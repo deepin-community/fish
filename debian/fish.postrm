@@ -1,0 +1,8 @@
+#! /bin/sh
+set -e
+
+remove-shell /usr/bin/fish
+
+#DEBHELPER#
+
+exit 0

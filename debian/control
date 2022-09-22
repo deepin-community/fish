@@ -1,0 +1,57 @@
+Source: fish
+Section: shells
+Priority: optional
+Maintainer: Tristan Seligmann <mithrandi@debian.org>
+Uploaders: Mo Zhou <lumin@debian.org>
+Build-Depends: bc,
+               bsdmainutils,
+               cmake,
+               debhelper-compat (= 13),
+               doxygen,
+               expect,
+               gettext,
+               groff-base,
+               libncurses5-dev,
+               libpcre2-dev,
+               locales-all,
+               ninja-build,
+               procps,
+               python3,
+               python3-pexpect <!nocheck>,
+               quilt
+Standards-Version: 4.5.0
+Homepage: http://fishshell.com/
+Vcs-Browser: https://salsa.debian.org/debian/fish
+Vcs-Git: https://salsa.debian.org/debian/fish.git
+Rules-Requires-Root: no
+
+Package: fish
+Architecture: any
+Depends: bc,
+         fish-common (= ${source:Version}),
+         lynx | www-browser,
+         man-db,
+         python3,
+         python3-distutils,
+         ${misc:Depends},
+         ${shlibs:Depends}
+Recommends: xsel
+Suggests: doc-base
+Pre-Depends: dpkg (>= 1.17.14)
+Description: friendly interactive shell
+ Fish is a shell geared towards interactive use.  Its features are focused on
+ user friendliness and discoverability.  The language syntax is simple but
+ incompatible with other shell languages.
+
+Package: fish-common
+Architecture: all
+Multi-Arch: foreign
+Depends: libjs-jquery, ${misc:Depends}
+Recommends: fish
+Replaces: fish (<= 2.1.1.dfsg-2)
+Description: friendly interactive shell (architecture-independent files)
+ Fish is a shell geared towards interactive use.  Its features are focused on
+ user friendliness and discoverability.  The language syntax is simple but
+ incompatible with other shell languages.
+ .
+ This package contains the common fish files shared by all architectures.

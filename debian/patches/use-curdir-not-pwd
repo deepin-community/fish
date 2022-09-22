@@ -1,0 +1,22 @@
+Index: fish/Makefile.in
+===================================================================
+--- fish.orig/Makefile.in
++++ fish/Makefile.in
+@@ -344,7 +344,7 @@ endif
+ #
+ # Note that doing `make DESTDIR=/some/path/ test` overrides this assignment.
+ #
+-test: DESTDIR = $(PWD)/test/root/
++test: DESTDIR = $(CURDIR)/test/root/
+ test: prefix = .
+ test: test-prep install-force test_low_level test_high_level
+ 	$v rm -f /tmp/file_truncation_test.txt /tmp/tee_test.txt /tmp/fish_foo.txt
+@@ -374,7 +374,7 @@ test_low_level: fish_tests $(call filter
+ 	env XDG_DATA_HOME=test/data XDG_CONFIG_HOME=test/home HOME=test/homedir ./fish_tests
+ .PHONY: test_low_level
+ 
+-test_high_level: DESTDIR = $(PWD)/test/root/
++test_high_level: DESTDIR = $(CURDIR)/test/root/
+ test_high_level: prefix = .
+ test_high_level: test-prep install-force test_fishscript test_interactive test_invocation
+ .PHONY: test_high_level

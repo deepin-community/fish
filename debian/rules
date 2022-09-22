@@ -1,0 +1,25 @@
+#!/usr/bin/make -f
+# -*- makefile -*-
+
+DEB_BUILD_MAINT_OPTIONS = hardening=+all
+DPKG_EXPORT_BUILDFLAGS = 1
+include /usr/share/dpkg/buildflags.mk
+include /usr/share/dpkg/pkg-info.mk
+CFLAGS+=$(CPPFLAGS)
+CXXFLAGS+=$(CPPFLAGS)
+
+export TERM=xterm
+export LC_ALL=C.UTF-8
+export HOME=/tmp/
+
+%:
+	dh $@ -Scmake+ninja
+
+execute_before_dh_auto_configure:
+	echo $(DEB_VERSION) | sed -e 's/\+ds//' > version
+
+override_dh_install:
+	dh_install -Xshare/fish/completions/rg.fish -XCHANGELOG
+
+override_dh_missing:
+	dh_missing --fail-missing

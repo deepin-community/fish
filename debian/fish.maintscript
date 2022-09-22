@@ -1,0 +1,2 @@
+rm_conffile /etc/fish/fish_inputrc 1.22.3-3 fish
+symlink_to_dir /usr/share/doc/fish /usr/share/doc/fish-common 2.1.2+dfsg1-1~ fish
