@@ -1,3 +1,81 @@
+fish (3.6.0-1) unstable; urgency=medium
+
+  * New upstream version 3.6.0 (Jan 2023)
+
+ -- Mo Zhou <lumin@debian.org>  Sat, 07 Jan 2023 11:39:49 -0500
+
+fish (3.5.1+ds-2) unstable; urgency=medium
+
+  * Move `lynx | www-browser` from Depends to Recommends. (Closes: #1017464)
+  * Track version via fishshell.com instead of the broken GitHub.
+
+ -- Mo Zhou <lumin@debian.org>  Tue, 13 Dec 2022 12:01:14 -0500
+
+fish (3.5.1+ds-1) unstable; urgency=medium
+
+  * New upstream version 3.5.1+ds (released July 20, 2022)
+
+ -- Mo Zhou <lumin@debian.org>  Sat, 23 Jul 2022 09:42:32 -0700
+
+fish (3.5.0+ds-1) unstable; urgency=medium
+
+  * New upstream version 3.5.0+ds (June 2022)
+
+ -- Mo Zhou <lumin@debian.org>  Thu, 16 Jun 2022 20:02:33 -0700
+
+fish (3.4.1+ds-1) unstable; urgency=medium
+
+  * New upstream version 3.4.1 (Closes: #1008618, #1008149)
+  * d/copyright: Bump year.
+
+ -- Mo Zhou <lumin@debian.org>  Thu, 31 Mar 2022 21:17:18 -0400
+
+fish (3.4.0+ds-1) unstable; urgency=medium
+
+  * New upstream version 3.4.0
+  * No longer need to manually create the `version` file.
+  * Remove unused patches and upstream-merged patches.
+  * Change pristine-tar to True in gbp.conf.
+
+ -- Mo Zhou <lumin@debian.org>  Sat, 19 Mar 2022 22:51:25 -0400
+
+fish (3.3.1+ds-3) unstable; urgency=medium
+
+  [ Marc Dequènes (Duck) ]
+  * Fix missing incldue for DEB_VERSION (Closes: #1001583, #1002332).
+  * Adapt version filtering regex to fix build on Salsa CI
+
+  [ Mo Zhou ]
+  * No resetting PATH with hardcoded list. (Closes: #1000199)
+    Thanks to Federico Di Gregorio
+  * Use DEB_VERSION_UPSTREAM instead for correct version string.
+
+ -- Mo Zhou <lumin@debian.org>  Sun, 13 Feb 2022 12:37:31 -0500
+
+fish (3.3.1+ds-2) unstable; urgency=medium
+
+  [ David Adam ]
+  * Remove obsolete dh_install override
+  * Remove and refresh dependencies
+  * Add build dependency on Sphinx (Closes: #999701)
+
+  [ Jochen Sprickerhof ]
+  * Fix reset $PATH only for login shells (Closes: #999749)
+  * Fix dependency on ul
+  * Drop old Pre-Dep/Replaces (versions are in oldoldstable)
+  * Drop unused build dependency on quilt
+  * Adopt to debhelper 13
+  * Drop wrong lintian overwrites
+  * Replace transition package libncurses5-dev
+
+  [ Mo Zhou ]
+  * d/watch: Import from git release instead of git tags.
+  * Really export variables to fixup hardening.
+  * Update lintian overrides.
+  * Bump Standards-Version to 4.6.0 (no change).
+
+ -- Mo Zhou <lumin@debian.org>  Fri, 19 Nov 2021 14:35:52 -0500
+
 fish (3.3.1+ds-1) unstable; urgency=medium
 
   [ Tristan Seligmann ]

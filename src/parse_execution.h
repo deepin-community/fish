@@ -4,15 +4,18 @@
 
 #include <stddef.h>
 
-#include "ast.h"
+#include <vector>
+
+#include "ast.h"  // IWYU pragma: keep
 #include "common.h"
 #include "io.h"
+#include "maybe.h"
 #include "parse_constants.h"
 #include "parse_tree.h"
 #include "proc.h"
+#include "redirection.h"
 
 class block_t;
-class cancellation_group_t;
 class operation_context_t;
 class parser_t;
 
@@ -33,12 +36,15 @@ enum class end_execution_reason_t {
     error,
 };
 
-class parse_execution_context_t {
+class parse_execution_context_t : noncopyable_t {
    private:
     parsed_source_ref_t pstree;
     parser_t *const parser;
     const operation_context_t &ctx;
-    const std::shared_ptr<cancellation_group_t> cancel_group;
+
+    // If set, one of our processes received a cancellation signal (INT or QUIT) so we are
+    // unwinding.
+    int cancel_signal{0};
 
     // The currently executing job node, used to indicate the line number.
     const ast::job_t *executing_job_node{};
@@ -50,10 +56,6 @@ class parse_execution_context_t {
     /// The block IO chain.
     /// For example, in `begin; foo ; end < file.txt` this would have the 'file.txt' IO.
     io_chain_t block_io{};
-
-    // No copying allowed.
-    parse_execution_context_t(const parse_execution_context_t &) = delete;
-    parse_execution_context_t &operator=(const parse_execution_context_t &) = delete;
 
     // Check to see if we should end execution.
     // \return the eval result to end with, or none() to continue on.
@@ -96,11 +98,11 @@ class parse_execution_context_t {
         const ast::variable_assignment_list_t &variable_assignments_list_t);
     end_execution_reason_t populate_not_process(job_t *job, process_t *proc,
                                                 const ast::not_statement_t &not_statement);
-    end_execution_reason_t populate_plain_process(job_t *job, process_t *proc,
+    end_execution_reason_t populate_plain_process(process_t *proc,
                                                   const ast::decorated_statement_t &statement);
 
     template <typename Type>
-    end_execution_reason_t populate_block_process(job_t *job, process_t *proc,
+    end_execution_reason_t populate_block_process(process_t *proc,
                                                   const ast::statement_t &statement,
                                                   const Type &specific_statement);
 
@@ -145,16 +147,20 @@ class parse_execution_context_t {
     end_execution_reason_t populate_job_from_job_node(job_t *j, const ast::job_t &job_node,
                                                       const block_t *associated_block);
 
+    // Assign a job group to the given job.
+    void setup_group(job_t *j);
+
+    // \return whether we should apply job control to our processes.
+    bool use_job_control() const;
+
     // Returns the line number of the node. Not const since it touches cached_lineno_offset.
     int line_offset_of_node(const ast::job_t *node);
     int line_offset_of_character_at_offset(size_t offset);
 
    public:
     /// Construct a context in preparation for evaluating a node in a tree, with the given block_io.
-    /// The cancel group is never null and should be provided when resolving job groups.
     /// The execution context may access the parser and parent job group (if any) through ctx.
     parse_execution_context_t(parsed_source_ref_t pstree, const operation_context_t &ctx,
-                              std::shared_ptr<cancellation_group_t> cancel_group,
                               io_chain_t block_io);
 
     /// Returns the current line number, indexed from 1. Not const since it touches

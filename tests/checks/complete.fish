@@ -1,4 +1,4 @@
-# RUN: %fish %s
+#RUN: %fish -C 'set -l fish %fish' %s
 function complete_test_alpha1
     echo $argv
 end
@@ -8,14 +8,16 @@ complete -c complete_test_alpha2 --no-files -w 'complete_test_alpha1 extra1'
 complete -c complete_test_alpha3 --no-files -w 'complete_test_alpha2 extra2'
 
 complete -C'complete_test_alpha1 arg1 '
-# CHECK: complete_test_alpha1 arg1 
+# CHECK: complete_test_alpha1 arg1
+complete --escape -C'complete_test_alpha1 arg1 '
+# CHECK: complete_test_alpha1\ arg1\
 complete -C'complete_test_alpha2 arg2 '
-# CHECK: complete_test_alpha1 extra1 arg2 
+# CHECK: complete_test_alpha1 extra1 arg2
 complete -C'complete_test_alpha3 arg3 '
-# CHECK: complete_test_alpha1 extra1 extra2 arg3 
+# CHECK: complete_test_alpha1 extra1 extra2 arg3
 # Works even with the argument as a separate token.
 complete -C 'complete_test_alpha3 arg3 '
-# CHECK: complete_test_alpha1 extra1 extra2 arg3 
+# CHECK: complete_test_alpha1 extra1 extra2 arg3
 
 alias myalias1 'complete_test_alpha1 arg1'
 alias myalias2='complete_test_alpha1 arg2'
@@ -26,8 +28,8 @@ myalias2 call2
 # CHECK: arg2 call2
 complete -C'myalias1 call3 '
 complete -C'myalias2 call3 '
-# CHECK: complete_test_alpha1 arg1 call3 
-# CHECK: complete_test_alpha1 arg2 call3 
+# CHECK: complete_test_alpha1 arg1 call3
+# CHECK: complete_test_alpha1 arg2 call3
 
 # Ensure that commands can't wrap themselves - if this did,
 # the completion would be executed a bunch of times.
@@ -56,7 +58,7 @@ complete
 # CHECK: complete --force-files t -l fileoption
 # CHECK: complete --no-files t -a '(t)'
 # CHECK: complete -p '/complete test/beta1' -s Z -d 'desc, desc'
-# CHECK: complete --requires-param 'complete test beta2' -d desc\ \'\ desc2\ \[ -a 'foo bar'
+# CHECK: complete --require-parameter 'complete test beta2' -d desc\ \'\ desc2\ \[ -a 'foo bar'
 # CHECK: complete --exclusive complete_test_beta2 -o test -n false
 # CHECK: complete {{.*}}
 # CHECK: complete {{.*}}
@@ -199,7 +201,7 @@ complete -C'BBBB -'
 echo "BBBB:"
 complete -C'BBBB -'
 #CHECK: BBBB:
-#CHECK: 
+#CHECK:
 
 # Test that erasing completions works correctly
 echo
@@ -290,14 +292,18 @@ if begin
         rm -rf test6.tmp.dir; and mkdir test6.tmp.dir
     end
     pushd test6.tmp.dir
-    set -l dir (mktemp -d XXXXXXXX)
-    if complete -C$dir | grep "^$dir/.*Directory" >/dev/null
+    # The "incorrect implicit cd from PATH" fails if mktemp returns an absolute path and
+    # `realpath --relative-to` is not available on macOS.
+    # set dir (realpath --relative-to="$PWD" (mktemp -d XXXXXXXX))
+    set dir (basename (mktemp -d XXXXXXXX))
+    mkdir -p $dir
+    if complete -C$dir | string match -r "^$dir/.*dir" >/dev/null
         echo "implicit cd complete works"
     else
         echo "no implicit cd complete"
     end
     #CHECK: implicit cd complete works
-    if complete -C"command $dir" | grep "^$dir/.*Directory" >/dev/null
+    if complete -C"command $dir" | string match -r "^$dir/.*dir" >/dev/null
         echo "implicit cd complete after 'command'"
     else
         echo "no implicit cd complete after 'command'"
@@ -306,7 +312,7 @@ if begin
     popd
     if begin
             set -l PATH $PWD/test6.tmp.dir $PATH 2>/dev/null
-            complete -C$dir | grep "^$dir/.*Directory" >/dev/null
+            complete -C$dir | string match -r "^$dir/.*dir" >/dev/null
         end
         echo "incorrect implicit cd from PATH"
     else
@@ -367,7 +373,7 @@ complete banana
 
 # "-a" ain't
 complete banana bar
-#CHECKERR: complete: Too many arguments
+#CHECKERR: complete: too many arguments
 #CHECKERR:
 #CHECKERR: {{.*}}checks/complete.fish (line {{\d+}}):
 #CHECKERR: complete banana bar
@@ -393,18 +399,24 @@ complete -c fudge -f
 complete -c fudge -n '__fish_seen_subcommand_from eat' -F
 complete -C'fudge eat yummyin'
 # CHECK: yummyinmytummy
+complete -C"echo no commpletion inside comment # "
 cd -
 
 rm -r $dir
 
 set -l dir (mktemp -d)
 cd $dir
-cd -
 
 : >command-not-in-path
 chmod +x command-not-in-path
 complete -p $PWD/command-not-in-path -xa relative-path
 complete -C './command-not-in-path '
+# CHECK: relative-path
+
+# Expand variables and tildes in command.
+complete -C '$PWD/command-not-in-path '
+# CHECK: relative-path
+HOME=$PWD complete -C '~/command-not-in-path '
 # CHECK: relative-path
 
 # Non-canonical command path
@@ -422,4 +434,97 @@ begin
     # CHECK: custom-completions
 end
 
+cd -
 rm -r $dir
+
+# Expand variables and tildes in command.
+complete cat -xa +pet
+set -l path_to_cat (command -v cat)
+complete -C '$path_to_cat '
+# CHECK: +pet
+HOME=$path_to_cat/.. complete -C '~/cat '
+# CHECK: +pet
+
+# Do not expand command substitutions.
+complete -C '(echo cat) ' | string match +pet
+# Give up if we expand to multiple arguments (we'd need to handle the arguments).
+complete -C '{cat,arg1,arg2} ' | string match +pet
+# Don't expand wildcards though we could.
+complete -C '$path_to_cat* ' | string match +pet
+
+# Also expand wrap targets.
+function crookshanks --wraps '$path_to_cat'
+end
+complete -C 'crookshanks '
+# CHECK: +pet
+
+# Custom completion works with variable overrides.
+complete cmd_with_fancy_completion -xa '(commandline -opc | count)'
+complete -C"a=1 b=2 cmd_with_fancy_completion "
+# CHECK: 1
+complete -C"a=1 b=2 cmd_with_fancy_completion 1 "
+# CHECK: 2
+
+complete -c thing -x -F
+# CHECKERR: complete: invalid option combination, '--exclusive' and '--force-files'
+# Multiple conditions
+complete -f -c shot
+complete -fc shot -n 'test (count (commandline -opc) -eq 1' -n 'test (commandline -opc)[-1] = shot' -a 'through'
+# CHECKERR: complete: -n 'test (count (commandline -opc) -eq 1': Unexpected end of string, expecting ')'
+# CHECKERR: test (count (commandline -opc) -eq 1
+# CHECKERR: ^
+complete -fc shot -n 'test (count (commandline -opc)) -eq 1' -n 'test (commandline -opc)[-1] = shot' -a 'through'
+complete -fc shot -n 'test (count (commandline -opc)) -eq 2' -n 'test (commandline -opc)[-1] = through' -a 'the'
+complete -fc shot -n 'test (count (commandline -opc)) -eq 3' -n 'test (commandline -opc)[-1] = the' -a 'heart'
+complete -fc shot -n 'test (count (commandline -opc)) -eq 4' -n 'test (commandline -opc)[-1] = heart' -a 'and'
+complete -fc shot -n 'test (count (commandline -opc)) -eq 5' -n 'test (commandline -opc)[-1] = and' -a "you\'re"
+complete -fc shot -n 'test (count (commandline -opc)) -eq 6' -n 'test (commandline -opc)[-1] = "you\'re"' -a 'to'
+complete -fc shot -n 'test (count (commandline -opc)) -eq 7' -n 'test (commandline -opc)[-1] = to' -a 'blame'
+
+complete -C"shot "
+# CHECK: through
+complete -C"shot through "
+# CHECK: the
+
+# See that conditions after a failing one aren't executed.
+set -g oops 0
+complete -fc oooops
+complete -fc oooops -n true -n true -n true -n 'false' -n 'set -g oops 1' -a oops
+complete -C'oooops '
+echo $oops
+# CHECK: 0
+
+complete -fc oooops -n 'true' -n 'set -g oops 1' -a oops
+complete -C'oooops '
+# CHECK: oops
+echo $oops
+# CHECK: 1
+
+
+# See that we load completions only if the command exists in $PATH,
+# as a workaround for #3117.
+
+# We need a completion script that runs the command,
+# and prints something simple, and isn't already used above.
+#
+# Currently, tr fits the bill (it does `tr --version` to check for GNUisms)
+begin
+    $fish -c "complete -C'tr -'" | string match -- '-d*'
+    # CHECK: -d{{\t.*}}
+end
+
+set -l tmpdir (mktemp -d)
+cd $tmpdir
+begin
+    touch tr
+    chmod +x tr
+    set -l PATH
+    complete -C'./tr -' | string match -- -d
+    or echo No match for relative
+    # CHECK: No match for relative
+    complete -c tr | string length -q
+    or echo Empty completions
+    # CHECK: Empty completions
+end
+
+rm -r $tmpdir

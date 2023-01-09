@@ -1,18 +1,22 @@
-#include "config.h"
+#include "config.h"  // IWYU pragma: keep
 
 #include "trace.h"
+
+#include <deque>
+#include <string>
 
 #include "common.h"
 #include "flog.h"
 #include "parser.h"
 
-static const wcstring VAR_fish_trace = L"fish_trace";
+static bool do_trace = false;
+
+void trace_set_enabled(bool do_enable) { do_trace = do_enable; }
 
 bool trace_enabled(const parser_t &parser) {
     const auto &ld = parser.libdata();
     if (ld.suppress_fish_trace) return false;
-    // TODO: this variable lookup is somewhat expensive, consider how to make this cheaper.
-    return !parser.vars().get(VAR_fish_trace).missing_or_empty();
+    return do_trace;
 }
 
 /// Trace an "argv": a list of arguments where the first is the command.
@@ -28,7 +32,7 @@ void trace_argv(const parser_t &parser, const wchar_t *command, const wcstring_l
     }
     for (const wcstring &arg : argv) {
         trace_text.push_back(L' ');
-        trace_text.append(escape_string(arg, ESCAPE_ALL));
+        trace_text.append(escape_string(arg));
     }
     trace_text.push_back(L'\n');
     log_extra_to_flog_file(trace_text);

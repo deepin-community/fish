@@ -3,6 +3,10 @@
 # Test function, loops, conditionals and some basic elements
 #
 
+# The test driver always starts each test in its own temporary directory, but to make it easier to
+# run this test directly for whatever reason:
+set -g tmpdir (mktemp -d)
+
 # Comments in odd places don't cause problems
 for i in 1 2 # Comment on same line as command
 # Comment inside loop
@@ -42,12 +46,12 @@ end
 # Simple function tests
 
 function foo
-    echo >../test/temp/fish_foo.txt $argv
+    echo > $tmpdir/fish_foo.txt $argv
 end
 
 foo hello
 
-cat ../test/temp/fish_foo.txt |read foo
+cat $tmpdir/fish_foo.txt |read foo
 
 if test $foo = hello;
   echo Test 2 pass
@@ -297,7 +301,7 @@ else if test -n "def"
 else if not_a_valid_command but it should be OK because a previous branch was taken
 	echo "epsilon 5.3"
 else if test ! -n "abc"
-	echo "epsilon 5.4"	
+	echo "epsilon 5.4"
 end
 #CHECK: epsilon5.2
 
@@ -327,10 +331,10 @@ type -q -f fish_test_type_zzz ; echo $status
 
 # ensure that builtins that produce no output can still truncate files
 # (bug PCA almost reintroduced!)
-echo abc > ../test/temp/file_truncation_test.txt
-cat ../test/temp/file_truncation_test.txt
-echo -n > ../test/temp/file_truncation_test.txt
-cat ../test/temp/file_truncation_test.txt
+echo abc > $tmpdir/file_truncation_test.txt
+cat $tmpdir/file_truncation_test.txt
+echo -n > $tmpdir/file_truncation_test.txt
+cat $tmpdir/file_truncation_test.txt
 #CHECK: abc
 
 # Test events.
@@ -401,6 +405,34 @@ while contains $i a
     echo Darp
 end
 #CHECK: Doop
+
+# break and continue may be dynamically invoked.
+set dyn_break break
+set dyn_continue continue
+
+while true
+    $dyn_break
+    echo "I should be unreachable"
+end
+
+for foo in 1 2 3
+    $dyn_continue
+    echo "I should be unreachable"
+end
+
+# Check that these error correctly.
+# Simplify __fish_print_help, as it's noisy.
+function __fish_print_help
+    echo $argv[2..]
+end
+$dyn_break
+eval break
+#CHECKERR: break: Not inside of loop
+#CHECKERR: break: Not inside of loop
+$dyn_continue
+eval continue
+#CHECKERR: continue: Not inside of loop
+#CHECKERR: continue: Not inside of loop
 
 # Test implicit cd. This should do nothing.
 ./
@@ -500,3 +532,63 @@ echo banana
 # This used to be a parse error - #7685.
 echo (echo hello\\)
 # CHECK: hello\
+
+# This used to be a parse error - #7866.
+echo (echo foo;#)
+     )
+# CHECK: foo
+echo (echo bar #'
+     )
+# CHECK: bar
+echo (#"
+      echo baz)
+# CHECK: baz
+
+# Make sure we don't match up brackets within comments (#8022).
+$fish -c 'echo f[oo # not valid, no matching ]'
+# CHECKERR: fish: Unexpected end of string, square brackets do not match
+# CHECKERR: echo f[oo # not valid, no matching ]
+# CHECKERR: {{      }}^
+
+# Should fail because $PWD is read-only.
+for PWD in foo bar
+    true
+end
+# CHECKERR: {{.*}}/basic.fish (line {{\d+}}): for: PWD: cannot overwrite read-only variable
+# CHECKERR: for PWD in foo bar
+# CHECKERR:     ^~^
+# XXX FIXME carat should point at PWD
+
+$fish -c 'echo \xtest'
+# CHECKERR: fish: Invalid token '\xtest'
+# CHECKERR: echo \xtest
+# CHECKERR:      ^~~~~^
+
+$fish -c 'echo \utest'
+# CHECKERR: fish: Invalid token '\utest'
+# CHECKERR: echo \utest
+# CHECKERR:      ^~~~~^
+
+$fish -c 'echo \c'
+# CHECKERR: fish: Incomplete escape sequence '\c'
+# CHECKERR: echo \c
+# CHECKERR:      ^^
+
+$fish -c 'echo \C'
+# CHECK: C
+
+$fish -c 'echo \U'
+# CHECKERR: fish: Incomplete escape sequence '\U'
+# CHECKERR: echo \U
+# CHECKERR:      ^^
+
+$fish -c 'echo \x'
+# CHECKERR: fish: Incomplete escape sequence '\x'
+# CHECKERR: echo \x
+# CHECKERR:      ^^
+
+printf '%s\n' "#!/bin/sh" 'echo $0' > $tmpdir/argv0.sh
+chmod +x $tmpdir/argv0.sh
+cd $tmpdir
+./argv0.sh
+# CHECK: ./argv0.sh

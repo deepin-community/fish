@@ -8,6 +8,7 @@
 
 #include "common.h"
 #include "global_safety.h"
+#include "maybe.h"
 
 class environment_t;
 class parser_t;

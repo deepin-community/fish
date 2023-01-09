@@ -4,38 +4,33 @@
 #include <arpa/inet.h>  // IWYU pragma: keep
 #include <errno.h>
 #include <fcntl.h>
+#include <unistd.h>
 // We need the sys/file.h for the flock() declaration on Linux but not OS X.
 #include <sys/file.h>  // IWYU pragma: keep
 // We need the ioctl.h header so we can check if SIOCGIFHWADDR is defined by it so we know if we're
 // on a Linux system.
-#include <limits.h>
 #include <netinet/in.h>  // IWYU pragma: keep
 #include <sys/ioctl.h>   // IWYU pragma: keep
-#if !defined(__APPLE__) && !defined(__CYGWIN__)
-#include <pwd.h>
-#endif
-#include <stddef.h>
-#include <stdint.h>
-#include <stdlib.h>
-
-#include <cstring>
 #ifdef __CYGWIN__
 #include <sys/mman.h>
 #endif
 #ifdef HAVE_SYS_SELECT_H
 #include <sys/select.h>  // IWYU pragma: keep
 #endif
-#include <signal.h>
+#if !defined(__APPLE__) && !defined(__CYGWIN__)
+#include <pwd.h>
+#endif
 #include <sys/stat.h>
 #include <sys/time.h>   // IWYU pragma: keep
 #include <sys/types.h>  // IWYU pragma: keep
-#include <unistd.h>
 
-#include <atomic>
+#include <algorithm>
+#include <cstdio>
+#include <cstring>
 #include <cwchar>
-#include <map>
+#include <functional>
 #include <string>
-#include <type_traits>
+#include <unordered_map>
 #include <utility>
 
 #include "common.h"
@@ -44,7 +39,6 @@
 #include "fallback.h"  // IWYU pragma: keep
 #include "flog.h"
 #include "path.h"
-#include "signal.h"
 #include "utf8.h"
 #include "util.h"  // IWYU pragma: keep
 #include "wcstringutil.h"
@@ -91,23 +85,6 @@ constexpr const char *PATH = "--path";
 
 /// The different types of messages found in the fishd file.
 enum class uvar_message_type_t { set, set_export };
-
-static wcstring get_machine_identifier();
-
-/// return a list of paths where the uvars file has been historically stored.
-static wcstring_list_t get_legacy_paths(const wcstring &wdir) {
-    wcstring_list_t result;
-    // A path used during fish 3.0 development.
-    result.push_back(wdir + L"/fish_universal_variables");
-
-    // Paths used in 2.x.
-    result.push_back(wdir + L"/fishd." + get_machine_identifier());
-    wcstring hostname_id;
-    if (get_hostname_identifier(hostname_id)) {
-        result.push_back(wdir + L'/' + hostname_id);
-    }
-    return result;
-}
 
 static maybe_t<wcstring> default_vars_path_directory() {
     wcstring path;
@@ -339,7 +316,7 @@ void env_universal_t::generate_callbacks_and_update_exports(const var_table_t &n
         }
         if (existing == this->vars.end() || export_changed || value_changed) {
             // Value is set for the first time, or has changed.
-            callbacks.push_back(callback_data_t(key, new_entry.as_string()));
+            callbacks.push_back(callback_data_t(key, new_entry));
         }
     }
 }
@@ -391,7 +368,10 @@ void env_universal_t::load_from_fd(int fd, callback_data_list_t &callbacks) {
 }
 
 bool env_universal_t::load_from_path(const wcstring &path, callback_data_list_t &callbacks) {
+    return load_from_path(wcs2string(path), callbacks);
+}
 
+bool env_universal_t::load_from_path(const std::string &path, callback_data_list_t &callbacks) {
     // Check to see if the file is unchanged. We do this again in load_from_fd, but this avoids
     // opening the file unnecessarily.
     if (last_read_file != kInvalidFileID && file_id_for_path(path) == last_read_file) {
@@ -400,7 +380,7 @@ bool env_universal_t::load_from_path(const wcstring &path, callback_data_list_t 
     }
 
     bool result = false;
-    autoclose_fd_t fd{wopen_cloexec(path, O_RDONLY)};
+    autoclose_fd_t fd{open_cloexec(path, O_RDONLY)};
     if (fd.valid()) {
         FLOGF(uvar_file, L"universal log reading from file");
         this->load_from_fd(fd.fd(), callbacks);
@@ -464,41 +444,23 @@ bool env_universal_t::move_new_vars_file_into_place(const wcstring &src, const w
     return ret == 0;
 }
 
-void env_universal_t::initialize_at_path(callback_data_list_t &callbacks, wcstring path,
-                                         bool migrate_legacy) {
+void env_universal_t::initialize_at_path(callback_data_list_t &callbacks, wcstring path) {
     if (path.empty()) return;
     assert(!initialized() && "Already initialized");
     vars_path_ = std::move(path);
+    narrow_vars_path_ = wcs2string(vars_path_);
 
-    if (load_from_path(vars_path_, callbacks)) {
+    if (load_from_path(narrow_vars_path_, callbacks)) {
         // Successfully loaded from our normal path.
         return;
-    }
-
-    if (errno == ENOENT && migrate_legacy) {
-        // We failed to load, because the file was not found. Attempt to load from our legacy paths.
-        if (auto dir = default_vars_path_directory()) {
-            for (const wcstring &path : get_legacy_paths(*dir)) {
-                if (load_from_path(path, callbacks)) {
-                    // Mark every variable as modified.
-                    // This tells the uvars to write out the values loaded from the legacy path;
-                    // otherwise it will conclude that the values have been deleted since they
-                    // aren't present.
-                    for (const auto &kv : vars) {
-                        modified.insert(kv.first);
-                    }
-                    break;
-                }
-            }
-        }
     }
 }
 
 void env_universal_t::initialize(callback_data_list_t &callbacks) {
     // Set do_flock to false immediately if the default variable path is on a remote filesystem.
     // See #7968.
-    if (path_get_config_is_remote() == 1) do_flock = false;
-    this->initialize_at_path(callbacks, default_vars_path(), true /* migrate legacy */);
+    if (path_get_config_remoteness() == dir_remoteness_t::remote) do_flock = false;
+    this->initialize_at_path(callbacks, default_vars_path());
 }
 
 autoclose_fd_t env_universal_t::open_temporary_file(const wcstring &directory, wcstring *out_path) {
@@ -639,7 +601,7 @@ bool env_universal_t::sync(callback_data_list_t &callbacks) {
     // with fire anyways.
     // If we have no changes, just load.
     if (modified.empty()) {
-        this->load_from_path(vars_path_, callbacks);
+        this->load_from_path(narrow_vars_path_, callbacks);
         FLOGF(uvar_file, L"universal log no modifications");
         return false;
     }
@@ -709,9 +671,13 @@ bool env_universal_t::save(const wcstring &directory, const wcstring &vars_path)
         // necessary because Linux aggressively reuses inodes, causing the ABA problem; on other
         // platforms we tend to notice the file has changed due to a different inode (or file size!)
         //
+        // The current time within the Linux kernel is cached, and generally only updated on a timer
+        // interrupt. So if the timer interrupt is running at 10 milliseconds, the cached time will
+        // only be updated once every 10 milliseconds.
+        //
         // It's probably worth finding a simpler solution to this. The tests ran into this, but it's
         // unlikely to affect users.
-#if HAVE_CLOCK_GETTIME && HAVE_FUTIMENS
+#if defined(UVAR_FILE_SET_MTIME_HACK)
         struct timespec times[2] = {};
         times[0].tv_nsec = UTIME_OMIT;  // don't change ctime
         if (0 == clock_gettime(CLOCK_REALTIME, &times[1])) {
@@ -905,72 +871,6 @@ void env_universal_t::parse_message_2x_internal(const wcstring &msgstr, var_tabl
 /// Maximum length of hostname. Longer hostnames are truncated.
 #define HOSTNAME_LEN 255
 
-/// Length of a MAC address.
-#define MAC_ADDRESS_MAX_LEN 6
-
-// Thanks to Jan Brittenson, http://lists.apple.com/archives/xcode-users/2009/May/msg00062.html
-#ifdef SIOCGIFHWADDR
-
-// Linux
-#include <net/if.h>
-#include <sys/socket.h>
-static bool get_mac_address(unsigned char macaddr[MAC_ADDRESS_MAX_LEN],
-                            const char *interface = "eth0") {
-    bool result = false;
-    const int dummy = socket(AF_INET, SOCK_STREAM, 0);
-    if (dummy >= 0) {
-        struct ifreq r;
-        strncpy(const_cast<char *>(r.ifr_name), interface, sizeof r.ifr_name - 1);
-        r.ifr_name[sizeof r.ifr_name - 1] = 0;
-        if (ioctl(dummy, SIOCGIFHWADDR, &r) >= 0) {
-            std::memcpy(macaddr, r.ifr_hwaddr.sa_data, MAC_ADDRESS_MAX_LEN);
-            result = true;
-        }
-        close(dummy);
-    }
-    return result;
-}
-
-#elif defined(HAVE_GETIFADDRS)
-
-// OS X and BSD
-#include <ifaddrs.h>
-#include <net/if_dl.h>
-#include <sys/socket.h>
-static bool get_mac_address(unsigned char macaddr[MAC_ADDRESS_MAX_LEN],
-                            const char *interface = "en0") {
-    // BSD, Mac OS X
-    struct ifaddrs *ifap;
-    bool ok = false;
-
-    if (getifaddrs(&ifap) != 0) {
-        return ok;
-    }
-
-    for (const ifaddrs *p = ifap; p; p = p->ifa_next) {
-        bool is_af_link = p->ifa_addr && p->ifa_addr->sa_family == AF_LINK;
-        if (is_af_link && p->ifa_name && p->ifa_name[0] &&
-            !strcmp((const char *)p->ifa_name, interface)) {
-            const sockaddr_dl &sdl = *reinterpret_cast<sockaddr_dl *>(p->ifa_addr);
-
-            size_t alen = sdl.sdl_alen;
-            if (alen > MAC_ADDRESS_MAX_LEN) alen = MAC_ADDRESS_MAX_LEN;
-            std::memcpy(macaddr, sdl.sdl_data + sdl.sdl_nlen, alen);
-            ok = true;
-            break;
-        }
-    }
-    freeifaddrs(ifap);
-    return ok;
-}
-
-#else
-
-// Unsupported
-static bool get_mac_address(unsigned char macaddr[MAC_ADDRESS_MAX_LEN]) { return false; }
-
-#endif
-
 /// Function to get an identifier based on the hostname.
 bool get_hostname_identifier(wcstring &result) {
     // The behavior of gethostname if the buffer size is insufficient differs by implementation and
@@ -981,27 +881,13 @@ bool get_hostname_identifier(wcstring &result) {
     if (gethostname(hostname, sizeof(hostname)) == 0) {
         result.assign(str2wcstring(hostname));
         result.assign(truncate(result, HOSTNAME_LEN));
-        success = true;
+        // Don't return an empty hostname, we may attempt to open a directory instead.
+        success = !result.empty();
     }
     return success;
 }
 
-/// Get a sort of unique machine identifier. Prefer the MAC address; if that fails, fall back to the
-/// hostname; if that fails, pick something.
-static wcstring get_machine_identifier() {
-    wcstring result;
-    unsigned char mac_addr[MAC_ADDRESS_MAX_LEN] = {};
-    if (get_mac_address(mac_addr)) {
-        result.reserve(2 * MAC_ADDRESS_MAX_LEN);
-        for (auto i : mac_addr) {
-            append_format(result, L"%02x", i);
-        }
-    } else if (!get_hostname_identifier(result)) {
-        result.assign(L"nohost");  // fallback to a dummy value
-    }
-    return result;
-}
-
+namespace {
 class universal_notifier_shmem_poller_t final : public universal_notifier_t {
 #ifdef __CYGWIN__
     // This is what our shared memory looks like. Everything here is stored in network byte order
@@ -1303,10 +1189,10 @@ class universal_notifier_named_pipe_t final : public universal_notifier_t {
     size_t drain_amount{0};
 
     // We "flash" the pipe to make it briefly readable, for this many usec.
-    static constexpr long long k_flash_duration_usec = 1e5;
+    static constexpr long long k_flash_duration_usec = 1e4;
 
     // If the pipe remains readable for this many usec, we drain it.
-    static constexpr long long k_readable_too_long_duration_usec = 5e6;
+    static constexpr long long k_readable_too_long_duration_usec = 1e6;
 
     /// \return the name of a state.
     static const char *state_name(state_t s) {
@@ -1408,7 +1294,7 @@ class universal_notifier_named_pipe_t final : public universal_notifier_t {
         char c[1] = {'\0'};
         ssize_t amt_written = write(pipe_fd.fd(), c, sizeof c);
         if (amt_written < 0 && (errno == EWOULDBLOCK || errno == EAGAIN)) {
-            // Very unsual: the pipe is full! Try to read some and repeat once.
+            // Very unusual: the pipe is full! Try to read some and repeat once.
             drain_excess();
             amt_written = write(pipe_fd.fd(), c, sizeof c);
             if (amt_written < 0) {
@@ -1449,7 +1335,7 @@ class universal_notifier_named_pipe_t final : public universal_notifier_t {
                 // If we're no longer readable, go back to wait mode.
                 // Conversely, if we have been readable too long, perhaps some fish died while its
                 // written data was still on the pipe; drain some.
-                if (!select_wrapper_t::poll_fd_readable(pipe_fd.fd())) {
+                if (!fd_readable_set_t::poll_fd_readable(pipe_fd.fd())) {
                     set_state(waiting_for_readable);
                 } else if (get_time() >= state_start_usec + k_readable_too_long_duration_usec) {
                     drain_excess();
@@ -1469,7 +1355,7 @@ class universal_notifier_named_pipe_t final : public universal_notifier_t {
                 // change occurred with ours.
                 if (get_time() >= state_start_usec + k_flash_duration_usec) {
                     drain_written();
-                    if (!select_wrapper_t::poll_fd_readable(pipe_fd.fd())) {
+                    if (!fd_readable_set_t::poll_fd_readable(pipe_fd.fd())) {
                         set_state(waiting_for_readable);
                     } else {
                         set_state(polling_during_readable);
@@ -1489,6 +1375,7 @@ class universal_notifier_named_pipe_t final : public universal_notifier_t {
     }
 #endif
 };
+}  // namespace
 
 universal_notifier_t::notifier_strategy_t universal_notifier_t::resolve_default_strategy() {
 #ifdef FISH_NOTIFYD_AVAILABLE

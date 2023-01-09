@@ -2,11 +2,10 @@
 #include "config.h"
 
 #include <stdio.h>
-#include <stdlib.h>
+#include <unistd.h>
 
-#include <cstring>
 #if HAVE_CURSES_H
-#include <curses.h>
+#include <curses.h>  // IWYU pragma: keep
 #elif HAVE_NCURSES_H
 #include <ncurses.h>
 #elif HAVE_NCURSES_CURSES_H
@@ -17,10 +16,9 @@
 #elif HAVE_NCURSES_TERM_H
 #include <ncurses/term.h>
 #endif
-#include <limits.h>
 
 #include <cwchar>
-#include <memory>
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -29,6 +27,7 @@
 #include "env.h"
 #include "fallback.h"  // IWYU pragma: keep
 #include "flog.h"
+#include "maybe.h"
 #include "output.h"
 #include "wcstringutil.h"
 #include "wutil.h"  // IWYU pragma: keep
@@ -36,7 +35,7 @@
 /// Whether term256 and term24bit are supported.
 static color_support_t color_support = 0;
 
-/// Returns true if we think tparm can handle outputting a color index
+/// Returns true if we think fish_tparm can handle outputting a color index
 static bool term_supports_color_natively(unsigned int c) {
     return static_cast<unsigned>(max_colors) >= c + 1;
 }
@@ -54,8 +53,8 @@ unsigned char index_for_color(rgb_color_t c) {
 
 static bool write_color_escape(outputter_t &outp, const char *todo, unsigned char idx, bool is_fg) {
     if (term_supports_color_natively(idx)) {
-        // Use tparm to emit color escape.
-        writembs(outp, tparm(const_cast<char *>(todo), idx));
+        // Use fish_tparm to emit color escape.
+        writembs(outp, fish_tparm(const_cast<char *>(todo), idx));
         return true;
     }
 
@@ -116,7 +115,7 @@ bool outputter_t::write_color(rgb_color_t color, bool is_fg) {
         return (is_fg ? write_foreground_color : write_background_color)(*this, idx);
     }
 
-    // 24 bit! No tparm here, just ANSI escape sequences.
+    // 24 bit! No fish_tparm here, just ANSI escape sequences.
     // Foreground: ^[38;2;<r>;<g>;<b>m
     // Background: ^[48;2;<r>;<g>;<b>m
     color24_t rgb = color.to_color24();
@@ -162,7 +161,7 @@ void outputter_t::set_color(rgb_color_t fg, rgb_color_t bg) {
     if (fg.is_reset() || bg.is_reset()) {
         fg = bg = normal;
         reset_modes();
-        // If we exit attibute mode, we must first set a color, or previously colored text might
+        // If we exit attribute mode, we must first set a color, or previously colored text might
         // lose it's color. Terminals are weird...
         write_foreground_color(*this, 0);
         writembs(*this, exit_attribute_mode);
@@ -242,7 +241,7 @@ void outputter_t::set_color(rgb_color_t fg, rgb_color_t bg) {
     // Lastly, we set bold, underline, italics, dim, and reverse modes correctly.
     if (is_bold && !was_bold && enter_bold_mode && enter_bold_mode[0] != '\0' && !bg_set) {
         // The unconst cast is for NetBSD's benefit. DO NOT REMOVE!
-        writembs_nofail(*this, tparm(const_cast<char *>(enter_bold_mode)));
+        writembs_nofail(*this, fish_tparm(const_cast<char *>(enter_bold_mode)));
         was_bold = is_bold;
     }
 
@@ -304,7 +303,7 @@ int outputter_t::term_puts(const char *str, int affcnt) {
     scoped_push<outputter_t *> push(&s_tputs_receiver, this);
     s_tputs_receiver->begin_buffering();
     // On some systems, tputs takes a char*, on others a const char*.
-    // Like tparm, we just cast it to unconst, that should work everywhere.
+    // Like fish_tparm, we just cast it to unconst, that should work everywhere.
     int res = tputs(const_cast<char *>(str), affcnt, tputs_writer);
     s_tputs_receiver->end_buffering();
     return res;

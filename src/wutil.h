@@ -2,19 +2,24 @@
 #ifndef FISH_WUTIL_H
 #define FISH_WUTIL_H
 
+#include "config.h"  // IWYU pragma: keep
+
 #include <dirent.h>
-#include <locale.h>
 #include <stddef.h>
-#include <stdio.h>
+#include <stdint.h>
+#include <sys/stat.h>
 #include <sys/types.h>
-#include <time.h>
-#include <wctype.h>
-
-#include <string>
-
-#ifdef HAVE_XLOCALE_H
-#include <xlocale.h>
+#ifdef __APPLE__
+// This include is required on macOS 10.10 for locale_t
+#include <xlocale.h> // IWYU pragma: keep
 #endif
+
+#include <ctime>
+#include <functional>
+#include <limits>
+#include <locale>
+#include <memory>
+#include <string>
 
 #include "common.h"
 #include "maybe.h"
@@ -40,14 +45,11 @@ int wunlink(const wcstring &file_name);
 /// Wide character version of perror().
 void wperror(const wchar_t *s);
 
-/// Async-safe version of perror().
-void safe_perror(const char *message);
-
-/// Async-safe version of std::strerror().
-const char *safe_strerror(int err);
-
 /// Wide character version of getcwd().
 wcstring wgetcwd();
+
+/// Wide character version of readlink().
+maybe_t<wcstring> wreadlink(const wcstring &file_name);
 
 /// Wide character version of realpath function.
 /// \returns the canonicalized path, or none if the path is invalid.
@@ -64,17 +66,6 @@ wcstring normalize_path(const wcstring &path, bool allow_leading_double_slashes 
 /// path. The intent here is to allow 'cd' out of a directory which may no longer exist, without
 /// allowing 'cd' into a directory that may not exist; see #5341.
 wcstring path_normalize_for_cd(const wcstring &wd, const wcstring &path);
-
-/// Wide character version of readdir().
-bool wreaddir(DIR *dir, wcstring &out_name);
-bool wreaddir_resolving(DIR *dir, const std::wstring &dir_path, wcstring &out_name,
-                        bool *out_is_dir);
-
-/// Like wreaddir, but skip items that are known to not be directories. If this requires a stat
-/// (i.e. the file is a symlink), then return it. Note that this does not guarantee that everything
-/// returned is a directory, it's just an optimization for cases where we would check for
-/// directories anyways.
-bool wreaddir_for_dirs(DIR *dir, wcstring *out_name);
 
 /// Wide character version of dirname().
 std::wstring wdirname(std::wstring path);
@@ -105,13 +96,6 @@ inline ssize_t wwrite_to_fd(const wcstring &s, int fd) {
     return wwrite_to_fd(s.c_str(), s.size(), fd);
 }
 
-#define PUA1_START 0xE000
-#define PUA1_END 0xF900
-#define PUA2_START 0xF0000
-#define PUA2_END 0xFFFFE
-#define PUA3_START 0x100000
-#define PUA3_END 0x10FFFE
-
 // We need this because there are too many implementations that don't return the proper answer for
 // some code points. See issue #3050.
 #ifndef FISH_NO_ISW_WRAPPERS
@@ -127,12 +111,18 @@ int fish_wcswidth(const wcstring &str);
 // returns an immortal locale_t corresponding to the C locale.
 locale_t fish_c_locale();
 
+void fish_invalidate_numeric_locale();
+locale_t fish_numeric_locale();
+
 int fish_wcstoi(const wchar_t *str, const wchar_t **endptr = nullptr, int base = 10);
 long fish_wcstol(const wchar_t *str, const wchar_t **endptr = nullptr, int base = 10);
 long long fish_wcstoll(const wchar_t *str, const wchar_t **endptr = nullptr, int base = 10);
 unsigned long long fish_wcstoull(const wchar_t *str, const wchar_t **endptr = nullptr,
                                  int base = 10);
+double fish_wcstod(const wchar_t *str, wchar_t **endptr, size_t len);
 double fish_wcstod(const wchar_t *str, wchar_t **endptr);
+double fish_wcstod(const wcstring &str, wchar_t **endptr);
+double fish_wcstod_underscores(const wchar_t *str, wchar_t **endptr);
 
 /// Class for representing a file's inode. We use this to detect and avoid symlink loops, among
 /// other things. While an inode / dev pair is sufficient to distinguish co-existing files, Linux
@@ -142,9 +132,9 @@ struct file_id_t {
     dev_t device{static_cast<dev_t>(-1LL)};
     ino_t inode{static_cast<ino_t>(-1LL)};
     uint64_t size{static_cast<uint64_t>(-1LL)};
-    time_t change_seconds{-1};
+    time_t change_seconds{std::numeric_limits<time_t>::min()};
     long change_nanoseconds{-1};
-    time_t mod_seconds{-1};
+    time_t mod_seconds{std::numeric_limits<time_t>::min()};
     long mod_nanoseconds{-1};
 
     constexpr file_id_t() = default;
@@ -156,20 +146,113 @@ struct file_id_t {
     bool operator<(const file_id_t &rhs) const;
 
     static file_id_t from_stat(const struct stat &buf);
-
+    bool older_than(const file_id_t &rhs) const;
     wcstring dump() const;
 
    private:
     int compare_file_id(const file_id_t &rhs) const;
 };
 
-/// RAII wrapper for DIR*
-struct dir_t {
-    DIR *dir;
-    bool valid() const;
-    bool read(wcstring &name) const;
-    dir_t(const wcstring &path);
-    ~dir_t();
+/// Types of files that may be in a directory.
+enum class dir_entry_type_t : uint8_t {
+    fifo = 1,  // FIFO file
+    chr,       // character device
+    dir,       // directory
+    blk,       // block device
+    reg,       // regular file
+    lnk,       // symlink
+    sock,      // socket
+    whiteout,  // whiteout (from BSD)
+};
+
+/// Class for iterating over a directory, wrapping readdir().
+/// This allows enumerating the contents of a directory, exposing the file type if the filesystem
+/// itself exposes that from readdir(). stat() is incurred only if necessary: if the entry is a
+/// symlink, or if the caller asks for the stat buffer.
+/// Symlinks are followed.
+class dir_iter_t : noncopyable_t {
+   public:
+    struct entry_t;
+
+    /// Open a directory at a given path. On failure, \p error() will return the error code.
+    /// Note opendir is guaranteed to set close-on-exec by POSIX (hooray).
+    explicit dir_iter_t(const wcstring &path);
+
+    /// Advance this iterator.
+    /// \return a pointer to the entry, or nullptr if the entry is finished, or an error occurred.
+    /// The returned pointer is only valid until the next call to next().
+    const entry_t *next();
+
+    /// \return the errno value for the last error, or 0 if none.
+    int error() const { return error_; }
+
+    /// \return if we are valid: successfully opened a directory.
+    bool valid() const { return dir_ != nullptr; }
+
+    /// \return the underlying file descriptor, or -1 if invalid.
+    int fd() const { return dir_ ? dirfd(&*dir_) : -1; }
+
+    /// Rewind the directory to the beginning.
+    void rewind();
+
+    ~dir_iter_t();
+    dir_iter_t(dir_iter_t &&);
+    dir_iter_t &operator=(dir_iter_t &&);
+
+    /// An entry returned by dir_iter_t.
+    struct entry_t : noncopyable_t {
+        /// File name of this entry.
+        wcstring name{};
+
+        /// inode of this entry.
+        ino_t inode{};
+
+        /// \return the type of this entry if it is already available, otherwise none().
+        maybe_t<dir_entry_type_t> fast_type() const { return type_; }
+
+        /// \return the type of this entry, falling back to stat() if necessary.
+        /// If stat() fails because the file has disappeared, this will return none().
+        /// If stat() fails because of a broken symlink, this will return type lnk.
+        maybe_t<dir_entry_type_t> check_type() const;
+
+        /// \return whether this is a directory. This may call stat().
+        bool is_dir() const { return check_type() == dir_entry_type_t::dir; }
+
+        /// \return the stat buff for this entry, invoking stat() if necessary.
+        const maybe_t<struct stat> &stat() const;
+
+       private:
+        // Reset our fields.
+        void reset();
+
+        // Populate our stat buffer, and type. Errors are silently ignored.
+        void do_stat() const;
+
+        // Stat buff for this entry, or none if not yet computed.
+        mutable maybe_t<struct stat> stat_{};
+
+        // The type of the entry. This is initially none; it may be populated eagerly via readdir()
+        // on some filesystems, or later via stat(). If stat() fails, the error is silently ignored
+        // and the type is left as none(). Note this is an unavoidable race.
+        mutable maybe_t<dir_entry_type_t> type_{};
+
+        // fd of the DIR*, used for fstatat().
+        int dirfd_{-1};
+
+        entry_t();
+        ~entry_t();
+        entry_t(entry_t &&) = default;
+        entry_t &operator=(entry_t &&) = default;
+        friend class dir_iter_t;
+    };
+
+   private:
+    struct dir_closer_t {
+        void operator()(DIR *dir) const { (void)closedir(dir); }
+    };
+    std::unique_ptr<DIR, dir_closer_t> dir_{nullptr};
+    int error_{0};
+    entry_t entry_;
 };
 
 #ifndef HASH_FILE_ID

@@ -5,6 +5,10 @@
 #include "config.h"
 
 #include "common.h"
+#include "enum_map.h"
+
+using source_offset_t = uint32_t;
+constexpr source_offset_t SOURCE_OFFSET_INVALID = static_cast<source_offset_t>(-1);
 
 #define PARSER_DIE()                   \
     do {                               \
@@ -14,12 +18,23 @@
 
 // A range of source code.
 struct source_range_t {
-    uint32_t start;
-    uint32_t length;
+    source_offset_t start;
+    source_offset_t length;
 
-    uint32_t end() const {
+    source_offset_t end() const {
         assert(start + length >= start && "Overflow");
         return start + length;
+    }
+
+    bool operator==(const source_range_t &rhs) const {
+        return start == rhs.start && length == rhs.length;
+    }
+
+    bool operator!=(const source_range_t &rhs) const { return !(*this == rhs); }
+
+    // \return true if a location is in this range, including one-past-the-end.
+    bool contains_inclusive(source_offset_t loc) const {
+        return start <= loc && loc - start <= length;
     }
 };
 
@@ -57,7 +72,6 @@ const enum_map<parse_token_type_t> token_enum_map[] = {
     {parse_token_type_t::terminate, L"parse_token_type_t::terminate"},
     {parse_token_type_t::invalid, L"parse_token_type_t::invalid"},
     {parse_token_type_t::invalid, nullptr}};
-#define token_enum_map_len (sizeof token_enum_map / sizeof *token_enum_map)
 
 // IMPORTANT: If the following enum is modified you must update the corresponding keyword_enum_map
 // array below.
@@ -109,7 +123,7 @@ const enum_map<parse_keyword_t> keyword_enum_map[] = {{parse_keyword_t::kw_excla
 #define keyword_enum_map_len (sizeof keyword_enum_map / sizeof *keyword_enum_map)
 
 // Statement decorations like 'command' or 'exec'.
-enum class statement_decoration_t {
+enum class statement_decoration_t : uint8_t {
     none,
     command,
     builtin,
@@ -117,7 +131,7 @@ enum class statement_decoration_t {
 };
 
 // Parse error code list.
-enum parse_error_code_t {
+enum parse_error_code_t : uint8_t {
     parse_error_none,
 
     // Matching values from enum parser_error.
@@ -159,10 +173,10 @@ enum {
     /// Indicate that extra semis should be generated.
     parse_flag_show_extra_semis = 1 << 5,
 };
-typedef unsigned int parse_tree_flags_t;
+using parse_tree_flags_t = uint8_t;
 
 enum { PARSER_TEST_ERROR = 1, PARSER_TEST_INCOMPLETE = 2 };
-typedef unsigned int parser_test_error_bits_t;
+using parser_test_error_bits_t = uint8_t;
 
 struct parse_error_t {
     /// Text of the error.
@@ -193,7 +207,7 @@ wcstring token_type_user_presentable_description(parse_token_type_t type,
 void parse_error_offset_source_start(parse_error_list_t *errors, size_t amt);
 
 // The location of a pipeline.
-enum class pipeline_position_t {
+enum class pipeline_position_t : uint8_t {
     none,       // not part of a pipeline
     first,      // first command in a pipeline
     subsequent  // second or further command in a pipeline
@@ -202,17 +216,21 @@ enum class pipeline_position_t {
 /// Maximum number of function calls.
 #define FISH_MAX_STACK_DEPTH 128
 
+/// Maximum number of nested string substitutions (in lieu of evals)
+/// Reduced under TSAN: our CI test creates 500 jobs and this is very slow with TSAN.
+#if FISH_TSAN_WORKAROUNDS
+#define FISH_MAX_EVAL_DEPTH 250
+#else
+#define FISH_MAX_EVAL_DEPTH 500
+#endif
+
 /// Error message on a function that calls itself immediately.
 #define INFINITE_FUNC_RECURSION_ERR_MSG \
     _(L"The function '%ls' calls itself immediately, which would result in an infinite loop.")
 
 /// Error message on reaching maximum call stack depth.
-#define CALL_STACK_LIMIT_EXCEEDED_ERR_MSG                                                     \
-    _(L"The function call stack limit has been exceeded. Do you have an accidental infinite " \
-      L"loop?")
-
-/// Error message when encountering an illegal command name.
-#define ILLEGAL_CMD_ERR_MSG _(L"Illegal command name '%ls'")
+#define CALL_STACK_LIMIT_EXCEEDED_ERR_MSG \
+    _(L"The call stack limit has been exceeded. Do you have an accidental infinite loop?")
 
 /// Error message when encountering an unknown builtin name.
 #define UNKNOWN_BUILTIN_ERR_MSG _(L"Unknown builtin '%ls'")
@@ -224,19 +242,13 @@ enum class pipeline_position_t {
 #define ILLEGAL_FD_ERR_MSG _(L"Illegal file descriptor in redirection '%ls'")
 
 /// Error message for wildcards with no matches.
-#define WILDCARD_ERR_MSG _(L"No matches for wildcard '%ls'. See `help expand`.")
-
-/// Error message when an expansion produces too many results, e.g. `echo /**`.
-#define EXPAND_OVERFLOW_ERR_MSG _(L"Too many items produced by '%ls'.")
+#define WILDCARD_ERR_MSG _(L"No matches for wildcard '%ls'. See `help wildcards-globbing`.")
 
 /// Error when using break outside of loop.
 #define INVALID_BREAK_ERR_MSG _(L"'break' while not inside of loop")
 
 /// Error when using continue outside of loop.
 #define INVALID_CONTINUE_ERR_MSG _(L"'continue' while not inside of loop")
-
-/// Error when using return builtin outside of function definition.
-#define INVALID_RETURN_ERR_MSG _(L"'return' outside of function definition")
 
 // Error messages. The number is a reminder of how many format specifiers are contained.
 
@@ -261,9 +273,6 @@ enum class pipeline_position_t {
 
 /// Error issued on $@.
 #define ERROR_NOT_ARGV_AT _(L"$@ is not supported. In fish, please use $argv.")
-
-/// Error issued on $(...).
-#define ERROR_BAD_VAR_SUBCOMMAND1 _(L"$(...) is not supported. In fish, please use '(%ls)'.")
 
 /// Error issued on $*.
 #define ERROR_NOT_ARGV_STAR _(L"$* is not supported. In fish, please use $argv.")

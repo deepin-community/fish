@@ -2,14 +2,10 @@
 #ifndef FISH_IOTHREAD_H
 #define FISH_IOTHREAD_H
 
-#include <pthread.h>
-
 #include <cstdint>  // for uint64_t
 #include <functional>
 #include <memory>
-#include <type_traits>
-
-#include "maybe.h"
+#include <utility>
 
 /// \return the fd on which to listen for completion callbacks.
 int iothread_port();
@@ -22,8 +18,8 @@ void iothread_service_main();
 void iothread_service_main_with_timeout(uint64_t timeout_usec);
 
 /// Waits for all iothreads to terminate.
-/// \return the number of threads that were running.
-int iothread_drain_all();
+/// This is a hacky function only used in the test suite.
+void iothread_drain_all();
 
 // Internal implementation
 void iothread_perform_impl(std::function<void()> &&, bool cant_wait = false);
@@ -39,9 +35,6 @@ inline void iothread_perform(std::function<void()> &&func) {
 inline void iothread_perform_cantwait(std::function<void()> &&func) {
     iothread_perform_impl(std::move(func), true);
 }
-
-/// Performs a function on the main thread, blocking until it completes.
-void iothread_perform_on_main(const std::function<void()> &func);
 
 /// Creates a pthread, manipulating the signal mask so that the thread receives no signals.
 /// The thread is detached.
@@ -80,7 +73,7 @@ class debounce_t {
 
     /// One-argument form with no completion.
     /// The result is a token which is only of interest to the tests.
-    uint64_t perform(std::function<void()> func);
+    uint64_t perform(std::function<void()> handler);
 
     explicit debounce_t(long timeout_msec = 0);
     ~debounce_t();

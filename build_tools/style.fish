@@ -23,9 +23,11 @@ if test $all = yes
     set -l files (git status --porcelain --short --untracked-files=all | sed -e 's/^ *[^ ]* *//')
     if set -q files[1]
         echo
-        echo You have uncommitted changes. Cowardly refusing to restyle the entire code base.
-        echo
-        exit 1
+        echo 'You have uncommitted changes. Are you sure you want to restyle?'
+        read -P 'y/N? ' -n1 -l ans
+        if not string match -qi "y" -- $ans
+            exit 1
+        end
     end
     set c_files src/*.h src/*.cpp src/*.c
     set fish_files share/**.fish
@@ -72,13 +74,20 @@ if set -q c_files[1]
     else if type -q clang-format
         echo === Running "$red"clang-format"$normal"
         for file in $c_files
-            cp $file $file.new # preserves mode bits
-            clang-format $file >$file.new
-            if cmp --quiet $file $file.new
-                rm $file.new
-            else
-                echo $file was NOT correctly formatted
-                mv $file.new $file
+            if clang-format --dry-run -Werror $file
+                # file was clean, remove it from the list
+                set -e c_files[(contains -i $file $c_files)]
+            end
+        end
+        if set -q c_files[1]
+            printf "Reformat those %d files?\n" (count $c_files)
+            read -P 'y/N? ' -n1 -l ans
+            if string match -qi "y" -- $ans
+                clang-format -i --verbose $c_files
+            else if string match -qi "n" -- $ans
+                echo Skipping
+            else # like they ctrl-C'd or something.
+                exit 1
             end
         end
     else

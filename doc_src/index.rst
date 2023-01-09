@@ -4,11 +4,9 @@
 Introduction
 ************
 
-This is the documentation for **fish**, the **f**\ riendly **i**\ nteractive **sh**\ ell.
+This is the documentation for :command:`fish`, the **f**\ riendly **i**\ nteractive **sh**\ ell.
 
 A shell is a program that helps you operate your computer by starting other programs. fish offers a command-line interface focused on usability and interactive use.
-
-Unlike other shells, fish does not follow the POSIX standard, but still uses roughly the same model.
 
 Some of the special features of fish are:
 
@@ -20,8 +18,8 @@ Some of the special features of fish are:
 
 This page explains how to install and set up fish and where to get more information.
 
-Further Reading
-===============
+Where to go?
+============
 
 If this is your first time using fish, see the :ref:`tutorial <tutorial>`.
 
@@ -31,10 +29,12 @@ For a comprehensive overview of fish's scripting language, see :ref:`The Fish La
 
 For information on using fish interactively, see :ref:`Interactive use <interactive>`.
 
-Installation and Start
-======================
+If you need to install fish first, read on, the rest of this document will tell you how to get, install and configure fish.
 
-This section describes how to install, uninstall, start, and exit the fish shell. It also explains how to make fish the default shell.
+Installation
+============
+
+This section describes how to install, uninstall, start, and exit :command:`fish`. It also explains how to make fish the default shell.
 
 Installation
 ------------
@@ -48,39 +48,40 @@ Starting and Exiting
 
 Once fish has been installed, open a terminal. If fish is not the default shell:
 
-- Type ``fish`` to start a fish shell::
+- Type :command:`fish` to start a shell::
 
     > fish
 
-- Type ``exit`` to exit a fish shell::
+- Type :command:`exit` to end the session::
 
     > exit
 
-Executing Bash
---------------
-
-If fish is your default shell and you want to copy commands from the internet that are written in bash (the default shell on most systems), you can proceed in one of the following two ways:
-
-- Use the ``bash`` command with the ``-c`` switch to read from a string::
-
-    > bash -c 'some bash command'
-
-- Use ``bash`` without a switch to open a bash shell you can use and ``exit`` afterward::
-
-    > bash
-    $ some bash command
-    $ exit
-    > _
+.. _default-shell:
 
 Default Shell
 -------------
 
-To make fish your default shell:
+There are multiple ways to switch to fish (or any other shell) as your default.
 
-- Add the line ``/usr/local/bin/fish`` to ``/etc/shells``.
-- Change your default shell with ``chsh -s /usr/local/bin/fish``.
+The simplest method is to set your terminal emulator (eg GNOME Terminal, Apple's Terminal.app, or Konsole) to start fish directly. See its configuration and set the program to start to ``/usr/local/bin/fish`` (if that's where fish is installed - substitute another location as appropriate).
 
-For detailed instructions see :ref:`Switching to fish <switching-to-fish>`.
+Alternatively, you can set fish as your login shell so that it will be started by all terminal logins, including SSH.
+
+.. warning::
+
+    Setting fish as your login shell may cause issues, such as an incorrect :envvar:`PATH`. Some operating systems, including a number of Linux distributions, require the login shell to be Bourne-compatible and to read configuration from ``/etc/profile``. fish may not be suitable as a login shell on these systems.
+
+To change your login shell to fish:
+
+1. Add the shell to ``/etc/shells`` with::
+
+    > echo /usr/local/bin/fish | sudo tee -a /etc/shells
+
+2. Change your default shell with::
+
+    > chsh -s /usr/local/bin/fish
+
+Again, substitute the path to fish for ``/usr/local/bin/fish`` - see ``command -s fish`` inside fish. To change it back to another shell, just substitute ``/usr/local/bin/fish`` with ``/bin/bash``, ``/bin/tcsh`` or ``/bin/zsh`` as appropriate in the steps above.
 
 Uninstalling
 ------------
@@ -92,7 +93,8 @@ Shebang Line
 
 Because shell scripts are written in many different languages, they need to carry information about which interpreter should be used to execute them. For this, they are expected to have a first line, the shebang line, which names the interpreter executable.
 
-A script written in ``bash`` would need a first line like this::
+A script written in :command:`bash` would need a first line like this:
+::
 
     #!/bin/bash
 
@@ -102,47 +104,31 @@ For a script written in another language, just replace ``/bin/bash`` with the in
 
 This line is only needed when scripts are executed without specifying the interpreter. For functions inside fish or when executing a script with ``fish /path/to/script``, a shebang is not required (but it doesn't hurt!).
 
-.. _configuration:
+Configuration
+=============
 
-Configuration files
-====================
+To store configuration write it to a file called ``~/.config/fish/config.fish``.
 
-When fish is started, it reads and runs its configuration files. Where these are depends on build configuration and environment variables.
+``.fish`` scripts in ``~/.config/fish/conf.d/`` are also automatically executed before ``config.fish``.
 
-The main file is ``~/.config/fish/config.fish`` (or more precisely ``$XDG_CONFIG_HOME/fish/config.fish``).
+These files are read on the startup of every shell, whether interactive and/or if they're login shells. Use ``status --is-interactive`` and ``status --is-login`` to do things only in interactive/login shells, respectively.
 
-Configuration files are evaluated in the following order:
+This is the short version; for a full explanation, like for sysadmins or integration for developers of other software, see :ref:`Configuration files <configuration>`.
 
-- Configuration snippets in files ending in ``.fish``, in the directories:
-
-  - ``$__fish_config_dir/conf.d`` (by default, ``~/.config/fish/conf.d/``)
-  - ``$__fish_sysconf_dir/conf.d`` (by default, ``/etc/fish/conf.d/``)
-  - Directories for third-party software vendors to ship their own configuration snippets for their software. Fish searches the directories in the ``XDG_DATA_DIRS`` environment variable for a ``fish/vendor_conf.d`` directory; if that variable is not defined, the default is ``/usr/share/fish/vendor_conf.d`` and ``/usr/local/share/fish/vendor_conf.d``, unless your distribution customized this.
-
-  If there are multiple files with the same name in these directories, only the first will be executed.
-  They are executed in order of their filename, sorted (like globs) in a natural order (i.e. "01" sorts before "2").
-
-- System-wide configuration files, where administrators can include initialization that should be run for all users on the system - similar to ``/etc/profile`` for POSIX-style shells - in ``$__fish_sysconf_dir`` (usually ``/etc/fish/config.fish``).
-- User initialization, usually in ``~/.config/fish/config.fish`` (controlled by the ``XDG_CONFIG_HOME`` environment variable, and accessible as ``$__fish_config_dir``).
-
-``~/.config/fish/config.fish`` is sourced *after* the snippets. This is so users can copy snippets and override some of their behavior.
-
-These files are all executed on the startup of every shell. If you want to run a command only on starting an interactive shell, use the exit status of the command ``status --is-interactive`` to determine if the shell is interactive. If you want to run a command only when using a login shell, use ``status --is-login`` instead. This will speed up the starting of non-interactive or non-login shells.
-
-If you are developing another program, you may wish to install configuration which is run for all users of the fish shell on a system. This is discouraged; if not carefully written, they may have side-effects or slow the startup of the shell. Additionally, users of other shells will not benefit from the Fish-specific configuration. However, if they are absolutely required, you may install them to the "vendor" configuration directory. As this path may vary from system to system, the ``pkgconfig`` framework should be used to discover this path with the output of ``pkg-config --variable confdir fish``.
+If you want to see what you changed over fish's defaults, see :doc:`fish_delta <cmds/fish_delta>`.
 
 Examples:
+---------
 
-If you want to add the directory ``~/linux/bin`` to your PATH variable when using a login shell, add this to your ``~/.config/fish/config.fish`` file::
+To add ``~/linux/bin`` to PATH variable when using a login shell, add this to ``~/.config/fish/config.fish`` file::
 
     if status --is-login
         set -gx PATH $PATH ~/linux/bin
     end
 
-(alternatively use :ref:`fish_add_path <cmd-fish_add_path>` like ``fish_add_path ~/linux/bin``, which only adds the path if it isn't included yet)
+This is just an example; using :doc:`fish_add_path <cmds/fish_add_path>` e.g. ``fish_add_path ~/linux/bin`` which only adds the path if it isn't included yet is easier.
 
-If you want to run a set of commands when fish exits, use an :ref:`event handler <event>` that is triggered by the exit of the shell::
-
+To run commands on exit, use an :ref:`event handler <event>` that is triggered by the exit of the shell::
 
     function on_exit --on-event fish_exit
         echo fish is now exiting
@@ -150,10 +136,8 @@ If you want to run a set of commands when fish exits, use an :ref:`event handler
 
 .. _more-help:
 
-Further help and development
-============================
-
-If you have a question not answered by this documentation, there are several avenues for help:
+Resources
+=========
 
 - The `GitHub page <https://github.com/fish-shell/fish-shell/>`_
 
@@ -169,7 +153,7 @@ Other help pages
 ================
 .. toctree::
    :maxdepth: 1
-
+              
    self
    faq
    interactive
@@ -179,5 +163,5 @@ Other help pages
    tutorial
    completions
    design
-   relnotes 
+   relnotes
    license

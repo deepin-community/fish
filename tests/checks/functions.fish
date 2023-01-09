@@ -6,10 +6,8 @@ end
 
 # ==========
 # Verify that `functions --details` works as expected when given too many args.
-set x (functions --details f1 f2 2>&1)
-if test "$x" != "functions --details: Expected 1 args, got 2"
-    echo "Unexpected output for 'functions --details f1 f2': $x" >&2
-end
+functions    --details f1 f2
+#CHECKERR: functions: --details: expected 1 arguments; got 2
 
 # ==========
 # Verify that `functions --details` works as expected when given the name of a
@@ -20,31 +18,29 @@ functions --details f1
 # ==========
 # Verify that `functions --details` works as expected when given the name of an
 # unknown function.
-set x (functions -D f2)
-if test "$x" != n/a
-    echo "Unexpected output for 'functions --details f2': $x" >&2
-end
+functions -D f2
+#CHECK: n/a
 
 # ==========
 # Verify that `functions --details` works as expected when given the name of a
 # function that could be autoloaded but isn't currently loaded.
-set x (functions -D abbr)
+set x (functions -D vared)
 if test (count $x) -ne 1
-    or not string match -q '*/share/functions/abbr.fish' "$x"
-    echo "Unexpected output for 'functions -D abbr': $x" >&2
+    or not string match -q '*/share/functions/vared.fish' "$x"
+    echo "Unexpected output for 'functions -D vared': $x" >&2
 end
 
 # ==========
 # Verify that `functions --verbose --details` works as expected when given the name of a
 # function that was autoloaded.
-set x (functions -v -D abbr)
+set x (functions -v -D vared)
 if test (count $x) -ne 5
-    or not string match -q '*/share/functions/abbr.fish' $x[1]
+    or not string match -q '*/share/functions/vared.fish' $x[1]
     or test $x[2] != autoloaded
-    or test $x[3] != 1
+    or test $x[3] != 6
     or test $x[4] != scope-shadowing
-    or test $x[5] != 'Manage abbreviations'
-    echo "Unexpected output for 'functions -v -D abbr': $x" >&2
+    or test $x[5] != 'Edit variable value'
+    echo "Unexpected output for 'functions -v -D vared': $x" >&2
 end
 
 # ==========
@@ -111,9 +107,10 @@ functions --no-details t
 # CHECK: end
 
 functions --no-details --details t
-# CHECKERR: functions: Invalid combination of options
+# CHECKERR: functions: invalid option combination
 # CHECKERR:
 # CHECKERR: checks/functions.fish (line {{\d+}}):
 # CHECKERR: functions --no-details --details t
 # CHECKERR: ^
 # CHECKERR: (Type 'help functions' for related documentation)
+# XXX FIXME ^ caret should point at --no-details --details

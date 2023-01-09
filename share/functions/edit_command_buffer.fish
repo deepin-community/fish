@@ -2,7 +2,7 @@ function edit_command_buffer --description 'Edit the command buffer in an extern
     set -l f (mktemp)
     or return 1
     if set -q f[1]
-        mv $f $f.fish
+        command mv $f $f.fish
         set f $f.fish
     else
         # We should never execute this block but better to be paranoid.
@@ -11,7 +11,7 @@ function edit_command_buffer --description 'Edit the command buffer in an extern
         else
             set f /tmp/fish.$fish_pid.fish
         end
-        touch $f
+        command touch $f
         or return 1
     end
 
@@ -44,7 +44,7 @@ function edit_command_buffer --description 'Edit the command buffer in an extern
     set -l basename (string match -r '[^/]*$' -- $editor[1])
     switch $basename
         case vi vim nvim
-            set -a editor +$line +"norm $col|" $f
+            set -a editor +$line +"norm! $col|" $f
         case emacs emacsclient gedit kak
             set -a editor +$line:$col $f
         case nano
@@ -56,7 +56,7 @@ function edit_command_buffer --description 'Edit the command buffer in an extern
         case subl
             set -a editor $f:$line:$col --wait
         case micro
-            set -a editor $f:$line:$col
+            set -a editor $f +$line:$col
         case '*'
             set -a editor $f
     end
@@ -70,7 +70,7 @@ function edit_command_buffer --description 'Edit the command buffer in an extern
     if test $editor_status -eq 0 -a -s $f
         # Set the command to the output of the edited command and move the cursor to the
         # end of the edited command.
-        commandline -r -- (cat $f)
+        commandline -r -- (command cat $f)
         commandline -C 999999
     else
         echo

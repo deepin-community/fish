@@ -3,11 +3,14 @@
 
 #include "wcstringutil.h"
 
+#include <stddef.h>
 #include <wctype.h>
 
 #include <locale>
+#include <utility>
 
 #include "common.h"
+#include "fallback.h"  // IWYU pragma: keep
 #include "flog.h"
 
 wcstring truncate(const wcstring &input, int max_len, ellipsis_type etype) {
@@ -117,8 +120,8 @@ bool string_suffixes_string_case_insensitive(const wcstring &proposed_suffix,
 /// Returns true if needle, represented as a subsequence, is contained within haystack.
 /// Note subsequence is not substring: "foo" is a subsequence of "follow" for example.
 static bool subsequence_in_string(const wcstring &needle, const wcstring &haystack) {
-    // Impossible if haystack is larger than string.
-    if (haystack.size() > haystack.size()) {
+    // Impossible if needle is larger than haystack.
+    if (needle.size() > haystack.size()) {
         return false;
     }
 
@@ -182,13 +185,12 @@ maybe_t<string_fuzzy_match_t> string_fuzzy_match_t::try_create(const wcstring &s
     }
 
     // substr samecase
-    size_t location;
-    if ((location = match_against.find(string)) != wcstring::npos) {
+    if (match_against.find(string) != wcstring::npos) {
         return string_fuzzy_match_t{contain_type_t::substr, case_fold_t::samecase};
     }
 
     // substr icase
-    if ((location = ifind(match_against, string, true /* fuzzy */)) != wcstring::npos) {
+    if (ifind(match_against, string, true /* fuzzy */) != wcstring::npos) {
         return string_fuzzy_match_t{contain_type_t::substr, get_case_fold()};
     }
 
@@ -214,7 +216,7 @@ uint32_t string_fuzzy_match_t::rank() const {
 }
 
 template <bool Fuzzy, typename T>
-size_t ifind_impl(const T &haystack, const T &needle) {
+static size_t ifind_impl(const T &haystack, const T &needle) {
     using char_t = typename T::value_type;
     std::locale locale;
 
@@ -284,12 +286,12 @@ wcstring_list_t split_string_tok(const wcstring &val, const wcstring &seps, size
     return out;
 }
 
-wcstring join_strings(const wcstring_list_t &vals, wchar_t sep) {
+static wcstring join_strings_impl(const wcstring_list_t &vals, const wchar_t *sep, size_t seplen) {
     if (vals.empty()) return wcstring{};
 
     // Reserve the size we will need.
     // count-1 separators, plus the length of all strings.
-    size_t size = vals.size() - 1;
+    size_t size = (vals.size() - 1) * seplen;
     for (const wcstring &s : vals) {
         size += s.size();
     }
@@ -300,7 +302,7 @@ wcstring join_strings(const wcstring_list_t &vals, wchar_t sep) {
     bool first = true;
     for (const wcstring &s : vals) {
         if (!first) {
-            result.push_back(sep);
+            result.append(sep, seplen);
         }
         result.append(s);
         first = false;
@@ -308,6 +310,19 @@ wcstring join_strings(const wcstring_list_t &vals, wchar_t sep) {
     return result;
 }
 
+wcstring join_strings(const wcstring_list_t &vals, wchar_t c) {
+    return join_strings_impl(vals, &c, 1);
+}
+
+wcstring join_strings(const wcstring_list_t &vals, const wchar_t *sep) {
+    return join_strings_impl(vals, sep, wcslen(sep));
+}
+
 void wcs2string_bad_char(wchar_t wc) {
     FLOGF(char_encoding, L"Wide character U+%4X has no narrow representation", wc);
+}
+
+int fish_wcwidth_visible(wchar_t widechar) {
+    if (widechar == L'\b') return -1;
+    return std::max(0, fish_wcwidth(widechar));
 }

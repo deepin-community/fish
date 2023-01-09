@@ -3,20 +3,24 @@
 #ifndef FISH_AST_H
 #define FISH_AST_H
 
-#include <array>
-#include <tuple>
+#include <cstddef>
+#include <cstdint>
+#include <initializer_list>
+#include <iterator>
+#include <memory>
 #include <type_traits>
+#include <utility>
+#include <vector>
 
-#include "flog.h"
+#include "common.h"
+#include "maybe.h"
 #include "parse_constants.h"
-#include "tokenizer.h"
 
 namespace ast {
-
 /**
  * This defines the fish abstract syntax tree.
  * The fish ast is a tree data structure. The nodes of the tree
- * are divided into three types:
+ * are divided into three categories:
  *
  * - leaf nodes refer to a range of source, and have no child nodes.
  * - branch nodes have ONLY child nodes, and no other fields.
@@ -28,9 +32,6 @@ namespace ast {
 
 struct node_t;
 
-// Our node categories.
-// Note these are not stored directly in a node; they are provided in the Category static constexpr
-// variable in each node.
 enum class category_t : uint8_t {
     branch,
     leaf,
@@ -74,7 +75,7 @@ const wchar_t *ast_type_to_string(type_t type);
  *    void will_visit_fields_of(job_t &job);
  *
  *    /// The visitor needs to be prepared for the following four field types.
- *    /// Naturally the vistor may overload visit_field to carve this
+ *    /// Naturally the visitor may overload visit_field to carve this
  *    /// arbitrarily finely.
  *
  *    /// A field may be a "direct embedding" of a node.
@@ -167,11 +168,13 @@ using only_if_t = typename std::enable_if<B>::type;
 template <typename FieldVisitor, typename Field>
 only_if_t<Field::Category != category_t::list> visit_1_field(FieldVisitor &v, Field &field) {
     v.visit_node_field(field);
+    return;
 }
 
 template <typename FieldVisitor, typename Field>
 only_if_t<Field::Category == category_t::list> visit_1_field(FieldVisitor &v, Field &field) {
     v.visit_list_field(field);
+    return;
 }
 
 template <typename FieldVisitor, typename Field>
@@ -215,7 +218,7 @@ void accept_field_visitor(FieldVisitor &v, bool reverse, Field &field, Rest &...
 
 /// node_t is the base node of all AST nodes.
 /// It is not a template: it is possible to work concretely with this type.
-struct node_t {
+struct node_t : noncopyable_t {
     /// The parent node, or null if this is root.
     const node_t *parent{nullptr};
 
@@ -226,12 +229,6 @@ struct node_t {
     const category_t category;
 
     constexpr explicit node_t(type_t t, category_t c) : type(t), category(c) {}
-
-    /// Disallow copying, etc.
-    node_t(const node_t &) = delete;
-    node_t(node_t &&) = delete;
-    void operator=(const node_t &) = delete;
-    void operator=(node_t &&) = delete;
 
     /// Cast to a concrete node type, aborting on failure.
     /// Example usage:
@@ -249,7 +246,7 @@ struct node_t {
     }
 
     /// Try casting to a concrete node type, except returns nullptr on failure.
-    /// Example ussage:
+    /// Example usage:
     ///     if (const auto *job_list = node->try_as<job_list_t>()) job_list->...
     template <typename To>
     To *try_as() {
@@ -349,8 +346,9 @@ struct leaf_t : public node_t {
 };
 
 // A simple fixed-size array, possibly empty.
+// Disallow moving as we own a raw pointer.
 template <type_t ListType, typename ContentsNode>
-struct list_t : public node_t {
+struct list_t : public node_t, nonmovable_t {
     static constexpr type_t AstType = ListType;
     static constexpr category_t Category = category_t::list;
 
@@ -404,10 +402,6 @@ struct list_t : public node_t {
 
     list_t() : node_t(ListType, Category) {}
     ~list_t() { delete[] contents; }
-
-    // Disallow moving as we own a raw pointer.
-    list_t(list_t &&) = delete;
-    void operator=(list_t &&) = delete;
 };
 
 // Fully define all list types, as they are very uniform.
@@ -825,7 +819,7 @@ union_ptr_t<Nodes...>::union_ptr_t(std::unique_ptr<Node> n) : contents(n.release
  * };
  */
 template <typename NodeVisitor>
-class node_visitation_t {
+class node_visitation_t : noncopyable_t {
    public:
     explicit node_visitation_t(NodeVisitor &v, bool reverse = false) : v_(v), reverse_(reverse) {}
 
@@ -890,13 +884,6 @@ class node_visitation_t {
     void will_visit_fields_of(node_t &) {}
     void did_visit_fields_of(node_t &) {}
 
-    node_visitation_t(node_visitation_t &&) = default;
-
-    // We cannot be copied.
-    node_visitation_t(const node_visitation_t &) = delete;
-    void operator=(const node_visitation_t &) = delete;
-    void operator=(node_visitation_t &&) = delete;
-
    private:
     // Our adapted visitor.
     NodeVisitor &v_;
@@ -942,9 +929,6 @@ class traversal_t {
     // Construct an empty visitor, used for iterator support.
     traversal_t() = default;
 
-    // \return whether we are finished visiting.
-    bool finished() const { return stack_.empty(); }
-
     // Append a node.
     void push(const node_t *n) {
         assert(n && "Should not push null node");
@@ -959,7 +943,7 @@ class traversal_t {
 };
 
 /// The ast type itself.
-class ast_t {
+class ast_t : noncopyable_t {
    public:
     using source_range_list_t = std::vector<source_range_t>;
 
@@ -1036,15 +1020,13 @@ class ast_t {
 
     ast_t(ast_t &&) = default;
     ast_t &operator=(ast_t &&) = default;
-    ast_t(const ast_t &) = delete;
-    void operator=(const ast_t &) = delete;
 
    private:
     ast_t() = default;
 
     // Shared parsing code that takes the top type.
     static ast_t parse_from_top(const wcstring &src, parse_tree_flags_t parse_flags,
-                                parse_error_list_t *out_errors, type_t top);
+                                parse_error_list_t *out_errors, type_t top_type);
 
     // The top node.
     // Its type depends on what was requested to parse.
@@ -1055,9 +1037,6 @@ class ast_t {
 
     /// Extra fields.
     extras_t extras_{};
-
-    class populator_t;
-    friend populator_t;
 };
 
 }  // namespace ast

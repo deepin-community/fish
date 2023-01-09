@@ -28,8 +28,9 @@ TIMEOUT_SECS = 5
 
 UNEXPECTED_SUCCESS = object()
 
+
 def get_prompt_re(counter):
-    """ Return a regular expression for matching a with a given prompt counter. """
+    """Return a regular expression for matching a with a given prompt counter."""
     return re.compile(
         r"""(?:\r\n?|^)   # beginning of line
             (?:\x1b[\d\[KB(m]*)* # optional colors
@@ -44,16 +45,21 @@ def get_prompt_re(counter):
 
 
 def get_callsite():
-    """ Return a triple (filename, line_number, line_text) of the call site location. """
+    """Return a triple (filename, line_number, line_text) of the call site location."""
     callstack = inspect.getouterframes(inspect.currentframe())
     for f in callstack:
-        if inspect.getmodule(f.frame) is not Message.MODULE:
-            return (os.path.basename(f.filename), f.lineno, f.code_context)
+        # Skip call sites from this file.
+        if inspect.getmodule(f.frame) is Message.MODULE:
+            continue
+        # Skip functions which have a truthy callsite_skip attribute.
+        if getattr(f.function, "callsite_skip", False):
+            continue
+        return (os.path.basename(f.filename), f.lineno, f.code_context)
     return ("Unknown", -1, "")
 
 
 def escape(s):
-    """ Escape the string 's' to make it human-understandable. """
+    """Escape the string 's' to make it human-understandable."""
     res = []
     for c in s:
         if c == "\n":
@@ -70,7 +76,7 @@ def escape(s):
 
 
 def pexpect_error_type(err):
-    """ Return a human-readable description of a pexpect error type. """
+    """Return a human-readable description of a pexpect error type."""
     if isinstance(err, pexpect.EOF):
         return "EOF"
     elif isinstance(err, pexpect.TIMEOUT):
@@ -100,7 +106,7 @@ class Message(object):
     MODULE = sys.modules[__name__]
 
     def __init__(self, dir, text, when):
-        """ Construct from a direction, message text and timestamp. """
+        """Construct from a direction, message text and timestamp."""
         self.dir = dir
         self.filename, self.lineno, _ = get_callsite()
         self.text = text
@@ -108,12 +114,12 @@ class Message(object):
 
     @staticmethod
     def sent_input(text, when):
-        """ Return an input message with the given text. """
+        """Return an input message with the given text."""
         return Message(Message.DIR_INPUT, text, when)
 
     @staticmethod
     def received_output(text, when):
-        """ Return a output message with the given text. """
+        """Return a output message with the given text."""
         return Message(Message.DIR_OUTPUT, text, when)
 
 
@@ -129,7 +135,9 @@ class SpawnedProc(object):
             function to ensure that each printed prompt is distinct.
     """
 
-    def __init__(self, name="fish", timeout=TIMEOUT_SECS, env=os.environ.copy(), **kwargs):
+    def __init__(
+        self, name="fish", timeout=TIMEOUT_SECS, env=os.environ.copy(), **kwargs
+    ):
         """Construct from a name, timeout, and environment.
 
         Args:
@@ -143,15 +151,17 @@ class SpawnedProc(object):
         if name not in env:
             raise ValueError("'%s' variable not found in environment" % name)
         exe_path = env.get(name)
-        self.colorize = sys.stdout.isatty()
+        self.colorize = sys.stdout.isatty() or env.get("FISH_FORCE_COLOR", "0") == "1"
         self.messages = []
         self.start_time = None
-        self.spawn = pexpect.spawn(exe_path, env=env, encoding="utf-8", timeout=timeout, **kwargs)
+        self.spawn = pexpect.spawn(
+            exe_path, env=env, encoding="utf-8", timeout=timeout, **kwargs
+        )
         self.spawn.delaybeforesend = None
         self.prompt_counter = 0
 
     def time_since_first_message(self):
-        """ Return a delta in seconds since the first message, or 0 if this is the first. """
+        """Return a delta in seconds since the first message, or 0 if this is the first."""
         now = time.monotonic()
         if not self.start_time:
             self.start_time = now
@@ -207,7 +217,7 @@ class SpawnedProc(object):
             self.report_exception_and_exit(pat_desc, unmatched, err)
 
     def expect_str(self, s, **kwargs):
-        """ Cover over expect_re() which accepts a literal string. """
+        """Cover over expect_re() which accepts a literal string."""
         return self.expect_re(re.escape(s), **kwargs)
 
     def expect_prompt(self, *args, increment=True, **kwargs):
@@ -263,16 +273,11 @@ class SpawnedProc(object):
         print("{CYAN}Escaped buffer:{RESET}".format(**colors))
         print(escape(self.spawn.before))
         print("")
-        if sys.stdout.isatty():
-            print(
-                "{CYAN}When written to the tty, this looks like:{RESET}".format(
-                    **colors
-                )
-            )
-            print("{CYAN}<-------{RESET}".format(**colors))
-            sys.stdout.write(self.spawn.before)
-            sys.stdout.flush()
-            print("{RESET}\n{CYAN}------->{RESET}".format(**colors))
+        print("{CYAN}When written to the tty, this looks like:{RESET}".format(**colors))
+        print("{CYAN}<-------{RESET}".format(**colors))
+        sys.stdout.write(self.spawn.before)
+        sys.stdout.flush()
+        print("{RESET}\n{CYAN}------->{RESET}".format(**colors))
 
         print("")
 
@@ -305,14 +310,14 @@ class SpawnedProc(object):
         sys.exit(1)
 
     def sleep(self, secs):
-        """ Cover over time.sleep(). """
+        """Cover over time.sleep()."""
         time.sleep(secs)
 
     def colors(self):
-        """ Return a dictionary mapping color names to ANSI escapes """
+        """Return a dictionary mapping color names to ANSI escapes"""
 
         def ansic(n):
-            """ Return either an ANSI escape sequence for a color, or empty string. """
+            """Return either an ANSI escape sequence for a color, or empty string."""
             return "\033[%dm" % n if self.colorize else ""
 
         return {
@@ -336,3 +341,25 @@ class SpawnedProc(object):
             "LIGHTCYAN": ansic(96),
             "WHITE": ansic(97),
         }
+
+
+def control(char: str) -> str:
+    """ Returns the char sent when control is pressed along the given key. """
+    assert len(char) == 1
+    char = char.lower()
+    if ord("a") <= ord(char) <= ord("z"):
+        return chr(ord(char) - ord("a") + 1)
+    return chr({
+        "@": 0,
+        "`": 0,
+        "[": 27,
+        "{": 27,
+        "\\": 28,
+        "|": 28,
+        "]": 29,
+        "}": 29,
+        "^": 30,
+        "~": 30,
+        "_": 31,
+        "?": 127,
+    }[char])

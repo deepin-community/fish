@@ -5,55 +5,42 @@
 #include "config.h"
 
 // IWYU likes to recommend adding term.h when we want ncurses.h.
-// IWYU pragma: no_include term.h
-#include <dirent.h>  // IWYU pragma: keep
+// IWYU pragma: no_include "term.h"
 #include <errno.h>   // IWYU pragma: keep
 #include <fcntl.h>   // IWYU pragma: keep
 #include <limits.h>  // IWYU pragma: keep
-#include <stdarg.h>  // IWYU pragma: keep
-#include <stdio.h>   // IWYU pragma: keep
-#include <stdlib.h>
-#include <sys/stat.h>   // IWYU pragma: keep
-#include <sys/types.h>  // IWYU pragma: keep
-#include <unistd.h>
+#include <unistd.h>  // IWYU pragma: keep
 #include <wctype.h>
 
-#include <algorithm>
-#include <cstring>
 #include <cwchar>
+#include <cstdlib>
 #if HAVE_GETTEXT
 #include <libintl.h>
 #endif
+#if defined(TPARM_SOLARIS_KLUDGE)
 #if HAVE_CURSES_H
-#include <curses.h>
+#include <curses.h>  // IWYU pragma: keep
 #elif HAVE_NCURSES_H
 #include <ncurses.h>  // IWYU pragma: keep
 #elif HAVE_NCURSES_CURSES_H
-#include <ncurses/curses.h>
+#include <ncurses/curses.h>  // IWYU pragma: keep
 #endif
 #if HAVE_TERM_H
 #include <term.h>  // IWYU pragma: keep
 #elif HAVE_NCURSES_TERM_H
 #include <ncurses/term.h>
 #endif
+#endif
 #include <signal.h>  // IWYU pragma: keep
-
-#include <cwchar>  // IWYU pragma: keep
 
 #include "common.h"    // IWYU pragma: keep
 #include "fallback.h"  // IWYU pragma: keep
 
 #if defined(TPARM_SOLARIS_KLUDGE)
-#undef tparm
-
 char *tparm_solaris_kludge(char *str, long p1, long p2, long p3, long p4, long p5, long p6, long p7,
                            long p8, long p9) {
     return tparm(str, p1, p2, p3, p4, p5, p6, p7, p8, p9);
 }
-
-// Re-defining just to make sure nothing breaks further down in this file.
-#define tparm tparm_solaris_kludge
-
 #endif
 
 int fish_mkstemp_cloexec(char *name_template) {
@@ -70,21 +57,10 @@ int fish_mkstemp_cloexec(char *name_template) {
     return result_fd;
 }
 
-/// Fallback implementations of wcsdup and wcscasecmp. On systems where these are not needed (e.g.
+/// Fallback implementations of wcsncasecmp and wcscasecmp. On systems where these are not needed (e.g.
 /// building on Linux) these should end up just being stripped, as they are static functions that
 /// are not referenced in this file.
 // cppcheck-suppress unusedFunction
-[[gnu::unused]] static wchar_t *wcsdup_fallback(const wchar_t *in) {
-    size_t len = std::wcslen(in);
-    auto out = static_cast<wchar_t *>(malloc(sizeof(wchar_t) * (len + 1)));
-    if (out == nullptr) {
-        return nullptr;
-    }
-
-    std::memcpy(out, in, sizeof(wchar_t) * (len + 1));
-    return out;
-}
-
 [[gnu::unused]] static int wcscasecmp_fallback(const wchar_t *a, const wchar_t *b) {
     if (*a == 0) {
         return *b == 0 ? 0 : -1;
@@ -111,12 +87,6 @@ int fish_mkstemp_cloexec(char *name_template) {
     return wcsncasecmp_fallback(a + 1, b + 1, count - 1);
 }
 
-#ifndef HAVE_WCSDUP
-#ifndef HAVE_STD__WCSDUP
-wchar_t *wcsdup(const wchar_t *in) { return wcsdup_fallback(in); }
-#endif
-#endif
-
 #ifndef HAVE_WCSCASECMP
 #ifndef HAVE_STD__WCSCASECMP
 int wcscasecmp(const wchar_t *a, const wchar_t *b) { return wcscasecmp_fallback(a, b); }
@@ -129,64 +99,6 @@ int wcsncasecmp(const wchar_t *a, const wchar_t *b, size_t n) {
     return wcsncasecmp_fallback(a, b, n);
 }
 #endif
-#endif
-
-#ifndef HAVE_WCSNDUP
-wchar_t *wcsndup(const wchar_t *in, size_t c) {
-    auto res = static_cast<wchar_t *>(malloc(sizeof(wchar_t) * (c + 1)));
-    if (res == nullptr) {
-        return nullptr;
-    }
-    wcslcpy(res, in, c + 1);
-    return res;
-}
-#endif
-
-#ifndef HAVE_WCSLCPY
-/*$OpenBSD: strlcpy.c,v 1.8 2003/06/17 21:56:24 millert Exp $*/
-
-/*
- * Copyright (c) 1998 Todd C. Miller <Todd.Miller@courtesan.com>
- *
- * Permission to use, copy, modify, and distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
- *
- * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
- * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
- * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
- * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
- * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
- * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
- * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
- */
-size_t wcslcpy(wchar_t *dst, const wchar_t *src, size_t siz) {
-    wchar_t *d = dst;
-    const wchar_t *s = src;
-    size_t n = siz;
-
-    // Copy as many bytes as will fit.
-    if (n != 0 && --n != 0) {
-        do {
-            if ((*d++ = *s++) == 0) break;
-        } while (--n != 0);
-    }
-
-    // Not enough room in dst, add NUL and traverse rest of src.
-    if (n == 0) {
-        if (siz != 0) *d = '\0';  // NUL-terminate dst
-        while (*s++)
-            ;  // ignore rest of src
-    }
-    return s - src - 1;  // count does not include NUL
-}
-#endif
-
-#ifndef HAVE_FUTIMES
-int futimes(int fd, const struct timeval *times) {
-    errno = ENOSYS;
-    return -1;
-}
 #endif
 
 #if HAVE_GETTEXT
@@ -202,11 +114,11 @@ char *fish_gettext(const char *msgid) { return (char *)msgid; }
 char *fish_bindtextdomain(const char *domainname, const char *dirname) {
     UNUSED(domainname);
     UNUSED(dirname);
-    return NULL;
+    return nullptr;
 }
 char *fish_textdomain(const char *domainname) {
     UNUSED(domainname);
-    return NULL;
+    return nullptr;
 }
 #endif
 
@@ -221,17 +133,12 @@ int killpg(int pgr, int sig) {
 int g_fish_ambiguous_width = 1;
 
 // Width of emoji characters.
-int g_fish_emoji_width = 0;
-
 // 1 is the typical emoji width in Unicode 8.
-int g_guessed_fish_emoji_width = 1;
+int g_fish_emoji_width = 1;
 
 static int fish_get_emoji_width(wchar_t c) {
     (void)c;
-    // Respect an explicit value. If we don't have one, use the guessed value. Do not try to fall
-    // back to wcwidth(), it's hopeless.
-    if (g_fish_emoji_width > 0) return g_fish_emoji_width;
-    return g_guessed_fish_emoji_width;
+    return g_fish_emoji_width;
 }
 
 // Big hack to use our versions of wcswidth where we know them to be broken, which is
@@ -255,21 +162,21 @@ int fish_wcwidth(wchar_t wc) {
     else if (wc == variation_selector_15)
         return 0;
 
-    // Korean Hangul Jamo median vowels and final consonants.
-    // These can either appear in combined form, taking 0 width themselves,
-    // or standalone with a 1 width. Since that's literally not expressible with wcwidth(),
-    // we take the position that the typical way for them to show up is composed.
-    if (wc >= L'\u1160' && wc <= L'\u11FF') return 0;
+    // Check for Emoji_Modifier property. Only the Fitzpatrick modifiers have this, in range
+    // 1F3FB..1F3FF. This is a hack because such an emoji appearing on its own would be drawn as
+    // width 2, but that's unlikely to be useful. See #8275.
+    if (wc >= 0x1F3FB && wc <= 0x1F3FF) return 0;
+
     int width = widechar_wcwidth(wc);
 
     switch (width) {
+        case widechar_non_character:
         case widechar_nonprint:
         case widechar_combining:
         case widechar_unassigned:
             // Fall back to system wcwidth in this case.
             return wcwidth(wc);
         case widechar_ambiguous:
-            return g_fish_ambiguous_width;
         case widechar_private_use:
             // TR11: "All private-use characters are by default classified as Ambiguous".
             return g_fish_ambiguous_width;

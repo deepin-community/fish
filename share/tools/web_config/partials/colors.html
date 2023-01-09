@@ -65,7 +65,11 @@ fish cannot change the background color of your terminal. Refer to your terminal
         	  ng-mouseenter="csHoveredType = 'error'"
         	  ng-mouseleave="csHoveredType = false"
               data-ng-style="{ 'color': interpret_color(selectedColorScheme.error)}"
-              ng-click="selectColorSetting('error')">'Errors are the portals to discovery</span>
+              ng-click="selectColorSetting('error')">'</span><span ng-class="{cs_clickable: customizationActive, cs_editing: csEditingType == 'quote'}"
+        	  ng-mouseenter="csHoveredType = 'quote'"
+        	  ng-mouseleave="csHoveredType = false"
+              data-ng-style="{ 'color': interpret_color(selectedColorScheme.quote)}"
+              ng-click="selectColorSetting('quote')">Errors are the portals to discovery</span>
 
         <br>
 
@@ -92,15 +96,15 @@ fish cannot change the background color of your terminal. Refer to your terminal
 
 		<div style="position: absolute; right: 5px; bottom: 5px;">
 
-			<span class="customize_theme_button"
+			<button class="customize_theme_button"
 				  ng-class="{button_highlight: customizationActive}"
 				  data-ng-style="{'color': text_color_for_color(terminalBackgroundColor || 'black')}"
-				  ng-click="toggleCustomizationActive();">Customize</span>
+				  ng-click="toggleCustomizationActive();">Customize</button>
 
-			<span class="save_button"
+			<button class="save_button"
 				  data-ng-style="{'color': text_color_for_color(terminalBackgroundColor || 'black')}"
 				  ng-show="showSaveButton"
-				  ng-click="setTheme()">{{saveThemeButtonTitle}}</span>
+				  ng-click="setTheme()">{{saveThemeButtonTitle}}</button>
 		</div>
 
     </div>
@@ -139,7 +143,7 @@ fish cannot change the background color of your terminal. Refer to your terminal
 					<span data-ng-style="{'color': interpret_color(colorScheme.end)}">&</span>
 					<br>
 					<span data-ng-style="{'color': interpret_color(colorScheme.command)}">echo</span>
-					<span data-ng-style="{'color': interpret_color(colorScheme.error)}">'Errors are the portals to discovery</span>
+					<span data-ng-style="{'color': interpret_color(colorScheme.error)}">'</span><span data-ng-style="{'color': interpret_color(colorScheme.quote)}">Errors are the portals to discovery</span>
 					<br>
 					<span data-ng-style="{'color': interpret_color(colorScheme.comment)}"># This is a comment</span>
 					<br>

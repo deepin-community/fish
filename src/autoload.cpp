@@ -3,11 +3,15 @@
 
 #include "autoload.h"
 
+#include <algorithm>
 #include <chrono>
+#include <functional>
+#include <utility>
+#include <vector>
 
 #include "common.h"
 #include "env.h"
-#include "exec.h"
+#include "io.h"
 #include "lru.h"
 #include "parser.h"
 #include "wutil.h"  // IWYU pragma: keep
@@ -16,6 +20,7 @@
 static const int kAutoloadStalenessInterval = 15;
 
 /// Represents a file that we might want to autoload.
+namespace {
 struct autoloadable_file_t {
     /// The path to the file.
     wcstring path;
@@ -23,6 +28,7 @@ struct autoloadable_file_t {
     /// The metadata for the file.
     file_id_t file_id;
 };
+}  // namespace
 
 /// Class representing a cache of files that may be autoloaded.
 /// This is responsible for performing cached accesses to a set of paths.
@@ -35,7 +41,7 @@ class autoload_file_cache_t {
 
     /// Our LRU cache of checks that were misses.
     /// The key is the command, the  value is the time of the check.
-    struct misses_lru_cache_t : public lru_cache_t<misses_lru_cache_t, timestamp_t> {};
+    using misses_lru_cache_t = lru_cache_t<timestamp_t>;
     misses_lru_cache_t misses_cache_;
 
     /// The set of files that we have returned to the caller, along with the time of the check.
@@ -52,7 +58,7 @@ class autoload_file_cache_t {
     /// \return whether a timestamp is fresh enough to use.
     static bool is_fresh(timestamp_t then, timestamp_t now);
 
-    /// Attempt to find an autoloadable file by searching our path list for a given comand.
+    /// Attempt to find an autoloadable file by searching our path list for a given command.
     /// \return the file, or none() if none.
     maybe_t<autoloadable_file_t> locate_file(const wcstring &cmd) const;
 
@@ -70,9 +76,17 @@ class autoload_file_cache_t {
     /// If \p allow_stale is true, allow stale entries; otherwise discard them.
     /// This returns an autoloadable file, or none() if there is no such file.
     maybe_t<autoloadable_file_t> check(const wcstring &cmd, bool allow_stale = false);
+
+    /// \return true if a command is cached (either as a hit or miss).
+    bool is_cached(const wcstring &cmd) const;
 };
 
 maybe_t<autoloadable_file_t> autoload_file_cache_t::locate_file(const wcstring &cmd) const {
+    // If the command is empty or starts with NULL (i.e. is empty as a path)
+    // we'd try to source the *directory*, which exists.
+    // So instead ignore these here.
+    if (cmd.empty()) return none();
+    if (cmd[0] == L'\0') return none();
     // Re-use the storage for path.
     wcstring path;
     for (const wcstring &dir : dirs()) {
@@ -135,6 +149,10 @@ maybe_t<autoloadable_file_t> autoload_file_cache_t::check(const wcstring &cmd, b
     return file;
 }
 
+bool autoload_file_cache_t::is_cached(const wcstring &cmd) const {
+    return known_files_.count(cmd) > 0 || misses_cache_.contains(cmd);
+}
+
 autoload_t::autoload_t(wcstring env_var_name)
     : env_var_name_(std::move(env_var_name)), cache_(make_unique<autoload_file_cache_t>()) {}
 
@@ -149,6 +167,8 @@ void autoload_t::invalidate_cache() {
 bool autoload_t::can_autoload(const wcstring &cmd) {
     return cache_->check(cmd, true /* allow stale */).has_value();
 }
+
+bool autoload_t::has_attempted_autoload(const wcstring &cmd) { return cache_->is_cached(cmd); }
 
 wcstring_list_t autoload_t::get_autoloaded_commands() const {
     wcstring_list_t result;
@@ -198,6 +218,12 @@ maybe_t<wcstring> autoload_t::resolve_command(const wcstring &cmd, const wcstrin
 }
 
 void autoload_t::perform_autoload(const wcstring &path, parser_t &parser) {
-    wcstring script_source = L"source " + escape_string(path, ESCAPE_ALL);
-    exec_subshell(script_source, parser, false /* do not apply exit status */);
+    // We do the useful part of what exec_subshell does ourselves
+    // - we source the file.
+    // We don't create a buffer or check ifs or create a read_limit
+
+    wcstring script_source = L"source " + escape_string(path);
+    auto prev_statuses = parser.get_last_statuses();
+    const cleanup_t put_back([&] { parser.set_last_statuses(prev_statuses); });
+    parser.eval(script_source, io_chain_t{});
 }

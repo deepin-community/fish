@@ -1,12 +1,23 @@
-#include "config.h"
+#include "config.h"  // IWYU pragma: keep
 
 #include "history_file.h"
 
-#include <cstring>
+#include <ctype.h>
+#include <errno.h>
+#include <unistd.h>
 
-#include "fds.h"
+#include <algorithm>
+#include <cstdint>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <cwchar>
+#include <utility>
+
+#include "common.h"
 #include "history.h"
 #include "path.h"
+#include "wutil.h"
 
 // Some forward declarations.
 static history_item_t decode_item_fish_2_0(const char *base, size_t len);
@@ -22,8 +33,8 @@ static maybe_t<size_t> offset_of_next_item_fish_1_x(const char *begin, size_t mm
 static bool should_mmap() {
     if (history_t::never_mmap) return false;
 
-    // mmap only if we are known not-remote (return is 0).
-    return path_get_data_is_remote() == 0;
+    // mmap only if we are known not-remote.
+    return path_get_config_remoteness() == dir_remoteness_t::local;
 }
 
 // Read up to len bytes from fd into address, zeroing the rest.
@@ -96,7 +107,7 @@ static void unescape_yaml_fish_2_0(std::string *str) {
 }
 
 // A type wrapping up a region allocated via mmap().
-struct history_file_contents_t::mmap_region_t {
+struct history_file_contents_t::mmap_region_t : noncopyable_t, nonmovable_t {
     void *const ptr;
     const size_t len;
 
@@ -128,11 +139,6 @@ struct history_file_contents_t::mmap_region_t {
         if (ptr == MAP_FAILED) return nullptr;
         return make_unique<mmap_region_t>(ptr, len);
     }
-
-    mmap_region_t(mmap_region_t &&rhs) = delete;
-    void operator=(mmap_region_t &&rhs) = delete;
-    mmap_region_t(const mmap_region_t &) = delete;
-    void operator=(const mmap_region_t &) = delete;
 };
 
 history_file_contents_t::~history_file_contents_t() = default;
@@ -161,7 +167,7 @@ bool history_file_contents_t::infer_file_type() {
 std::unique_ptr<history_file_contents_t> history_file_contents_t::create(int fd) {
     // Check that the file is seekable, and its size.
     off_t len = lseek(fd, 0, SEEK_END);
-    if (len <= 0 || static_cast<unsigned long>(len) >= SIZE_MAX) return nullptr;
+    if (len <= 0 || static_cast<uint64_t>(len) >= static_cast<uint64_t>(SIZE_MAX)) return nullptr;
 
     bool mmap_file_directly = should_mmap();
     std::unique_ptr<mmap_region_t> region =
@@ -368,7 +374,6 @@ static const char *next_line(const char *start, const char *end) {
 static maybe_t<size_t> offset_of_next_item_fish_2_0(const history_file_contents_t &contents,
                                                     size_t *inout_cursor, time_t cutoff_timestamp) {
     size_t cursor = *inout_cursor;
-    maybe_t<size_t> result = none();
     const size_t length = contents.length();
     const char *const begin = contents.begin();
     const char *const end = contents.end();

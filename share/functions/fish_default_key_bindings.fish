@@ -1,4 +1,4 @@
-function fish_default_key_bindings -d "Default (Emacs-like) key bindings for fish"
+function fish_default_key_bindings -d "emacs-like key binds"
     if contains -- -h $argv
         or contains -- --help $argv
         echo "Sorry but this function doesn't support -h or --help"
@@ -27,27 +27,6 @@ function fish_default_key_bindings -d "Default (Emacs-like) key bindings for fis
     __fish_shared_key_bindings $argv
     or return # protect against invalid $argv
 
-    # This is the default binding, i.e. the one used if no other binding matches
-    bind --preset $argv "" self-insert
-    or exit # protect against invalid $argv
-
-    # Space and other command terminators expands abbrs _and_ inserts itself.
-    bind --preset $argv " " self-insert expand-abbr
-    bind --preset $argv ";" self-insert expand-abbr
-    bind --preset $argv "|" self-insert expand-abbr
-    bind --preset $argv "&" self-insert expand-abbr
-    bind --preset $argv "^" self-insert expand-abbr
-    bind --preset $argv ">" self-insert expand-abbr
-    bind --preset $argv "<" self-insert expand-abbr
-    # Closing a command substitution expands abbreviations
-    bind --preset $argv ")" self-insert expand-abbr
-    # Ctrl-space inserts space without expanding abbrs
-    bind --preset $argv -k nul 'commandline -i " "'
-
-
-    bind --preset $argv \n execute
-    bind --preset $argv \r execute
-
     bind --preset $argv \ck kill-line
 
     bind --preset $argv \eOC forward-char
@@ -69,7 +48,7 @@ function fish_default_key_bindings -d "Default (Emacs-like) key bindings for fis
 
     bind --preset $argv -k home beginning-of-line
     bind --preset $argv -k end end-of-line
-    bind --preset $argv \e\[3\;2~ backward-delete-char # Mavericks Terminal.app shift-ctrl-delete
+    bind --preset $argv -k sdc backward-delete-char # shifted delete
 
     bind --preset $argv \ca beginning-of-line
     bind --preset $argv \ce end-of-line
@@ -91,18 +70,31 @@ function fish_default_key_bindings -d "Default (Emacs-like) key bindings for fis
     # One of these is alt+backspace.
     bind --preset $argv \e\x7f backward-kill-word
     bind --preset $argv \e\b backward-kill-word
-    bind --preset $argv \eb backward-word
-    bind --preset $argv \ef forward-word
+    if not test "$TERM_PROGRAM" = Apple_Terminal
+        bind --preset $argv \eb backward-word
+        bind --preset $argv \ef forward-word
+    else
+        # Terminal.app sends \eb for alt+left, \ef for alt+right.
+        # Yeah.
+        bind --preset $argv \eb prevd-or-backward-word
+        bind --preset $argv \ef nextd-or-forward-word
+    end
+
     bind --preset $argv \e\< beginning-of-buffer
     bind --preset $argv \e\> end-of-buffer
 
     bind --preset $argv \ed kill-word
 
-    # Let ctrl+r search history if there is something in the commandline.
-    bind --preset $argv \cr 'commandline | string length -q; and commandline -f history-search-backward'
+    bind --preset $argv \cr history-pager
 
     # term-specific special bindings
     switch "$TERM"
+        case st-256color
+            # suckless and bash/zsh/fish have a different approach to how the terminal should be configured;
+            # the major effect is that several keys do not work as intended.
+            # This is a workaround, there will be additions in he future.
+            bind --preset $argv \e\[P delete-char
+            bind --preset $argv \e\[Z up-line
         case 'rxvt*'
             bind --preset $argv \e\[8~ end-of-line
             bind --preset $argv \eOc forward-word
@@ -112,4 +104,6 @@ function fish_default_key_bindings -d "Default (Emacs-like) key bindings for fis
             # the following to tell a console to paste:
             bind --preset $argv \e\x20ep fish_clipboard_paste
     end
+
+    set -e -g fish_cursor_selection_mode
 end

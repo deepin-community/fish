@@ -23,30 +23,34 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <wctype.h>
 
+#include <algorithm>
+#include <cstdint>
 #include <cstring>
 #include <cwchar>
+#include <cwctype>
 #include <memory>
-#include <stack>
 #include <string>
-#include <tuple>
+#include <type_traits>
+#include <utility>
 #include <vector>
 
 #include "ast.h"
-#include "color.h"
 #include "common.h"
 #include "env.h"
 #include "expand.h"
 #include "fds.h"
 #include "fish_version.h"
 #include "flog.h"
+#include "future_feature_flags.h"
+#include "global_safety.h"
 #include "highlight.h"
+#include "maybe.h"
 #include "operation_context.h"
-#include "output.h"
 #include "parse_constants.h"
 #include "parse_util.h"
 #include "print_help.h"
+#include "tokenizer.h"
 #include "wcstringutil.h"
 #include "wutil.h"  // IWYU pragma: keep
 
@@ -549,7 +553,28 @@ struct pretty_printer_t {
 
     template <type_t Type>
     void emit_node_text(const leaf_t<Type> &node) {
-        emit_text(node.range, gap_text_flags_before_node(node));
+        source_range_t range = node.range;
+
+        // Weird special-case: a token may end in an escaped newline. Notably, the newline is
+        // not part of the following gap text, handle indentation here (#8197).
+        bool ends_with_escaped_nl = node.range.length >= 2 &&
+                                    source.at(node.range.end() - 2) == L'\\' &&
+                                    source.at(node.range.end() - 1) == L'\n';
+        if (ends_with_escaped_nl) {
+            range = {range.start, range.length - 2};
+        }
+
+        emit_text(range, gap_text_flags_before_node(node));
+
+        if (ends_with_escaped_nl) {
+            // By convention, escaped newlines are preceded with a space.
+            output.append(L" \\\n");
+            // TODO Maybe check "allow_escaped_newlines" and use the precomputed indents.
+            // The cases where this matters are probably very rare.
+            current_indent++;
+            emit_space_or_indent();
+            current_indent--;
+        }
     }
 
     // Emit one newline.
@@ -649,6 +674,7 @@ static const char *highlight_role_to_string(highlight_role_t role) {
         TEST_ROLE(keyword)
         TEST_ROLE(statement_terminator)
         TEST_ROLE(param)
+        TEST_ROLE(option)
         TEST_ROLE(comment)
         TEST_ROLE(search_match)
         TEST_ROLE(operat)
@@ -755,6 +781,9 @@ static const wchar_t *html_class_name_for_color(highlight_spec_t spec) {
         case highlight_role_t::param: {
             return P(param);
         }
+        case highlight_role_t::option: {
+            return P(option);
+        }
         case highlight_role_t::comment: {
             return P(comment);
         }
@@ -853,6 +882,12 @@ int main(int argc, char *argv[]) {
     setlocale(LC_ALL, "");
     env_init();
 
+    if (auto features_var = env_stack_t::globals().get(L"fish_features")) {
+        for (const wcstring &s : features_var->as_list()) {
+            mutable_fish_features().set_from_string(s);
+        }
+    }
+
     // Types of output we support.
     enum {
         output_type_plain_text,
@@ -880,7 +915,7 @@ int main(int argc, char *argv[]) {
                                        {"ansi", no_argument, nullptr, 2},
                                        {"pygments", no_argument, nullptr, 3},
                                        {"check", no_argument, nullptr, 'c'},
-                                       {nullptr, 0, nullptr, 0}};
+                                       {}};
 
     int opt;
     while ((opt = getopt_long(argc, argv, short_opts, long_opts, nullptr)) != -1) {
@@ -922,17 +957,7 @@ int main(int argc, char *argv[]) {
                 break;
             }
             case 'd': {
-                char *end;
-                long tmp;
-
-                errno = 0;
-                tmp = strtol(optarg, &end, 10);
-
-                if (tmp >= 0 && tmp <= 10 && !*end && !errno) {
-                    debug_level = static_cast<int>(tmp);
-                } else {
-                    activate_flog_categories_by_pattern(str2wcstring(optarg));
-                }
+                activate_flog_categories_by_pattern(str2wcstring(optarg));
                 for (auto cat : get_flog_categories()) {
                     if (cat->enabled) {
                         std::fwprintf(stdout, L"Debug enabled for category: %ls\n", cat->name);

@@ -4,11 +4,11 @@
 function __fish_unexpected_hist_args --no-scope-shadowing
     if test -n "$search_mode"
         or set -q show_time[1]
-        printf (_ "%ls: you cannot use any options with the %ls command\n") $cmd $hist_cmd >&2
+        printf (_ "%ls: %ls: subcommand takes no options\n") $cmd $hist_cmd >&2
         return 0
     end
     if set -q argv[1]
-        printf (_ "%ls: %ls expected %d args, got %d\n") $cmd $hist_cmd 0 (count $argv) >&2
+        printf (_ "%ls: %ls: expected %d arguments; got %d\n") $cmd $hist_cmd 0 (count $argv) >&2
         return 0
     end
     return 1
@@ -62,13 +62,15 @@ function history --description "display or manipulate interactive command histor
         set hist_cmd search
     else if set -q _flag_merge
         set hist_cmd merge
+    else if set -q _flag_clear-session
+        set hist_cmd clear-session
     end
 
     # If a history command has not already been specified check the first non-flag argument for a
     # command. This allows the flags to appear before or after the subcommand.
     if not set -q hist_cmd[1]
         and set -q argv[1]
-        if contains $argv[1] search delete merge save clear
+        if contains $argv[1] search delete merge save clear clear-session
             set hist_cmd $argv[1]
             set -e argv[1]
         end
@@ -89,11 +91,14 @@ function history --description "display or manipulate interactive command histor
                 and echo $PAGER | read -at pager
 
                 # If the user hasn't preconfigured less with the $LESS environment variable,
-                # we do so to have it behave like cat if output fits on one screen. Prevent the
-                # screen from clearing on quit, so there is something to see if it exits.
-                # These are two of the options `git` sets through $LESS before starting the pager.
-                not set -qx LESS
-                and set -x LESS --quit-if-one-screen
+                # we do so to have it behave like cat if output fits on one screen.
+                if not set -qx LESS
+                    set -x LESS --quit-if-one-screen
+                    # Also set --no-init for less < v530, see #8157.
+                    if type -q less; and test (less --version | string match -r 'less (\d+)')[2] -lt 530 2>/dev/null
+                        set -x LESS $LESS --no-init
+                    end
+                end
                 not set -qx LV # ask the pager lv not to strip colors
                 and set -x LV -c
 
@@ -114,7 +119,7 @@ function history --description "display or manipulate interactive command histor
             end
 
             if test $search_mode = --exact
-                builtin history delete $search_mode $_flag_case_sensitive $searchterm
+                builtin history delete $search_mode $_flag_case_sensitive -- $searchterm
                 return
             end
 
@@ -187,7 +192,12 @@ function history --description "display or manipulate interactive command histor
             else
                 printf (_ "You did not say 'yes' so I will not clear your command history\n")
             end
+        case clear-session # clears only session
+            __fish_unexpected_hist_args $argv
+            and return 1
 
+            builtin history clear-session -- $argv
+            printf (_ "Command history for session cleared!\n")
         case '*'
             printf "%ls: unexpected subcommand '%ls'\n" $cmd $hist_cmd
             return 2

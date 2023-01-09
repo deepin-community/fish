@@ -1,5 +1,11 @@
 # Completions for the `apt` command
 
+# macOS has a /usr/bin/apt that is something else entirely: 
+# (apt - Returns the path to a Java home directory from the current user's settings)
+if [ "$(uname -s)" = Darwin -a "$(command -s apt)" = /usr/bin/apt ]
+    exit 1
+end
+
 set -l all_subcmds update upgrade full-upgrade search list install show remove edit-sources purge changelog autoremove depends rdepends
 set -l pkg_subcmds install upgrade full-upgrade show search purge changelog policy depends rdepends autoremove
 set -l installed_pkg_subcmds remove
@@ -27,8 +33,8 @@ end
 
 complete -c apt -f
 
-complete -k -c apt -n "__fish_seen_subcommand_from $pkg_subcmds" -a '(__fish_print_apt_packages | head -n 250 | sort)'
-complete -c apt -n "__fish_seen_subcommand_from $installed_pkg_subcmds" -a '(__fish_print_apt_packages --installed | string match -re -- "(?:\\b|_)"(commandline -ct | string escape --style=regex) | head -n 250)' -d Package
+complete -k -c apt -n "__fish_seen_subcommand_from $pkg_subcmds" -a '(__fish_print_apt_packages | string match -re -- "(?:\\b|_)"(commandline -ct | string escape --style=regex) | head -n 250 | sort)'
+complete -c apt -n "__fish_seen_subcommand_from $installed_pkg_subcmds" -a '(__fish_print_apt_packages --installed | string match -re -- "(?:\\b|_)"(commandline -ct | string escape --style=regex) | head -n 250)'
 complete -k -c apt -n "__fish_seen_subcommand_from $handle_file_pkg_subcmds" -a '(__fish_complete_suffix .deb)'
 
 complete -c apt -n "__fish_seen_subcommand_from install" -l no-install-recommends

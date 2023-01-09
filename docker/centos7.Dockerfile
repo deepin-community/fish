@@ -1,16 +1,19 @@
 FROM centos:7
+LABEL org.opencontainers.image.source=https://github.com/fish-shell/fish-shell
 
 # install epel first to get cmake3
 RUN yum install --assumeyes epel-release https://repo.ius.io/ius-release-el7.rpm \
   && yum install --assumeyes \
     cmake3 \
     gcc-c++ \
-    git224-core \
+    git236 \
     ncurses-devel \
     ninja-build \
     python3 \
     openssl \
-    sudo
+    pcre2-devel \
+    sudo \
+  && yum clean all
 
 # cmake is called "cmake3" on centos7.
 RUN ln -s /usr/bin/cmake3 /usr/bin/cmake \

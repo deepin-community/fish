@@ -1,7 +1,8 @@
+
 .. _language:
 
 The fish language
-*****************
+=================
 
 This document is a comprehensive overview of fish's scripting language.
 
@@ -16,29 +17,29 @@ Shells like fish are used by giving them commands. A command is executed by writ
 
     echo hello world
 
-This calls the :ref:`echo <cmd-echo>` command. ``echo`` writes its arguments to the screen. In this example the output is ``hello world``.
+:doc:`echo <cmds/echo>` command writes its arguments to the screen. In this example the output is ``hello world``.
 
 Everything in fish is done with commands. There are commands for repeating other commands, commands for assigning variables, commands for treating a group of commands as a single command, etc. All of these commands follow the same basic syntax.
 
-To learn more about the ``echo`` command, read its manual page by typing ``man echo``. ``man`` is a command for displaying a manual page on a given topic. It takes the name of the manual page to display as an argument. There are manual pages for almost every command. There are also manual pages for many other things, such as system libraries and important files.
-
-Every program on your computer can be used as a command in fish. If the program file is located in one of the :ref:`PATH <PATH>` directories, you can just type the name of the program to use it. Otherwise the whole filename, including the directory (like ``/home/me/code/checkers/checkers`` or ``../checkers``) is required.
+Every program on your computer can be used as a command in fish. If the program file is located in one of the :envvar:`PATH` directories, you can just type the name of the program to use it. Otherwise the whole filename, including the directory (like ``/home/me/code/checkers/checkers`` or ``../checkers``) is required.
 
 Here is a list of some useful commands:
 
-- :ref:`cd <cmd-cd>`: Change the current directory
+- :doc:`cd <cmds/cd>`: Change the current directory
 - ``ls``: List files and directories
-- ``man``: Display a manual page
+- ``man``: Display a manual page - try ``man ls`` to get help on your "ls" command, or ``man mv`` to get information about "mv".
 - ``mv``: Move (rename) files
 - ``cp``: Copy files
-- :ref:`open <cmd-open>`: Open files with the default application associated with each filetype
+- :doc:`open <cmds/open>`: Open files with the default application associated with each filetype
 - ``less``: Display the contents of files
 
 Commands and arguments are separated by the space character ``' '``. Every command ends with either a newline (by pressing the return key) or a semicolon ``;``. Multiple commands can be written on the same line by separating them with semicolons.
 
 A switch is a very common special type of argument. Switches almost always start with one or more hyphens ``-`` and alter the way a command operates. For example, the ``ls`` command usually lists the names of all files and directories in the current working directory. By using the ``-l`` switch, the behavior of ``ls`` is changed to not only display the filename, but also the size, permissions, owner, and modification time of each file.
 
-Switches differ between commands and are usually documented on a command's manual page. There are some switches, however, that are common to most commands. For example, ``--help`` will usually display a help text, ``--version`` will usually display the command version, and ``-i`` will often turn on interactive prompting before taking action.
+Switches differ between commands and are usually documented on a command's manual page. There are some switches, however, that are common to most commands. For example, ``--help`` will usually display a help text, ``--version`` will usually display the command version, and ``-i`` will often turn on interactive prompting before taking action. Try ``man your-command-here`` to get information on your command's switches.
+
+So the basic idea of fish is the same as with other unix shells: It gets a commandline, runs :ref:`expansions <expand>`, and the result is then run as a command.
 
 .. _terminology:
 
@@ -47,21 +48,21 @@ Terminology
 
 Here we define some of the terms used on this page and throughout the rest of the fish documentation:
 
-- **Argument**: A parameter given to a command.
+- **Argument**: A parameter given to a command. In ``echo foo``, the "foo" is an argument.
 
-- **Builtin**: A command that is implemented by the shell. Builtins are so closely tied to the operation of the shell that it is impossible to implement them as external commands.
+- **Builtin**: A command that is implemented by the shell. Builtins are so closely tied to the operation of the shell that it is impossible to implement them as external commands. In ``echo foo``, the "echo" is a builtin.
 
-- **Command**: A program that the shell can run, or more specifically an external program that the shell runs in another process.
+- **Command**: A program that the shell can run, or more specifically an external program that the shell runs in another process. External commands are provided on your system, as executable files. In ``echo foo`` the "echo" is a builtin command, in ``command echo foo`` the "echo" is an external command, provided by a file like /bin/echo.
 
 - **Function**: A block of commands that can be called as if they were a single command. By using functions, it is possible to string together multiple simple commands into one more advanced command.
 
 - **Job**: A running pipeline or command.
 
-- **Pipeline**: A set of commands strung together so that the output of one command is the input of the next command.
+- **Pipeline**: A set of commands strung together so that the output of one command is the input of the next command. ``echo foo | grep foo`` is a pipeline.
 
 - **Redirection**: An operation that changes one of the input or output streams associated with a job.
 
-- **Switch** or **Option**: A special kind of argument that alters the behavior of a command. A switch almost always begins with one or two hyphens.
+- **Switch** or **Option**: A special kind of argument that alters the behavior of a command. A switch almost always begins with one or two hyphens. In ``echo -n foo`` the "-n" is an option.
 
 .. _quotes:
 
@@ -106,11 +107,10 @@ Some characters cannot be written directly on the command line. For these charac
 - ``\r`` represents the carriage return character.
 - ``\t`` represents the tab character.
 - ``\v`` represents the vertical tab character.
-- ``\xHH``, where ``HH`` is a hexadecimal number, represents the ASCII character with the specified value. For example, ``\x9`` is the tab character.
-- ``\XHH``, where ``HH`` is a hexadecimal number, represents a byte of data with the specified value. If you are using a multibyte encoding, this can be used to enter invalid strings. Only use this if you know what you are doing.
-- ``\ooo``, where ``ooo`` is an octal number, represents the ASCII character with the specified value. For example, ``\011`` is the tab character.
+- ``\xHH`` or ``\XHH``, where ``HH`` is a hexadecimal number, represents a byte of data with the specified value. For example, ``\x9`` is the tab character. If you are using a multibyte encoding, this can be used to enter invalid strings. Typically fish is run with the ASCII or UTF-8 encoding, so anything up to ``\X7f`` is an ASCII character.
+- ``\ooo``, where ``ooo`` is an octal number, represents the ASCII character with the specified value. For example, ``\011`` is the tab character. The highest allowed value is ``\177``.
 - ``\uXXXX``, where ``XXXX`` is a hexadecimal number, represents the 16-bit Unicode character with the specified value. For example, ``\u9`` is the tab character.
-- ``\UXXXXXXXX``, where ``XXXXXXXX`` is a hexadecimal number, represents the 32-bit Unicode character with the specified value. For example, ``\U9`` is the tab character.
+- ``\UXXXXXXXX``, where ``XXXXXXXX`` is a hexadecimal number, represents the 32-bit Unicode character with the specified value. For example, ``\U9`` is the tab character. The highest allowed value is \U10FFFF.
 - ``\cX``, where ``X`` is a letter of the alphabet, represents the control sequence generated by pressing the control key and the specified letter. For example, ``\ci`` is the tab character
 
 Some characters have special meaning to the shell. For example, an apostrophe ``'`` disables expansion (see :ref:`Quotes<quotes>`). To tell the shell to treat these characters literally, escape them with a backslash. For example, the command::
@@ -125,7 +125,9 @@ outputs ``hello world`` (without the apostrophes). In the former case the shell 
 
 The special characters and their escape sequences are:
 
-- :code:`\ ` (backslash space) escapes the space character. This keeps the shell from splitting arguments on the escaped space.
+.. (next line features a non-breaking space - this will be rendered to a normal space instead of removed)
+
+- :code:`\\\ ` (backslash space) escapes the space character. This keeps the shell from splitting arguments on the escaped space.
 - ``\$`` escapes the dollar character.
 - ``\\`` escapes the backslash character.
 - ``\*`` escapes the star character.
@@ -140,12 +142,13 @@ The special characters and their escape sequences are:
 - ``\]`` escapes the right bracket character.
 - ``\<`` escapes the less than character.
 - ``\>`` escapes the more than character.
-- ``\^`` escapes the circumflex character.
 - ``\&`` escapes the ampersand character.
 - ``\|`` escapes the vertical bar character.
 - ``\;`` escapes the semicolon character.
 - ``\"`` escapes the quote character.
 - ``\'`` escapes the apostrophe character.
+
+As a special case, ``\`` immediately followed by a literal new line is a "continuation" and tells fish to ignore the line break and resume input at the start of the next line (without introducing any whitespace or terminating a token).
 
 .. _redirects:
 
@@ -171,23 +174,46 @@ The destination of a stream can be changed using something called *redirection*.
 
 ``DESTINATION`` can be one of the following:
 
-- A filename. The output will be written to the specified file. Often ``>/dev/null`` to silence output by writing it to the special "sinkhole" file.
+- A filename to write the output to. Often ``>/dev/null`` to silence output by writing it to the special "sinkhole" file.
 - An ampersand (``&``) followed by the number of another file descriptor like ``&2`` for standard error. The output will be written to the destination descriptor.
-- An ampersand followed by a minus sign (``&-``). The file descriptor will be closed.
+- An ampersand followed by a minus sign (``&-``). The file descriptor will be closed. Note: This may cause the program to fail because its writes will be unsuccessful.
 
 As a convenience, the redirection ``&>`` can be used to direct both stdout and stderr to the same destination. For example, ``echo hello &> all_output.txt`` redirects both stdout and stderr to the file ``all_output.txt``. This is equivalent to ``echo hello > all_output.txt 2>&1``.
 
-Any arbitrary file descriptor can used in a redirection by prefixing the redirection with the FD number.
+Any arbitrary file descriptor can be used in a redirection by prefixing the redirection with the FD number.
 
 - To redirect the input of descriptor N, use ``N<DESTINATION``.
 - To redirect the output of descriptor N, use ``N>DESTINATION``.
 - To append the output of descriptor N to a file, use ``N>>DESTINATION_FILE``.
 
-For example, ``echo hello 2> output.stderr`` writes the standard error (file descriptor 2) to ``output.stderr``.
+For example::
+
+  # Write `foo`'s standard error (file descriptor 2)
+  # to a file called "output.stderr":
+  foo 2> output.stderr
+
+  # if $num doesn't contain a number,
+  # this test will be false and print an error,
+  # so by ignoring the error we can be sure that we're dealing
+  # with a number in the "if" block:
+  if test "$num" -gt 2 2>/dev/null
+      # do things with $num as a number greater than 2
+  else
+      # do things if $num is <= 2 or not a number
+  end
+
+  # Save `make`s output in a file:
+  make &>/log
+
+  # Redirections stack and can be used with blocks:
+  begin
+      echo stdout
+      echo stderr >&2 # <- this goes to stderr!
+  end >/dev/null # ignore stdout, so this prints "stderr"
 
 It is an error to redirect a builtin, function, or block to a file descriptor above 2. However this is supported for external commands.
 
-.. [#] Previous versions of fish also allowed specifying this as ``^DESTINATION``, but that made another character special so it was deprecated and will be removed in the future. See :ref:`feature flags<featureflags>`.
+.. [#] Previous versions of fish also allowed specifying this as ``^DESTINATION``, but that made another character special so it was deprecated and removed. See :ref:`feature flags<featureflags>`.
 
 .. _pipes:
 
@@ -222,16 +248,18 @@ Example::
   emacs &
 
 
-will start the emacs text editor in the background. :ref:`fg <cmd-fg>` can be used to bring it into the foreground again when needed.
+will start the emacs text editor in the background. :doc:`fg <cmds/fg>` can be used to bring it into the foreground again when needed.
 
-Most programs allow you to suspend the program's execution and return control to fish by pressing :kbd:`Control`\ +\ :kbd:`Z` (also referred to as ``^Z``). Once back at the fish commandline, you can start other programs and do anything you want. If you then want you can go back to the suspended command by using the :ref:`fg <cmd-fg>` (foreground) command.
+Most programs allow you to suspend the program's execution and return control to fish by pressing :kbd:`Control`\ +\ :kbd:`Z` (also referred to as ``^Z``). Once back at the fish commandline, you can start other programs and do anything you want. If you then want you can go back to the suspended command by using the :doc:`fg <cmds/fg>` (foreground) command.
 
-If you instead want to put a suspended job into the background, use the :ref:`bg <cmd-bg>` command.
+If you instead want to put a suspended job into the background, use the :doc:`bg <cmds/bg>` command.
 
-To get a listing of all currently started jobs, use the :ref:`jobs <cmd-jobs>` command.
-These listed jobs can be removed with the :ref:`disown <cmd-disown>` command.
+To get a listing of all currently started jobs, use the :doc:`jobs <cmds/jobs>` command.
+These listed jobs can be removed with the :doc:`disown <cmds/disown>` command.
 
-At the moment, functions cannot be started in the background. Functions that are stopped and then restarted in the background using the :ref:`bg <cmd-bg>` command will not execute correctly.
+At the moment, functions cannot be started in the background. Functions that are stopped and then restarted in the background using the :doc:`bg <cmds/bg>` command will not execute correctly.
+
+If the ``&`` character is followed by a non-separating character, it is not interpreted as background operator. Separating characters are whitespace and the characters ``;<>&|``.
 
 .. _syntax-function:
 
@@ -250,9 +278,9 @@ The first line tells fish to define a function by the name of ``ll``, so it can 
 
 Calling this as ``ll /tmp/`` will end up running ``ls -l /tmp/``, which will list the contents of /tmp.
 
-This is a kind of function known as a :ref:`wrapper <syntax-function-wrappers>` or "alias".
+This is a kind of function known as an :ref:`alias <syntax-aliases>`.
 
-Fish's prompt is also defined in a function, called :ref:`fish_prompt <cmd-fish_prompt>`. It is run when the prompt is about to be displayed and its output forms the prompt::
+Fish's prompt is also defined in a function, called :doc:`fish_prompt <cmds/fish_prompt>`. It is run when the prompt is about to be displayed and its output forms the prompt::
 
   function fish_prompt
       # A simple prompt. Displays the current directory
@@ -266,18 +294,18 @@ Fish's prompt is also defined in a function, called :ref:`fish_prompt <cmd-fish_
       echo (set_color yellow)$PWD (set_color purple)$user_char
   end
 
-To edit a function, you can use :ref:`funced <cmd-funced>`, and to save a function :ref:`funcsave <cmd-funcsave>`. This will store it in a function file that fish will :ref:`autoload <syntax-function-autoloading>` when needed.
+To edit a function, you can use :doc:`funced <cmds/funced>`, and to save a function :doc:`funcsave <cmds/funcsave>`. This will store it in a function file that fish will :ref:`autoload <syntax-function-autoloading>` when needed.
 
-The :ref:`functions <cmd-functions>` builtin can show a function's current definition (and :ref:`type <cmd-type>` will also do if given a function).
+The :doc:`functions <cmds/functions>` builtin can show a function's current definition (and :doc:`type <cmds/type>` will also do if given a function).
 
-For more information on functions, see the documentation for the :ref:`function <cmd-function>` builtin.
+For more information on functions, see the documentation for the :doc:`function <cmds/function>` builtin.
 
-.. _syntax-function-wrappers:
+.. _syntax-aliases:
 
 Defining aliases
 ^^^^^^^^^^^^^^^^
 
-One of the most common uses for functions is to slightly alter the behavior of an already existing command. For example, one might want to redefine the ``ls`` command to display colors. The switch for turning on colors on GNU systems is ``--color=auto``. An alias, or wrapper, around ``ls`` might look like this::
+One of the most common uses for functions is to slightly alter the behavior of an already existing command. For example, one might want to redefine the ``ls`` command to display colors. The switch for turning on colors on GNU systems is ``--color=auto``. An alias around ``ls`` might look like this::
 
   function ls
       command ls --color=auto $argv
@@ -289,9 +317,7 @@ There are a few important things that need to be noted about aliases:
 
 - If the alias has the same name as the aliased command, you need to prefix the call to the program with ``command`` to tell fish that the function should not call itself, but rather a command with the same name. If you forget to do so, the function would call itself until the end of time. Usually fish is smart enough to figure this out and will refrain from doing so (which is hopefully in your interest).
 
-- Autoloading isn't applicable to aliases. Since, by definition, the function is created at the time the alias command is executed. You cannot autoload aliases.
-
-To easily create a function of this form, you can use the :ref:`alias <cmd-alias>` command. Unlike other shells, this just makes functions - fish has no separate concept of an "alias", we just use the word for a function wrapper like this.
+To easily create a function of this form, you can use the :doc:`alias <cmds/alias>` command. Unlike other shells, this just makes functions - fish has no separate concept of an "alias", we just use the word for a simple wrapping function like this. :doc:`alias <cmds/alias>` immediately creates a function. Consider using ``alias --save`` or :doc:`funcsave <cmds/funcsave>` to save the created function into an autoload file instead of recreating the alias each time.
 
 For an alternative, try :ref:`abbreviations <abbreviations>`. These are words that are expanded while you type, instead of being actual functions inside the shell.
 
@@ -314,7 +340,7 @@ By default ``$fish_function_path`` contains the following:
 
 - A directory for users to keep their own functions, usually ``~/.config/fish/functions`` (controlled by the ``XDG_CONFIG_HOME`` environment variable).
 - A directory for functions for all users on the system, usually ``/etc/fish/functions`` (really ``$__fish_sysconfdir/functions``).
-- Directories for other software to put their own functions. These are in the directories in the ``XDG_DATA_DIRS`` environment variable, in a subdirectory called ``fish/vendor_functions.d``. The default is usually ``/usr/share/fish/vendor_functions.d`` and ``/usr/local/share/fish/vendor_functions.d``.
+- Directories for other software to put their own functions. These are in the directories under ``$__fish_user_data_dir`` (usually ``~/.local/share/fish``, controlled by the ``XDG_DATA_HOME`` environment variable) and in the ``XDG_DATA_DIRS`` environment variable, in a subdirectory called ``fish/vendor_functions.d``. The default value for ``XDG_DATA_DIRS`` is usually ``/usr/share/fish/vendor_functions.d`` and ``/usr/local/share/fish/vendor_functions.d``.
 - The functions shipped with fish, usually installed in ``/usr/share/fish/functions`` (really ``$__fish_data_dir/functions``).
 
 If you are unsure, your functions probably belong in ``~/.config/fish/functions``.
@@ -351,13 +377,19 @@ Comments can also appear after a line like so::
 Conditions
 ----------
 
-Fish has some builtins that let you execute commands only if a specific criterion is met: :ref:`if <cmd-if>`, :ref:`switch <cmd-switch>`, :ref:`and <cmd-and>` and :ref:`or <cmd-or>`, and also the familiar :ref:`&&/|| <tut-combiners>` syntax.
+Fish has some builtins that let you execute commands only if a specific criterion is met: :doc:`if <cmds/if>`, :doc:`switch <cmds/switch>`, :doc:`and <cmds/and>` and :doc:`or <cmds/or>`, and also the familiar :ref:`&&/|| <tut-combiners>` syntax.
 
-The :ref:`switch <cmd-switch>` command is used to execute one of possibly many blocks of commands depending on the value of a string. See the documentation for :ref:`switch <cmd-switch>` for more information.
+The :doc:`switch <cmds/switch>` command is used to execute one of possibly many blocks of commands depending on the value of a string. See the documentation for :doc:`switch <cmds/switch>` for more information.
 
 The other conditionals use the :ref:`exit status <variables-status>` of a command to decide if a command or a block of commands should be executed.
 
-Unlike programming languages you might know, :ref:`if <cmd-if>` doesn't take a *condition*, it takes a *command*. If that command returned a successful :ref:`exit status <variables-status>` (that's 0), the ``if`` branch is taken, otherwise the :ref:`else <cmd-else>` branch.
+Unlike programming languages you might know, :doc:`if <cmds/if>` doesn't take a *condition*, it takes a *command*. If that command returned a successful :ref:`exit status <variables-status>` (that's 0), the ``if`` branch is taken, otherwise the :doc:`else <cmds/else>` branch.
+
+To check a condition, there is the :doc:`test <cmds/test>` command::
+
+  if test 5 -gt 2
+      echo Yes, five is greater than two
+  end
 
 Some examples::
 
@@ -376,6 +408,28 @@ Some examples::
   set -q XDG_CONFIG_HOME; and set -l configdir $XDG_CONFIG_HOME
   or set -l configdir ~/.config
 
+Note that combiners are *lazy* - only the part that is necessary to determine the final status is run.
+
+Compare::
+
+  if sleep 2; and false
+      echo 'How did I get here? This should be impossible'
+  end
+
+and::
+
+  if false; and sleep 2
+      echo 'How did I get here? This should be impossible'
+  end
+
+These do essentially the same thing, but the former takes 2 seconds longer because the ``sleep`` always needs to run. So, in cases like these, the ordering is quite important for performance.
+
+Or you can have a case where it is necessary to stop early::
+
+  if command -sq foo; and foo
+
+If this went on after seeing that the command "foo" doesn't exist, it would try to run ``foo`` and error because it wasn't found!
+
 For more, see the documentation for the builtins or the :ref:`Conditionals <tut-conditionals>` section of the tutorial.
 
 .. _syntax-loops-and-blocks:
@@ -383,9 +437,9 @@ For more, see the documentation for the builtins or the :ref:`Conditionals <tut-
 Loops and blocks
 ----------------
 
-Like most programming language, fish also has the familiar :ref:`while <cmd-while>` and :ref:`for <cmd-for>` loops.
+Like most programming language, fish also has the familiar :doc:`while <cmds/while>` and :doc:`for <cmds/for>` loops.
 
-``while`` works like a repeated :ref:`if <cmd-if>`::
+``while`` works like a repeated :doc:`if <cmds/if>`::
 
   while true
       echo Still running
@@ -413,7 +467,7 @@ If you need a list of numbers, you can use the ``seq`` command to create one::
       echo $i
   end
 
-:ref:`break <cmd-break>` is available to break out of a loop, and :ref:`continue <cmd-continue>` to jump to the next iteration.
+:doc:`break <cmds/break>` is available to break out of a loop, and :doc:`continue <cmds/continue>` to jump to the next iteration.
 
 :ref:`Input and output redirections <redirects>` (including :ref:`pipes <pipes>`) can also be applied to loops::
 
@@ -421,7 +475,7 @@ If you need a list of numbers, you can use the ``seq`` command to create one::
       echo line: $line
   end < file
 
-In addition there's a :ref:`begin <cmd-begin>` block that just groups commands together so you can redirect to a block or use a new :ref:`variable scope <variables-scope>` without any repetition::
+In addition there's a :doc:`begin <cmds/begin>` block that just groups commands together so you can redirect to a block or use a new :ref:`variable scope <variables-scope>` without any repetition::
 
   begin
      set -l foo bar # this variable will only be available in this block!
@@ -434,11 +488,11 @@ Parameter expansion
 
 When fish is given a commandline, it expands the parameters before sending them to the command. There are multiple different kinds of expansions:
 
-- :ref:`Wildcards <expand-wildcard>`, to create filenames from patterns
-- :ref:`Variable expansion <expand-variable>`, to use the value of a variable
-- :ref:`Command substitution <expand-command-substitution>`, to use the output of another command
-- :ref:`Brace expansion <expand-brace>`, to write lists with common pre- or suffixes in a shorter way
-- :ref:`Tilde expansion <expand-home>`, to turn the ``~`` at the beginning of paths into the path to the home directory
+- :ref:`Wildcards <expand-wildcard>`, to create filenames from patterns - ``*.jpg``
+- :ref:`Variable expansion <expand-variable>`, to use the value of a variable - ``$HOME``
+- :ref:`Command substitution <expand-command-substitution>`, to use the output of another command - ``$(cat /path/to/file)``
+- :ref:`Brace expansion <expand-brace>`, to write lists with common pre- or suffixes in a shorter way ``{/usr,}/bin``
+- :ref:`Tilde expansion <expand-home>`, to turn the ``~`` at the beginning of paths into the path to the home directory ``~/bin``
 
 Parameter expansion is limited to 524288 items. There is a limit to how many arguments the operating system allows for any command, and 524288 is far above it. This is a measure to stop the shell from hanging doing useless computation.
 
@@ -455,16 +509,6 @@ When a parameter includes an :ref:`unquoted <quotes>` ``*`` star (or "asterisk")
 
 - ``?`` can match any single character except ``/``. This is deprecated and can be disabled via the ``qmark-noglob`` :ref:`feature flag<featureflags>`, so ``?`` will just be an ordinary character.
 
-Other shells, such as zsh, have a much richer glob syntax, like ``**(.)`` to only match regular files. Fish does not. Instead of reinventing the wheel, use programs like ``find`` to look for files. For example::
-
-    function ff --description 'Like ** but only returns plain files.'
-        # This also ignores .git directories.
-        find . \( -name .git -type d -prune \) -o -type f | \
-            sed -n -e '/^\.\/\.git$/n' -e 's/^\.\///p'
-    end
-
-You would then use it in place of ``**`` like this, ``my_prog (ff)``, to pass only regular files in or below $PWD to ``my_prog``. [#]_
-
 Wildcard matches are sorted case insensitively. When sorting matches containing numbers, they are naturally sorted, so that the strings '1' '5' and '12' would be sorted like 1, 5, 12.
 
 Hidden files (where the name begins with a dot) are not considered when wildcarding unless the wildcard string has a dot in that place.
@@ -473,13 +517,11 @@ Examples:
 
 - ``a*`` matches any files beginning with an 'a' in the current directory.
 
-- ``???`` matches any file in the current directory whose name is exactly three characters long.
-
 - ``**`` matches any files and directories in the current directory and all of its subdirectories.
 
 - ``~/.*`` matches all hidden files (also known as "dotfiles") and directories in your home directory.
 
-For most commands, if any wildcard fails to expand, the command is not executed, :ref:`$status <variables-status>` is set to nonzero, and a warning is printed. This behavior is like what bash does with ``shopt -s failglob``. There are exactly 4 exceptions, namely :ref:`set <cmd-set>`, overriding variables in :ref:`overrides <variables-override>`, :ref:`count <cmd-count>` and :ref:`for <cmd-for>`. Their globs will instead expand to zero arguments (so the command won't see them at all), like with ``shopt -s nullglob`` in bash.
+For most commands, if any wildcard fails to expand, the command is not executed, :ref:`$status <variables-status>` is set to nonzero, and a warning is printed. This behavior is like what bash does with ``shopt -s failglob``. There are exceptions, namely :doc:`set <cmds/set>` and :doc:`path <cmds/path>`, overriding variables in :ref:`overrides <variables-override>`, :doc:`count <cmds/count>` and :doc:`for <cmds/for>`. Their globs will instead expand to zero arguments (so the command won't see them at all), like with ``shopt -s nullglob`` in bash.
 
 Examples::
 
@@ -492,22 +534,24 @@ Examples::
         ls $foos
     end
 
-.. [#] Technically, unix allows filenames with newlines, and this splits the ``find`` output on newlines. If you want to avoid that, use find's ``-print0`` option and :ref:`string split0<cmd-string-split0>`.
+Unlike bash (by default), fish will not pass on the literal glob character if no match was found, so for a command like ``apt install`` that does the matching itself, you need to add quotes::
+
+    apt install "ncurses-*"
 
 .. _expand-variable:
 
 Variable expansion
 ^^^^^^^^^^^^^^^^^^
 
-One of the most important expansions in fish is the "variable expansion". This is the replacing of a dollar sign (``$``) followed by a variable name with the _value_ of that variable. For more on shell variables, read the :ref:`Shell variables <variables>` section.
+One of the most important expansions in fish is the "variable expansion". This is the replacing of a dollar sign (``$``) followed by a variable name with the _value_ of that variable.
 
 In the simplest case, this is just something like::
 
     echo $HOME
 
-which will replace ``$HOME`` with the home directory of the current user, and pass it to :ref:`echo <cmd-echo>`, which will then print it.
+which will replace ``$HOME`` with the home directory of the current user, and pass it to :doc:`echo <cmds/echo>`, which will then print it.
 
-Some variables like ``$HOME`` are already set because fish sets them by default or because fish's parent process passed them to fish when it started it. You can define your own variables by setting them with :ref:`set <cmd-set>`::
+Some variables like ``$HOME`` are already set because fish sets them by default or because fish's parent process passed them to fish when it started it. You can define your own variables by setting them with :doc:`set <cmds/set>`::
 
     set my_directory /home/cooluser/mystuff
     ls $my_directory
@@ -516,7 +560,6 @@ Some variables like ``$HOME`` are already set because fish sets them by default 
 For more on how setting variables works, see :ref:`Shell variables <variables>` and the following sections.
 
 Sometimes a variable has no value because it is undefined or empty, and it expands to nothing::
-
 
     echo $nonexistentvariable
     # Prints no output.
@@ -535,11 +578,43 @@ The latter syntax ``{$WORD}`` is a special case of :ref:`brace expansion <expand
 
 If $WORD here is undefined or an empty list, the "s" is not printed. However, it is printed if $WORD is the empty string (like after ``set WORD ""``).
 
-Unlike all the other expansions, variable expansion also happens in double quoted strings. Inside double quotes (``"these"``), variables will always expand to exactly one argument. If they are empty or undefined, it will result in an empty string. If they have one element, they'll expand to that element. If they have more than that, the elements will be joined with spaces, unless the variable is a :ref:`path variable <variables-path>` - in that case it will use a colon (`:`) instead [#]_.
+For more on shell variables, read the :ref:`Shell variables <variables>` section.
+
+Quoting variables
+'''''''''''''''''
+
+
+Unlike all the other expansions, variable expansion also happens in double quoted strings. Inside double quotes (``"these"``), variables will always expand to exactly one argument. If they are empty or undefined, it will result in an empty string. If they have one element, they'll expand to that element. If they have more than that, the elements will be joined with spaces, unless the variable is a :ref:`path variable <variables-path>` - in that case it will use a colon (``:``) instead [#]_.
 
 Outside of double quotes, variables will expand to as many arguments as they have elements. That means an empty list will expand to nothing, a variable with one element will expand to that element, and a variable with multiple elements will expand to each of those elements separately.
 
 If a variable expands to nothing, it will cancel out any other strings attached to it. See the :ref:`cartesian product <cartesian-product>` section for more information.
+
+Unlike other shells, fish doesn't do what is known as "Word Splitting". Once a variable is set to a particular set of elements, those elements expand as themselves. They aren't split on spaces or newlines or anything::
+
+  > set foo one\nthing
+  > echo $foo
+  one
+  thing
+  > printf '|%s|\n' $foo
+  |one
+  thing|
+
+That means quoting isn't the absolute necessity it is in other shells. Most of the time, not quoting a variable is correct. The exception is when you need to ensure that the variable is passed as one element, even if it might be unset or have multiple elements. This happens often with :doc:`test <cmds/test>`::
+
+  set -l foo one two three
+  test -n $foo
+  # prints an error that it got too many arguments, because it was executed like
+  test -n one two three
+
+  test -n "$foo"
+  # works, because it was executed like
+  test -n "one two three"
+
+.. [#] Unlike bash or zsh, which will join with the first character of $IFS (which usually is space).
+
+Dereferencing variables
+'''''''''''''''''''''''
 
 The ``$`` symbol can also be used multiple times, as a kind of "dereference" operator (the ``*`` in C or C++), like in the following code::
 
@@ -556,9 +631,7 @@ The ``$`` symbol can also be used multiple times, as a kind of "dereference" ope
 
 ``$$foo[$i]`` is "the value of the variable named by ``$foo[$i]``.
 
-When using this feature together with list brackets, the brackets will be used from the inside out. ``$$foo[5]`` will use the fifth element of ``$foo`` as a variable name, instead of giving the fifth element of all the variables $foo refers to. That would instead be expressed as ``$$foo[1][5]`` (take the first element of ``$foo``, use it as a variable name, then give the fifth element of that).
-
-.. [#] Unlike bash or zsh, which will join with the first character of $IFS (which usually is space).
+When using this feature together with list brackets, the brackets will be used from the inside out. ``$$foo[5]`` will use the fifth element of ``$foo`` as a variable name, instead of giving the fifth element of all the variables $foo refers to. That would instead be expressed as ``$$foo[1..-1][5]`` (take all elements of ``$foo``, use them as variable names, then give the fifth element of those).
 
 .. _expand-command-substitution:
 
@@ -567,15 +640,15 @@ Command substitution
 
 The output of a command (or an entire :ref:`pipeline <pipes>`) can be used as the arguments to another command.
 
-When you write a command in parenthesis like ``outercommand (innercommand)``, the ``innercommand`` will be executed first. Its output will be taken and each line given as a separate argument to ``outercommand``, which will then be executed. [#]_
+When you write a command in parentheses like ``outercommand (innercommand)``, fish first runs ``innercommand``, and then uses each line of its output as a separate argument to ``outercommand``, which will then be executed. Unlike other shells, the value of ``$IFS`` is not used [#]_, fish splits on newlines.
 
-If the output is piped to :ref:`string split or string split0 <cmd-string-split>` as the last step, those splits are used as they appear instead of splitting lines.
+A command substitution can have a dollar sign before the opening parenthesis like ``outercommand $(innercommand)``. This variant is also allowed inside double quotes. When using double quotes, the command output is not split up by lines, but trailing empty lines are still removed.
 
-The exit status of the last run command substitution is available in the :ref:`status <variables-status>` variable if the substitution happens in the context of a :ref:`set <cmd-set>` command (so ``if set -l (something)`` checks if ``something`` returned true).
+If the output is piped to :doc:`string split or string split0 <cmds/string-split>` as the last step, those splits are used as they appear instead of splitting lines.
 
-Only part of the output can be used, see :ref:`index range expansion <expand-index-range>` for details.
+The exit status of the last run command substitution is available in the :ref:`status <variables-status>` variable if the substitution happens in the context of a :doc:`set <cmds/set>` command (so ``if set -l (something)`` checks if ``something`` returned true).
 
-Fish has a default limit of 100 MiB on the data it will read in a command sustitution. If that limit is reached the command (all of it, not just the command substitution - the outer command won't be executed at all) fails and ``$status`` is set to 122. This is so command substitutions can't cause the system to go out of memory, because typically your operating system has a much lower limit, so reading more than that would be useless and harmful. This limit can be adjusted with the ``fish_read_limit`` variable (`0` meaning no limit). This limit also affects the :ref:`read <cmd-read>` command.
+To use only some lines of the output, refer to :ref:`index range expansion <expand-index-range>`.
 
 Examples::
 
@@ -588,7 +661,7 @@ Examples::
 
     # Set the ``data`` variable to the contents of 'data.txt'
     # without splitting it into a list.
-    begin; set -l IFS; set data (cat data.txt); end
+    set data "$(cat data.txt)"
 
     # Set ``$data`` to the contents of data, splitting on NUL-bytes.
     set data (cat data | string split0)
@@ -598,15 +671,16 @@ Sometimes you want to pass the output of a command to another command that only 
 
     grep fish myanimallist1 | wc -l
 
-but if you need multiple or the command doesn't read from standard input, "process substitution" is useful. Other shells [#]_ allow this via ``foo <(bar) <(baz)``, and fish uses the :ref:`psub <cmd-psub>` command::
+but if you need multiple or the command doesn't read from standard input, "process substitution" is useful. Other shells allow this via ``foo <(bar) <(baz)``, and fish uses the :doc:`psub <cmds/psub>` command::
 
     # Compare just the lines containing "fish" in two files:
     diff -u (grep fish myanimallist1 | psub) (grep fish myanimallist2 | psub)
 
 This creates a temporary file, stores the output of the command in that file and prints the filename, so it is given to the outer command.
 
-.. [#] Setting ``$IFS`` to empty will disable line splitting. This is deprecated, use :ref:`string split <cmd-string-split>` instead.
-.. [#] Bash and Zsh at least, though it is a POSIX extension
+Fish has a default limit of 100 MiB on the data it will read in a command sustitution. If that limit is reached the command (all of it, not just the command substitution - the outer command won't be executed at all) fails and ``$status`` is set to 122. This is so command substitutions can't cause the system to go out of memory, because typically your operating system has a much lower limit, so reading more than that would be useless and harmful. This limit can be adjusted with the ``fish_read_limit`` variable (`0` meaning no limit). This limit also affects the :doc:`read <cmds/read>` command.
+
+.. [#] One exception: Setting ``$IFS`` to empty will disable line splitting. This is deprecated, use :doc:`string split <cmds/string-split>` instead.
 
 .. _expand-brace:
 
@@ -657,7 +731,7 @@ To use a "," as an element, :ref:`quote <quotes>` or :ref:`escape <escapes>` it.
 Combining lists (Cartesian Product)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-When lists are expanded with other parts attached, they are expanded with these parts still attached. Even if two lists are attached to each other, they are expanded in all combinations. This is referred to as the `cartesian product` (like in mathematics), and works basically like :ref:`brace expansion <expand-brace>`.
+When lists are expanded with other parts attached, they are expanded with these parts still attached. Even if two lists are attached to each other, they are expanded in all combinations. This is referred to as the "cartesian product" (like in mathematics), and works basically like :ref:`brace expansion <expand-brace>`.
 
 Examples::
 
@@ -696,7 +770,6 @@ Sometimes this may be unwanted, especially that tokens can disappear after expan
 This also happens after :ref:`command substitution <expand-command-substitution>`. To avoid tokens disappearing there, make the inner command return a trailing newline, or store the output in a variable and double-quote it.
 
 E.g.
-
 ::
 
     >_ set b 1 2 3
@@ -711,11 +784,12 @@ E.g.
     # so this is `''banana`
     banana
 
-This can be quite useful. For example, if you want to go through all the files in all the directories in $PATH, use::
+This can be quite useful. For example, if you want to go through all the files in all the directories in :envvar:`PATH`, use
+::
 
     for file in $PATH/*
 
-Because :ref:`$PATH <path>` is a list, this expands to all the files in all the directories in it. And if there are no directories in $PATH, the right answer here is to expand to no files.
+Because :envvar:`PATH` is a list, this expands to all the files in all the directories in it. And if there are no directories in :envvar:`PATH`, the right answer here is to expand to no files.
 
 .. _expand-index-range:
 
@@ -819,7 +893,6 @@ The ``~`` (tilde) character at the beginning of a parameter, followed by a usern
 
   echo ~root # prints root's home directory, probably "/root"
 
-
 .. _combine:
 
 Combining different expansions
@@ -847,7 +920,7 @@ Shell variables
 
 Variables are a way to save data and pass it around. They can be used just by the shell, or they can be ":ref:`exported <variables-export>`", so that a copy of the variable is available to any external command the shell starts. An exported variable is referred to as an "environment variable".
 
-To set a variable value, use the :ref:`set <cmd-set>` command. A variable name can not be empty and can contain only letters, digits, and underscores. It may begin and end with any of those characters.
+To set a variable value, use the :doc:`set <cmds/set>` command. A variable name can not be empty and can contain only letters, digits, and underscores. It may begin and end with any of those characters.
 
 Example:
 
@@ -866,36 +939,46 @@ So you set a variable with ``set``, and use it with a ``$`` and the name.
 
 .. _variables-scope:
 
-Variable scope
+Variable Scope
 ^^^^^^^^^^^^^^
 
-There are three kinds of variables in fish: universal, global and local variables.
+There are four kinds of variables in fish: universal, global, function and local variables.
 
 - Universal variables are shared between all fish sessions a user is running on one computer.
 - Global variables are specific to the current fish session, and will never be erased unless explicitly requested by using ``set -e``.
-- Local variables are specific to the current fish session, and associated with a specific block of commands, and automatically erased when a specific block goes out of scope. A block of commands is a series of commands that begins with one of the commands ``for``, ``while`` , ``if``, ``function``, ``begin`` or ``switch``, and ends with the command ``end``.
+- Function variables are specific to the currently executing function. They are erased ("go out of scope") when the current function ends. Outside of a function, they don't go out of scope.
+- Local variables are specific to the current block of commands, and automatically erased when a specific block goes out of scope. A block of commands is a series of commands that begins with one of the commands ``for``, ``while`` , ``if``, ``function``, ``begin`` or ``switch``, and ends with the command ``end``. Outside of a block, this is the same as the function scope.
 
-Variables can be explicitly set to be universal with the ``-U`` or ``--universal`` switch, global with the ``-g`` or ``--global`` switch, or local with the ``-l`` or ``--local`` switch.  The scoping rules when creating or updating a variable are:
+Variables can be explicitly set to be universal with the ``-U`` or ``--universal`` switch, global with ``-g`` or ``--global``, function-scoped with ``-f`` or ``--function`` and local to the current block with ``-l`` or ``--local``.  The scoping rules when creating or updating a variable are:
 
 - When a scope is explicitly given, it will be used. If a variable of the same name exists in a different scope, that variable will not be changed.
 
 - When no scope is given, but a variable of that name exists, the variable of the smallest scope will be modified. The scope will not be changed.
 
-- As a special case, when no scope is given and no variable has been defined the variable will belong to the scope of the currently executing *function*. This is different from the ``--local`` flag, which would make the variable local to the current *block*.
+- When no scope is given and no variable of that name exists, the variable is created in function scope if inside a function, or global scope if no function is executing.
 
 There can be many variables with the same name, but different scopes. When you :ref:`use a variable <expand-variable>`, the smallest scoped variable of that name will be used. If a local variable exists, it will be used instead of the global or universal variable of the same name.
-
 
 Example:
 
 There are a few possible uses for different scopes.
 
-Typically inside funcions you should use local scope::
+Typically inside functions you should use local scope::
 
     function something
         set -l file /path/to/my/file
         if not test -e "$file"
             set file /path/to/my/otherfile
+        end
+    end
+
+    # or
+
+    function something
+        if test -e /path/to/my/file
+            set -f file /path/to/my/file
+        else
+            set -f file /path/to/my/otherfile
         end
     end
 
@@ -921,16 +1004,24 @@ If you want to set some personal customization, universal variables are nice::
 
 Here is an example of local vs function-scoped variables::
 
-    begin
-        # This is a nice local scope where all variables will die
-        set -l pirate 'There be treasure in them thar hills'
-        set captain Space, the final frontier
-    end
+  function test-scopes
+      begin
+          # This is a nice local scope where all variables will die
+          set -l pirate 'There be treasure in them thar hills'
+          set -f captain Space, the final frontier
+          # If no variable of that name was defined, it is function-local.
+          set gnu "In the beginning there was nothing, which exploded"
+      end
 
-    echo $pirate
-    # This will not output anything, since the pirate was local
-    echo $captain
-    # This will output the good Captain's speech since $captain had function-scope.
+      echo $pirate
+      # This will not output anything, since the pirate was local
+      echo $captain
+      # This will output the good Captain's speech since $captain had function-scope.
+      echo $gnu
+      # Will output Sir Terry's wisdom.
+  end
+
+When in doubt, use function-scoped variables. When you need to make a variable accessible everywhere, make it global. When you need to persistently store configuration, make it universal. When you want to use a variable only in a short block, make it local.
 
 .. _variables-override:
 
@@ -976,7 +1067,6 @@ To see universal variables in action, start two fish sessions side by side, and 
 
 Do not append to universal variables in :ref:`config.fish <configuration>`, because these variables will then get longer with each new shell instance. Instead, simply set them once at the command line.
 
-
 .. _variables-functions:
 
 Variable scope for functions
@@ -1001,28 +1091,16 @@ For example::
 
     # Outputs "Avast, mateys"
 
-
-
 .. _variables-export:
 
 Exporting variables
 ^^^^^^^^^^^^^^^^^^^
 
-Variables in fish can be "exported", so they will be inherited by any commands started by fish. In particular, this is necessary for variables used to configure external commands like $LESS or $GOPATH, but also for variables that contain general system settings like $PATH or $LANGUAGE. If an external command needs to know a variable, it needs to be exported.
+Variables in fish can be exported, so they will be inherited by any commands started by fish. In particular, this is necessary for variables used to configure external commands like ``PAGER`` or ``GOPATH``, but also for variables that contain general system settings like ``PATH`` or ``LANGUAGE``. If an external command needs to know a variable, it needs to be exported. Exported variables are also often called "environment variables".
 
-This also applies to fish - when it starts up, it receives environment variables from its parent (usually the terminal). These typically include system configuration like :ref:`$PATH <PATH>` and :ref:`locale variables <variables-locale>`.
+This also applies to fish - when it starts up, it receives environment variables from its parent (usually the terminal). These typically include system configuration like :envvar:`PATH` and :ref:`locale variables <variables-locale>`.
 
-Variables can be explicitly set to be exported with the ``-x`` or ``--export`` switch, or not exported with the ``-u`` or ``--unexport`` switch.  The exporting rules when setting a variable are identical to the scoping rules for variables:
-
-- If a variable is explicitly set to either be exported or not exported, that setting will be honored.
-
-- If a variable is not explicitly set to be exported or not exported, but has been previously defined, the previous exporting rule for the variable is kept.
-
-- Otherwise, by default, the variable will not be exported.
-
-- If a variable has local scope and is exported, any function called receives a *copy* of it, so any changes it makes to the variable disappear once the function returns.
-
-- Global variables are accessible to functions whether they are exported or not.
+Variables can be explicitly set to be exported with the ``-x`` or ``--export`` switch, or not exported with the ``-u`` or ``--unexport`` switch.  The exporting rules when setting a variable are similar to the scoping rules for variables - when an option is passed it is respected, otherwise the variable's existing state is used. If no option is passed and the variable didn't exist yet it is not exported.
 
 As a naming convention, exported variables are in uppercase and unexported variables are in lowercase.
 
@@ -1035,7 +1113,7 @@ For example::
     set -gx GTK2_RC_FILES "$XDG_CONFIG_HOME/gtk-2.0/gtkrc"
     set -gx LESSHISTFILE "-"
 
-Note: Exporting is not a :ref:`scope <variables-scope>`, but an additional state. It typically makes sense to make exported variables global as well, but local-exported variables can be useful if you need something more specific than :ref:`Overrides <variables-override>`. They are *copied* to functions so the function can't alter them outside, and still available to commands.
+Note: Exporting is not a :ref:`scope <variables-scope>`, but an additional state. It typically makes sense to make exported variables global as well, but local-exported variables can be useful if you need something more specific than :ref:`Overrides <variables-override>`. They are *copied* to functions so the function can't alter them outside, and still available to commands. Global variables are accessible to functions whether they are exported or not.
 
 .. _variables-lists:
 
@@ -1062,7 +1140,7 @@ If you don't use any brackets, all the elements of the list will be passed to th
         echo $i is in the path
     end
 
-This goes over every directory in $PATH separately and prints a line saying it is in the path.
+This goes over every directory in :envvar:`PATH` separately and prints a line saying it is in the path.
 
 To create a variable ``smurf``, containing the items ``blue`` and ``small``, simply write::
 
@@ -1081,7 +1159,6 @@ It is also possible to set or erase individual elements of a list::
 
     # Output 'evil'
     echo $smurf
-
 
 If you specify a negative index when expanding or assigning to a list variable, the index will be taken from the *end* of the list. For example, the index -1 is the last element of the list::
 
@@ -1110,15 +1187,19 @@ When a list is exported as an environment variable, it is either space or colon 
     smurf=blue small
     smurf_PATH=forest:mushroom
 
-Fish automatically creates lists from all environment variables whose name ends in PATH (like $PATH, $CDPATH or $MANPATH), by splitting them on colons. Other variables are not automatically split.
+Fish automatically creates lists from all environment variables whose name ends in ``PATH`` (like :envvar:`PATH`, :envvar:`CDPATH` or :envvar:`MANPATH`), by splitting them on colons. Other variables are not automatically split.
 
-Lists can be inspected with the :ref:`count <cmd-count>` or the :ref:`contains <cmd-contains>` commands::
+Lists can be inspected with the :doc:`count <cmds/count>` or the :doc:`contains <cmds/contains>` commands::
 
-    count $smurf
-    # 2
+    > count $smurf
+    2
 
-    contains blue $smurf
-    # key found, exits with status 0
+    > contains blue $smurf
+    # blue was found, so it exits with status 0
+    # (without printing anything)
+
+    > echo $status
+    0
 
     > contains -i blue $smurf
     1
@@ -1152,23 +1233,27 @@ This function takes whatever arguments it gets and prints the first and third::
   apple
   banana
 
-Commandline tools often get various options and flags and positional arguments, and $argv would contain all of these.
+That covers the positional arguments, but commandline tools often get various options and flags, and $argv would contain them intermingled with the positional arguments. Typical unix argument handling allows short options (``-h``, also grouped like in ``ls -lah``), long options (``--help``) and allows those options to take arguments (``--color=auto`` or ``--position anywhere`` or ``complete -C"git "``) as well as a ``--`` separator to signal the end of options. Handling all of these manually is tricky and error-prone.
 
-A more robust approach to argument handling is :ref:`argparse <cmd-argparse>`, which checks the defined options and puts them into various variables, leaving only the positional arguments in $argv. Here's a simple example::
+A more robust approach to option handling is :doc:`argparse <cmds/argparse>`, which checks the defined options and puts them into various variables, leaving only the positional arguments in $argv. Here's a simple example::
 
   function mybetterfunction
+      # We tell argparse about -h/--help and -s/--second - these are short and long forms of the same option.
+      # The "--" here is mandatory, it tells it from where to read the arguments.
       argparse h/help s/second -- $argv
-      or return # exit if argparse failed because it found an option it didn't recognize - it will print an error
+      # exit if argparse failed because it found an option it didn't recognize - it will print an error
+      or return
 
       # If -h or --help is given, we print a little help text and return
-      if set -q _flag_help
-          echo "mybetterfunction [-h|--help] [-s|--second] [ARGUMENTS...]"
+      if set -ql _flag_help
+          echo "mybetterfunction [-h|--help] [-s|--second] [ARGUMENT ...]"
           return 0
       end
 
       # If -s or --second is given, we print the second argument,
       # not the first and third.
-      if set -q _flag_second
+      # (this is also available as _flag_s because of the short version)
+      if set -ql _flag_second
           echo $argv[2]
       else
           echo $argv[1]
@@ -1181,12 +1266,14 @@ The options will be *removed* from $argv, so $argv[2] is the second *positional*
   > mybetterfunction first -s second third
   second
 
+For more information on argparse, like how to handle option arguments, see :doc:`the argparse documentation <cmds/argparse>`.
+
 .. _variables-path:
 
 PATH variables
 ^^^^^^^^^^^^^^
 
-Path variables are a special kind of variable used to support colon-delimited path lists including PATH, CDPATH, MANPATH, PYTHONPATH, etc. All variables that end in "PATH" (case-sensitive) become PATH variables.
+Path variables are a special kind of variable used to support colon-delimited path lists including :envvar:`PATH`, :envvar:`CDPATH`, :envvar:`MANPATH`, :envvar:`PYTHONPATH`, etc. All variables that end in "PATH" (case-sensitive) become PATH variables by default.
 
 PATH variables act as normal lists, except they are implicitly joined and split on colons.
 
@@ -1201,6 +1288,16 @@ PATH variables act as normal lists, except they are implicitly joined and split 
     echo "$MYPATH"
     # 1:2:3:4:5
 
+Path variables will also be exported in the colon form, so ``set -x MYPATH 1 2 3`` will have external commands see it as ``1:2:3``.
+
+::
+
+   > set -gx MYPATH /bin /usr/bin /sbin
+   > env | grep MYPATH
+   MYPATH=/bin:/usr/bin:/sbin
+
+This is for compatibility with other tools. Unix doesn't have variables with multiple elements, the closest thing it has are colon-lists like :envvar:`PATH`. For obvious reasons this means no element can contain a ``:``.
+
 Variables can be marked or unmarked as PATH variables via the ``--path`` and ``--unpath`` options to ``set``.
 
 .. _variables-special:
@@ -1210,83 +1307,186 @@ Special variables
 
 You can change the settings of fish by changing the values of certain variables.
 
-.. _PATH:
+.. envvar:: PATH
 
-- ``PATH``, a list of directories in which to search for commands
+   A list of directories in which to search for commands. This is a common unix variable also used by other tools.
 
-- ``CDPATH``, a list of directories in which the :ref:`cd <cmd-cd>` builtin looks for a new directory.
+.. envvar:: CDPATH
 
-- The locale variables ``LANG``, ``LC_ALL``, ``LC_COLLATE``, ``LC_CTYPE``, ``LC_MESSAGES``, ``LC_MONETARY``, ``LC_NUMERIC`` and ``LC_TIME`` set the language option for the shell and subprograms. See the section :ref:`Locale variables <variables-locale>` for more information.
+   A list of directories in which the :doc:`cd <cmds/cd>` builtin looks for a new directory.
 
-- A number of variable starting with the prefixes ``fish_color`` and ``fish_pager_color``. See :ref:`Variables for changing highlighting colors <variables-color>` for more information.
+.. describe:: Locale Variables
 
-- ``fish_ambiguous_width`` controls the computed width of ambiguous-width characters. This should be set to 1 if your terminal renders these characters as single-width (typical), or 2 if double-width.
+   The locale variables :envvar:`LANG`, :envvar:`LC_ALL`, :envvar:`LC_COLLATE`, :envvar:`LC_CTYPE`, :envvar:`LC_MESSAGES`, :envvar:`LC_MONETARY`, :envvar:`LC_NUMERIC`, and :envvar:`LANG` set the language option for the shell and subprograms. See the section :ref:`Locale variables <variables-locale>` for more information.
 
-- ``fish_emoji_width`` controls whether fish assumes emoji render as 2 cells or 1 cell wide. This is necessary because the correct value changed from 1 to 2 in Unicode 9, and some terminals may not be aware. Set this if you see graphical glitching related to emoji (or other "special" characters). It should usually be auto-detected.
+.. describe:: Color variables
 
-- ``FISH_DEBUG`` and ``FISH_DEBUG_OUTPUT`` control what debug output fish generates and where it puts it, analogous to the ``--debug`` and ``--debug-output`` options. These have to be set on startup, via e.g. ``FISH_DEBUG='reader*' FISH_DEBUG_OUTPUT=/tmp/fishlog fish``.
+   A number of variable starting with the prefixes ``fish_color`` and ``fish_pager_color``. See :ref:`Variables for changing highlighting colors <variables-color>` for more information.
 
-- ``fish_escape_delay_ms`` sets how long fish waits for another key after seeing an escape, to distinguish pressing the escape key from the start of an escape sequence. The default is 30ms. Increasing it increases the latency but allows pressing escape instead of alt for alt+character bindings. For more information, see :ref:`the chapter in the bind documentation <cmd-bind-escape>`.
+.. envvar:: fish_ambiguous_width
 
-- ``fish_greeting``, the greeting message printed on startup. This is printed by a function of the same name that can be overridden for more complicated changes (see :ref:`funced <cmd-funced>`
+   controls the computed width of ambiguous-width characters. This should be set to 1 if your terminal renders these characters as single-width (typical), or 2 if double-width.
 
-- ``fish_handle_reflow``, determines whether fish should try to repaint the commandline when the terminal resizes. In terminals that reflow text this should be disabled. Set it to 1 to enable, anything else to disable.
+.. envvar:: fish_emoji_width
 
-- ``fish_history``, the current history session name. If set, all subsequent commands within an
-  interactive fish session will be logged to a separate file identified by the value of the
-  variable. If unset, the default session name "fish" is used. If set to an
-  empty string, history is not saved to disk (but is still available within the interactive
-  session).
+   controls whether fish assumes emoji render as 2 cells or 1 cell wide. This is necessary because the correct value changed from 1 to 2 in Unicode 9, and some terminals may not be aware. Set this if you see graphical glitching related to emoji (or other "special" characters). It should usually be auto-detected.
 
-- ``fish_key_bindings``, the name of the function that sets up the keyboard shortcuts for the :ref:`command-line editor <editor>`.
+.. envvar:: fish_autosuggestion_enabled
 
-- ``fish_trace``, if set and not empty, will cause fish to print commands before they execute, similar to ``set -x`` in bash. The trace is printed to the path given by the :ref:`--debug-output <cmd-fish>` option to fish (stderr by default).
+   controls if :ref:`autosuggestions` are enabled. Set it to 0 to disable, anything else to enable. By default they are on.
 
-- ``fish_user_paths``, a list of directories that are prepended to ``PATH``. This can be a universal variable.
+.. envvar:: fish_handle_reflow
 
-- ``umask``, the current file creation mask. The preferred way to change the umask variable is through the :ref:`umask <cmd-umask>` function. An attempt to set umask to an invalid value will always fail.
+   determines whether fish should try to repaint the commandline when the terminal resizes. In terminals that reflow text this should be disabled. Set it to 1 to enable, anything else to disable.
 
-- ``BROWSER``, your preferred web browser. If this variable is set, fish will use the specified browser instead of the system default browser to display the fish documentation.
+.. envvar:: fish_key_bindings
+
+   the name of the function that sets up the keyboard shortcuts for the :ref:`command-line editor <editor>`.
+
+.. envvar:: fish_escape_delay_ms
+
+   sets how long fish waits for another key after seeing an escape, to distinguish pressing the escape key from the start of an escape sequence. The default is 30ms. Increasing it increases the latency but allows pressing escape instead of alt for alt+character bindings. For more information, see :ref:`the chapter in the bind documentation <cmd-bind-escape>`.
+
+.. envvar:: fish_complete_path
+
+   determines where fish looks for completion. When trying to complete for a command, fish looks for files in the directories in this variable.
+
+.. envvar:: fish_cursor_selection_mode
+
+    controls whether the selection is inclusive or exclusive of the character under the cursor (see :ref:`Copy and Paste <killring>`).
+
+.. envvar:: fish_function_path
+
+   determines where fish looks for functions. When fish :ref:`autoloads <syntax-function-autoloading>` a function, it will look for files in these directories.
+
+.. envvar:: fish_greeting
+
+   the greeting message printed on startup. This is printed by a function of the same name that can be overridden for more complicated changes (see :doc:`funced <cmds/funced>`)
+
+.. envvar:: fish_history
+
+   the current history session name. If set, all subsequent commands within an
+   interactive fish session will be logged to a separate file identified by the value of the
+   variable. If unset, the default session name "fish" is used. If set to an
+   empty string, history is not saved to disk (but is still available within the interactive
+   session).
+
+.. envvar:: fish_trace
+
+   if set and not empty, will cause fish to print commands before they execute, similar to ``set -x``
+   in bash. The trace is printed to the path given by the `--debug-output` option to fish or the :envvar:`FISH_DEBUG_OUTPUT` variable. It goes to stderr by default.
+
+.. envvar:: FISH_DEBUG
+
+   Controls which debug categories :command:`fish` enables for output, analogous to the ``--debug`` option.
+
+.. envvar:: FISH_DEBUG_OUTPUT
+
+   Specifies a file to direct debug output to.
+
+.. envvar:: fish_user_paths
+
+   a list of directories that are prepended to :envvar:`PATH`. This can be a universal variable.
+
+.. envvar:: umask
+
+   the current file creation mask. The preferred way to change the umask variable is through the :doc:`umask <cmds/umask>` function. An attempt to set umask to an invalid value will always fail.
+
+.. envvar:: BROWSER
+
+   your preferred web browser. If this variable is set, fish will use the specified browser instead of the system default browser to display the fish documentation.
 
 Fish also provides additional information through the values of certain environment variables. Most of these variables are read-only and their value can't be changed with ``set``.
 
-- ``_``, the name of the currently running command (though this is deprecated, and the use of ``status current-command`` is preferred).
+.. envvar:: _
 
-- ``argv``, a list of arguments to the shell or function. ``argv`` is only defined when inside a function call, or if fish was invoked with a list of arguments, like ``fish myscript.fish foo bar``. This variable can be changed.
+   the name of the currently running command (though this is deprecated, and the use of ``status current-command`` is preferred).
 
-- ``CMD_DURATION``, the runtime of the last command in milliseconds.
+.. envvar:: argv
 
-- ``COLUMNS`` and ``LINES``, the current size of the terminal in height and width. These values are only used by fish if the operating system does not report the size of the terminal. Both variables must be set in that case otherwise a default of 80x24 will be used. They are updated when the window size changes.
+   a list of arguments to the shell or function. ``argv`` is only defined when inside a function call, or if fish was invoked with a list of arguments, like ``fish myscript.fish foo bar``. This variable can be changed.
 
-- ``fish_kill_signal``, the signal that terminated the last foreground job, or 0 if the job exited normally.
+.. envvar:: CMD_DURATION
 
-- ``fish_pid``, the process ID (PID) of the shell.
+   the runtime of the last command in milliseconds.
 
-- ``history``, a list containing the last commands that were entered.
+.. describe:: COLUMNS and LINES
 
-- ``HOME``, the user's home directory. This variable can be changed.
+   the current size of the terminal in height and width. These values are only used by fish if the operating system does not report the size of the terminal. Both variables must be set in that case otherwise a default of 80x24 will be used. They are updated when the window size changes.
 
-- ``hostname``, the machine's hostname.
+.. envvar:: fish_kill_signal
 
-- ``IFS``, the internal field separator that is used for word splitting with the :ref:`read <cmd-read>` builtin. Setting this to the empty string will also disable line splitting in :ref:`command substitution <expand-command-substitution>`. This variable can be changed.
+   the signal that terminated the last foreground job, or 0 if the job exited normally.
 
-- ``last_pid``, the process ID (PID) of the last background process.
+.. envvar:: fish_killring
 
-- ``PWD``, the current working directory.
+   a list of entries in fish's :ref:`kill ring <killring>` of cut text.
 
-- ``pipestatus``, a list of exit statuses of all processes that made up the last executed pipe. See :ref:`exit status <variables-status>`.
+.. envvar:: fish_read_limit
 
-- ``SHLVL``, the level of nesting of shells. Fish increments this in interactive shells, otherwise it simply passes it along.
+   how many bytes fish will process with :doc:`read <cmds/read>` or in a :ref:`command substitution <expand-command-substitution>`.
 
-- ``status``, the :ref:`exit status <variables-status>` of the last foreground job to exit. If the job was terminated through a signal, the exit status will be 128 plus the signal number.
+.. envvar:: fish_pid
 
-- ``status_generation``, the "generation" count of ``$status``. This will be incremented only when the previous command produced an explicit status. (For example, background jobs will not increment this).
+   the process ID (PID) of the shell.
 
-- ``USER``, the current username. This variable can be changed.
+.. envvar:: history
 
-- ``version``, the version of the currently running fish (also available as ``FISH_VERSION`` for backward compatibility).
+   a list containing the last commands that were entered.
 
-- ``fish_killring``, list of entries in fish kill ring.
+.. ENVVAR:: HOME
+
+   the user's home directory. This variable can be changed.
+
+.. envvar:: hostname
+
+   the machine's hostname.
+
+.. ENVVAR:: IFS
+
+   the internal field separator that is used for word splitting with the :doc:`read <cmds/read>` builtin. Setting this to the empty string will also disable line splitting in :ref:`command substitution <expand-command-substitution>`. This variable can be changed.
+
+.. envvar:: last_pid
+
+   the process ID (PID) of the last background process.
+
+.. ENVVAR:: PWD
+
+   the current working directory.
+
+.. envvar:: pipestatus
+
+   a list of exit statuses of all processes that made up the last executed pipe. See :ref:`exit status <variables-status>`.
+
+.. ENVVAR:: SHLVL
+
+   the level of nesting of shells. Fish increments this in interactive shells, otherwise it simply passes it along.
+
+.. envvar:: status
+
+   the :ref:`exit status <variables-status>` of the last foreground job to exit. If the job was terminated through a signal, the exit status will be 128 plus the signal number.
+
+.. envvar:: status_generation
+
+   the "generation" count of ``$status``. This will be incremented only when the previous command produced an explicit status. (For example, background jobs will not increment this).
+
+.. ENVVAR:: TERM
+
+   the type of the current terminal. When fish tries to determine how the terminal works - how many colors it supports, what sequences it sends for keys and other things - it looks at this variable and the corresponding information in the terminfo database (see ``man terminfo``).
+
+   Note: Typically this should not be changed as the terminal sets it to the correct value.
+
+.. ENVVAR:: USER
+
+   the current username. This variable can be changed.
+
+.. ENVVAR:: EUID
+
+   the current effective user id, set by fish at startup. This variable can be changed.
+
+.. envvar:: version
+
+   the version of the currently running fish (also available as ``FISH_VERSION`` for backward compatibility).
 
 As a convention, an uppercase name is usually used for exported variables, while lowercase variables are not exported. (``CMD_DURATION`` is an exception for historical reasons). This rule is not enforced by fish, but it is good coding practice to use casing to distinguish between exported and unexported variables.
 
@@ -1321,9 +1521,9 @@ If fish encounters a problem while executing a command, the status variable may 
 
 If a process exits through a signal, the exit status will be 128 plus the number of the signal.
 
-The status can be negated with :ref:`not <cmd-not>` (or ``!``), which is useful in a :ref:`condition <syntax-conditional>`. This turns a status of 0 into 1 and any non-zero status into 0.
+The status can be negated with :doc:`not <cmds/not>` (or ``!``), which is useful in a :ref:`condition <syntax-conditional>`. This turns a status of 0 into 1 and any non-zero status into 0.
 
-There is also ``$pipestatus``, which is a list of all ``status`` values of processes in a pipe. One difference is that :ref:`not <cmd-not>` applies to ``$status``, but not ``$pipestatus``, because it loses information.
+There is also ``$pipestatus``, which is a list of all ``status`` values of processes in a pipe. One difference is that :doc:`not <cmds/not>` applies to ``$status``, but not ``$pipestatus``, because it loses information.
 
 For example::
 
@@ -1334,18 +1534,71 @@ Here ``$status`` reflects the status of ``grep``, which returns 0 if it found so
 
 So if both ``cat`` and ``grep`` succeeded, ``$status`` would be 1 because of the ``not``, and ``$pipestatus`` would be 0 and 0.
 
+It's possible for the first command to fail while the second succeeds. One common example is when the second program quits early.
+
+For example, if you have a pipeline like::
+
+  cat file1 file2 | head -n 50
+
+This will tell ``cat`` to print two files, "file1" and "file2", one after the other, and the ``head`` will then only print the first 50 lines. In this case you might often see this constellation::
+
+  > cat file1 file2 | head -n 50
+  # 50 lines of output
+  > echo $pipestatus
+  141 0
+
+Here, the "141" signifies that ``cat`` was killed by signal number 13 (128 + 13 == 141) - a ``SIGPIPE``. You can also use :envvar:`fish_kill_signal` to see the signal number. This happens because it was still working, and then ``head`` closed the pipe, so ``cat`` received a signal that it didn't ignore and so it died.
+
+Whether ``cat`` here will see a SIGPIPE depends on how long the file is and how much it writes at once, so you might see a pipestatus of "0 0", depending on the implementation. This is a general unix issue and not specific to fish. Some shells feature a "pipefail" feature that will call a pipeline failed if one of the processes in it failed, and this is a big problem with it.
+
 .. _variables-locale:
 
-Locale variables
+Locale Variables
 ^^^^^^^^^^^^^^^^
 
-The "locale" of a program is its set of language and regional settings. In UNIX, there are a few separate variables to control separate things - ``LC_CTYPE`` defines the text encoding while ``LC_TIME`` defines the time format.
+The "locale" of a program is its set of language and regional settings that depend on language and cultural convention. In UNIX, these are made up of several categories. The categories are:
 
-The locale variables are: ``LANG``, ``LC_ALL``, ``LC_COLLATE``, ``LC_CTYPE``, ``LC_MESSAGES``,  ``LC_MONETARY``, ``LC_NUMERIC`` and ``LC_TIME``. These variables work as follows: ``LC_ALL`` forces all the aspects of the locale to the specified value. If ``LC_ALL`` is set, all other locale variables will be ignored (this is typically not recommended!). The other ``LC_`` variables set the specified aspect of the locale information. ``LANG`` is a fallback value, it will be used if none of the ``LC_`` variables are specified.
+.. envvar:: LANG
 
-The most common way to set the locale to use a command like ``set -gx LANG en_GB.utf8``, which sets the current locale to be the English language, as used in Great Britain, using the UTF-8 character set. That way any program that requires one setting differently can easily override just that and doesn't have to resort to LC_ALL. For a list of available locales on your system, try ``locale -a``.
+   This is the typical environment variable for specifying a locale. A user may set this variable to express the language they speak, their region, and a character encoding. The actual values are specific to their platform, except for special values like ``C`` or ``POSIX``.
 
-Because it needs to handle output that might include multibyte characters (like e.g. emojis), fish will try to set its own internal LC_CTYPE to one that is UTF8-capable even if given an effective LC_CTYPE of "C" (the default). This prevents issues with e.g. filenames given in autosuggestions even if the user started fish with LC_ALL=C. To turn this handling off, set ``fish_allow_singlebyte_locale`` to "1".
+   The value of LANG is used for each category unless the variable for that category was set or LC_ALL is set. So typically you only need to set LANG.
+
+   An example value might be ``en_US.UTF-8`` for the american version of english and the UTF-8 encoding, or ``de_AT.UTF-8`` for the austrian version of german and the UTF-8 encoding.
+   Your operating system might have a ``locale`` command that you can call as ``locale -a`` to see a list of defined locales.
+
+   A UTF-8 encoding is recommended.
+
+.. envvar:: LC_ALL
+
+   Overrides the :envvar:`LANG` environment variable and the values of the other ``LC_*`` variables. If this is set, none of the other variables are used for anything.
+
+   Usually the other variables should be used instead. Use LC_ALL only when you need to override something.
+
+.. envvar:: LC_COLLATE
+
+   This determines the rules about equivalence of cases and alphabetical ordering: collation.
+
+.. envvar:: LC_CTYPE
+
+   This determines classification rules, like if the type of character is an alpha, digit, and so on.
+   Most importantly, it defines the text *encoding* - which numbers map to which characters. On modern systems, this should typically be something ending in "UTF-8".
+
+.. envvar:: LC_MESSAGES
+
+   ``LC_MESSAGES`` determines the language in which messages are diisplayed.
+
+.. envvar:: LC_MONETARY
+
+   Determines currency, how it is formated, and the symbols used.
+
+.. envvar:: LC_NUMERIC
+
+   Sets the locale for formatting numbers.
+
+.. envvar:: LC_TIME
+
+   Sets the locale for formatting dates and times.
 
 .. _builtin-overview:
 
@@ -1354,33 +1607,142 @@ Builtin commands
 
 Fish includes a number of commands in the shell directly. We call these "builtins". These include:
 
-- Builtins that manipulate the shell state - :ref:`cd <cmd-cd>` changes directory, :ref:`set <cmd-set>` sets variables
-- Builtins for dealing with data, like :ref:`string <cmd-string>` for strings and :ref:`math <cmd-math>` for numbers, :ref:`count <cmd-count>` for counting lines or arguments
-- :ref:`status <cmd-status>` for asking about the shell's status
-- :ref:`printf <cmd-printf>` and :ref:`echo <cmd-echo>` for creating output
-- :ref:`test <cmd-test>` for checking conditions
-- :ref:`argparse <cmd-argparse>` for parsing function arguments
-- :ref:`source <cmd-source>` to read a script in the current shell (so changes to variables stay) and :ref:`eval <cmd-eval>` to execute a string as script
-- :ref:`random <cmd-random>` to get random numbers or pick a random element from a list
+- Builtins that manipulate the shell state - :doc:`cd <cmds/cd>` changes directory, :doc:`set <cmds/set>` sets variables
+- Builtins for dealing with data, like :doc:`string <cmds/string>` for strings and :doc:`math <cmds/math>` for numbers, :doc:`count <cmds/count>` for counting lines or arguments, :doc:`path <cmds/path>` for dealing with path
+- :doc:`status <cmds/status>` for asking about the shell's status
+- :doc:`printf <cmds/printf>` and :doc:`echo <cmds/echo>` for creating output
+- :doc:`test <cmds/test>` for checking conditions
+- :doc:`argparse <cmds/argparse>` for parsing function arguments
+- :doc:`source <cmds/source>` to read a script in the current shell (so changes to variables stay) and :doc:`eval <cmds/eval>` to execute a string as script
+- :doc:`random <cmds/random>` to get random numbers or pick a random element from a list
+- :doc:`read <cmds/read>` for reading from a pipe or the terminal
 
 For a list of all builtins, use ``builtin -n``.
 
 For a list of all builtins, functions and commands shipped with fish, see the :ref:`list of commands <Commands>`. The documentation is also available by using the ``--help`` switch.
+
+.. _command-lookup:
+
+Command lookup
+--------------
+
+When fish is told to run something, it goes through multiple steps to find it.
+
+If it contains a ``/``, fish tries to execute the given file, from the current directory on.
+
+If it doesn't contain a ``/``, it could be a function, builtin, or external command, and so fish goes through the full lookup.
+
+In order:
+
+1. It tries to resolve it as a :ref:`function <syntax-function>`.
+
+   - If the function is already known, it uses that
+   - If there is a file of the name with a ".fish" suffix in :envvar:`fish_function_path`, it :ref:`loads that <syntax-function-autoloading>`. (If there is more than one file only the first is used)
+   - If the function is now defined it uses that
+
+2. It tries to resolve it as a :ref:`builtin <builtin-overview>`.
+3. It tries to find an executable file in :envvar:`PATH`.
+
+   - If it finds a file, it tells the kernel to run it.
+   - If the kernel knows how to run the file (e.g. via a ``#!`` line - ``#!/bin/sh`` or ``#!/usr/bin/python``), it does it.
+   - If the kernel reports that it couldn't run it because of a missing interpreter, and the file passes a rudimentary check, fish tells ``/bin/sh`` to run it.
+
+If none of these work, fish runs the function :doc:`fish_command_not_found <cmds/fish_command_not_found>` and sets :envvar:`status` to 127.
+
+You can use :doc:`type <cmds/type>` to see how fish resolved something::
+
+  > type --short --all echo
+  echo is a builtin
+  echo is /usr/bin/echo
+
+.. _user-input:
+
+Querying for user input
+-----------------------
+
+Sometimes, you want to ask the user for input, for instance to confirm something. This can be done with the :doc:`read <cmds/read>` builtin.
+
+Let's make up an example. This function will :ref:`glob <expand-wildcard>` the files in all the directories it gets as :ref:`arguments <variables-argv>`, and :ref:`if <syntax-conditional>` there are :doc:`more than five <cmds/test>` it will ask the user if it is supposed to show them, but only if it is connected to a terminal::
+
+    function show_files
+        # This will glob on all arguments. Any non-directories will be ignored.
+        set -l files $argv/*
+
+        # If there are more than 5 files
+        if test (count $files) -gt 5
+            # and both stdin (for reading input) and stdout (for writing the prompt)
+            # are terminals
+            and isatty stdin
+            and isatty stdout
+            # Keep asking until we get a valid response
+            while read --nchars 1 -l response --prompt-str="Are you sure? (y/n)"
+                  or return 1 # if the read was aborted with ctrl-c/ctrl-d
+                switch $response
+                    case y Y
+                        echo Okay
+                        # We break out of the while and go on with the function
+                        break
+                    case n N
+                        # We return from the function without printing
+                        echo Not showing
+                        return 1
+                    case '*'
+                        # We go through the while loop and ask again
+                        echo Not valid input
+                        continue
+                end
+            end
+        end
+
+        # And now we print the files
+        printf '%s\n' $files
+    end
+
+If you run this as ``show_files /``, it will most likely ask you until you press Y/y or N/n. If you run this as ``show_files / | cat``, it will print the files without asking. If you run this as ``show_files .``, it might just print something without asking because there are fewer than five files.
 
 .. _identifiers:
 
 Shell variable and function names
 ---------------------------------
 
-The names given to variables and functions (so called "identifiers") have to follow certain rules:
+The names given to variables and functions (so-called "identifiers") have to follow certain rules:
 
 - A variable name cannot be empty. It can contain only letters, digits, and underscores. It may begin and end with any of those characters.
 
-- A function name cannot be empty. It may not begin with a hyphen ("-") and may not contain a slash ("/"). All other characters, including a space, are valid.
+- A function name cannot be empty. It may not begin with a hyphen ("-") and may not contain a slash ("/"). All other characters, including a space, are valid. A function name also can't be the same as a reserved keyword or essential builtin like ``if`` or ``set``.
 
 - A bind mode name (e.g., ``bind -m abc ...``) must be a valid variable name.
 
 Other things have other restrictions. For instance what is allowed for file names depends on your system, but at the very least they cannot contain a "/" (because that is the path separator) or NULL byte (because that is how UNIX ends strings).
+
+.. _configuration:
+
+Configuration files
+-------------------
+
+When fish is started, it reads and runs its configuration files. Where these are depends on build configuration and environment variables.
+
+The main file is ``~/.config/fish/config.fish`` (or more precisely ``$XDG_CONFIG_HOME/fish/config.fish``).
+
+Configuration files are run in the following order:
+
+- Configuration snippets (named ``*.fish``) in the directories:
+
+  - ``$__fish_config_dir/conf.d`` (by default, ``~/.config/fish/conf.d/``)
+  - ``$__fish_sysconf_dir/conf.d`` (by default, ``/etc/fish/conf.d/``)
+  - Directories for others to ship configuration snippets for their software. Fish searches the directories under ``$__fish_user_data_dir`` (usually ``~/.local/share/fish``, controlled by the ``XDG_DATA_HOME`` environment variable) and in the ``XDG_DATA_DIRS`` environment variable for a ``fish/vendor_conf.d`` directory; if not defined, the default value of ``XDG_DATA_DIRS`` is ``/usr/share/fish/vendor_conf.d`` and ``/usr/local/share/fish/vendor_conf.d``, unless your distribution customized this.
+
+  If there are multiple files with the same name in these directories, only the first will be executed.
+  They are executed in order of their filename, sorted (like globs) in a natural order (i.e. "01" sorts before "2").
+
+- System-wide configuration files, where administrators can include initialization for all users on the system - similar to ``/etc/profile`` for POSIX-style shells - in ``$__fish_sysconf_dir`` (usually ``/etc/fish/config.fish``).
+- User configuration, usually in ``~/.config/fish/config.fish`` (controlled by the ``XDG_CONFIG_HOME`` environment variable, and accessible as ``$__fish_config_dir``).
+
+``~/.config/fish/config.fish`` is sourced *after* the snippets. This is so you can copy snippets and override some of their behavior.
+
+These files are all executed on the startup of every shell. If you want to run a command only on starting an interactive shell, use the exit status of the command ``status --is-interactive`` to determine if the shell is interactive. If you want to run a command only when using a login shell, use ``status --is-login`` instead. This will speed up the starting of non-interactive or non-login shells.
+
+If you are developing another program, you may want to add configuration for all users of fish on a system. This is discouraged; if not carefully written, they may have side-effects or slow the startup of the shell. Additionally, users of other shells won't benefit from the fish-specific configuration. However, if they are required, you can install them to the "vendor" configuration directory. As this path may vary from system to system, ``pkg-config`` should be used to discover it: ``pkg-config --variable confdir fish``.
 
 .. _featureflags:
 
@@ -1392,30 +1754,42 @@ Feature flags are how fish stages changes that might break scripts. Breaking cha
 You can see the current list of features via ``status features``::
 
     > status features
-    stderr-nocaret  on     3.0      ^ no longer redirects stderr
-    qmark-noglob    off    3.0      ? no longer globs
-    regex-easyesc   off    3.1      string replace -r needs fewer \\'s
+    stderr-nocaret          on  3.0 ^ no longer redirects stderr
+    qmark-noglob            off 3.0 ? no longer globs
+    regex-easyesc           on  3.1 string replace -r needs fewer \\'s
+    ampersand-nobg-in-token on  3.4 & only backgrounds if followed by a separating character
 
-There are two breaking changes in fish 3.0: caret ``^`` no longer redirects stderr, and question mark ``?`` is no longer a glob.
+Here is what they mean:
 
-There is one breaking change in fish 3.1: ``string replace -r`` does a superfluous round of escaping for the replacement, so escaping backslashes would look like ``string replace -ra '([ab])' '\\\\\\\$1' a``. This flag removes that if turned on, so ``'\\\\$1'`` is enough.
+- ``stderr-nocaret`` was introduced in fish 3.0 (and made the default in 3.3). It makes ``^`` an ordinary character instead of denoting an stderr redirection, to make dealing with quoting and such easier. Use ``2>`` instead. This can no longer be turned off since fish 3.5. The flag can still be tested for compatibility, but a ``no-stderr-nocaret`` value will simply be ignored.
+- ``qmark-noglob`` was also introduced in fish 3.0. It makes ``?`` an ordinary character instead of a single-character glob. Use a ``*`` instead (which will match multiple characters) or find other ways to match files like ``find``.
+- ``regex-easyesc`` was introduced in 3.1. It makes it so the replacement expression in ``string replace -r`` does one fewer round of escaping. Before, to escape a backslash you would have to use ``string replace -ra '([ab])' '\\\\\\\\$1'``. After, just ``'\\\\$1'`` is enough. Check your ``string replace`` calls if you use this anywhere.
+- ``ampersand-nobg-in-token`` was introduced in fish 3.4. It makes it so a ``&`` i no longer interpreted as the backgrounding operator in the middle of a token, so dealing with URLs becomes easier. Either put spaces or a semicolon after the ``&``. This is recommended formatting anyway, and ``fish_indent`` will have done it for you already.
 
 
-These changes are off by default. They can be enabled on a per session basis::
+These changes are introduced off by default. They can be enabled on a per session basis::
 
-    > fish --features qmark-noglob,stderr-nocaret
+    > fish --features qmark-noglob,regex-easyesc
 
 
 or opted into globally for a user::
 
 
-    > set -U fish_features stderr-nocaret qmark-noglob
+    > set -U fish_features regex-easyesc qmark-noglob
 
 Features will only be set on startup, so this variable will only take effect if it is universal or exported.
 
-You can also use the version as a group, so ``3.0`` is equivalent to "stderr-nocaret" and "qmark-noglob".
+You can also use the version as a group, so ``3.0`` is equivalent to "stderr-nocaret" and "qmark-noglob". Instead of a version, the special group ``all`` enables all features.
 
-Prefixing a feature with ``no-`` turns it off instead.
+Prefixing a feature with ``no-`` turns it off instead. E.g. to reenable the ``?`` single-character glob::
+
+  set -Ua fish_features no-qmark-noglob
+
+Currently, the following features are enabled by default:
+
+- stderr-nocaret - ``^`` no longer redirects stderr, use ``2>``. Enabled by default in fish 3.3.0. No longer changeable since fish 3.5.0.
+- regex-easyesc - ``string replace -r`` requires fewer backslashes in the replacement part. Enabled by default in fish 3.5.0.
+- ampersand-nobg-in-token - ``&`` in the middle of a word is a normal character instead of backgrounding. Enabled by default in fish 3.5.0.
 
 .. _event:
 
@@ -1437,9 +1811,38 @@ To specify a signal handler for the WINCH signal, write::
         echo Got WINCH signal!
     end
 
-Please note that event handlers only become active when a function is loaded, which means you need to otherwise :ref:`source <cmd-source>` or execute a function instead of relying on :ref:`autoloading <syntax-function-autoloading>`. One approach is to put it into your :ref:`configuration file <configuration>`.
+Fish already the following named events for the ``--on-event`` switch:
 
-For more information on how to define new event handlers, see the documentation for the :ref:`function <cmd-function>` command.
+- ``fish_prompt`` is emitted whenever a new fish prompt is about to be displayed.
+
+- ``fish_preexec`` is emitted right before executing an interactive command. The commandline is passed as the first parameter. Not emitted if command is empty.
+
+- ``fish_posterror`` is emitted right after executing a command with syntax errors. The commandline is passed as the first parameter.
+
+- ``fish_postexec`` is emitted right after executing an interactive command. The commandline is passed as the first parameter. Not emitted if command is empty.
+
+- ``fish_exit`` is emitted right before fish exits.
+
+- ``fish_cancel`` is emitted when a commandline is cleared.
+
+Events can be fired with the :doc:`emit <cmds/emit>` command, and do not have to be defined before. The names just need to match. For example::
+
+  function handler --on-event imdone
+      echo generator is done $argv
+  end
+
+  function generator
+      sleep 1
+      # The "imdone" is the name of the event
+      # the rest is the arguments to pass to the handler
+      emit imdone with $argv
+  end
+
+If there are multiple handlers for an event, they will all be run, but the order might change between fish releases, so you should not rely on it.
+
+Please note that event handlers only become active when a function is loaded, which means you need to otherwise :doc:`source <cmds/source>` or execute a function instead of relying on :ref:`autoloading <syntax-function-autoloading>`. One approach is to put it into your :ref:`configuration file <configuration>`.
+
+For more information on how to define new event handlers, see the documentation for the :doc:`function <cmds/function>` command.
 
 
 .. _debugging:
@@ -1447,6 +1850,10 @@ For more information on how to define new event handlers, see the documentation 
 Debugging fish scripts
 ----------------------
 
-Fish includes a built in debugging facility. The debugger allows you to stop execution of a script at an arbitrary point. When this happens you are presented with an interactive prompt. At this prompt you can execute any fish command (there are no debug commands as such). For example, you can check or change the value of any variables using :ref:`printf <cmd-printf>` and :ref:`set <cmd-set>`. As another example, you can run :ref:`status print-stack-trace <cmd-status>` to see how this breakpoint was reached. To resume normal execution of the script, simply type :ref:`exit <cmd-exit>` or :kbd:`Control`\ +\ :kbd:`D`.
+Fish includes basic built-in debugging facilities that allow you to stop execution of a script at an arbitrary point. When this happens you are presented with an interactive prompt where you can execute any fish command to inspect or change state (there are no debug commands as such). For example, you can check or change the value of any variables using :doc:`printf <cmds/printf>` and :doc:`set <cmds/set>`. As another example, you can run :doc:`status print-stack-trace <cmds/status>` to see how the current breakpoint was reached. To resume normal execution of the script, simply type :doc:`exit <cmds/exit>` or :kbd:`Control`\ +\ :kbd:`D`.
 
-To start a debug session simply run the builtin command :ref:`breakpoint <cmd-breakpoint>` at the point in a function or script where you wish to gain control. Also, the default action of the TRAP signal is to call this builtin. So a running script can be debugged by sending it the TRAP signal with the ``kill`` command. Once in the debugger, it is easy to insert new breakpoints by using the funced function to edit the definition of a function.
+To start a debug session simply insert the :doc:`builtin command <cmds/breakpoint>` ``breakpoint`` at the point in a function or script where you wish to gain control, then run the function or script. Also, the default action of the ``TRAP`` signal is to call this builtin, meaning a running script can be actively debugged by sending it the ``TRAP`` signal (``kill -s TRAP <PID>``). There is limited support for interactively setting or modifying breakpoints from this debug prompt: it is possible to insert new breakpoints in (or remove old ones from) other functions by using the ``funced`` function to edit the definition of a function, but it is not possible to add or remove a breakpoint from the function/script currently loaded and being executed.
+
+Another way to debug script issues is to set the :envvar:`fish_trace` variable, e.g. ``fish_trace=1 fish_prompt`` to see which commands fish executes when running the :doc:`fish_prompt <cmds/fish_prompt>` function.
+
+If you specifically want to debug performance issues, :program:`fish` can be run with the ``--profile /path/to/profile.log`` option to save a profile to the specified path. This profile log includes a breakdown of how long each step in the execution took. See :doc:`fish <cmds/fish>` for more information.

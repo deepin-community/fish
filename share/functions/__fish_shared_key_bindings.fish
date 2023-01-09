@@ -5,7 +5,7 @@ function __fish_shared_key_bindings -d "Bindings shared between emacs and vi mod
 
     if contains -- -h $argv
         or contains -- --help $argv
-        echo "Sorry but this function doesn't support -h or --help"
+        echo "Sorry but this function doesn't support -h or --help" >&2
         return 1
     end
 
@@ -98,7 +98,7 @@ function __fish_shared_key_bindings -d "Bindings shared between emacs and vi mod
     bind --preset $argv \ed 'set -l cmd (commandline); if test -z "$cmd"; echo; dirh; commandline -f repaint; else; commandline -f kill-word; end'
     bind --preset $argv \cd delete-or-exit
 
-    bind --preset $argv \es "fish_commandline_prepend sudo"
+    bind --preset $argv \es "if command -q sudo; fish_commandline_prepend sudo; else if command -q doas; fish_commandline_prepend doas; end"
 
     # Allow reading manpages by pressing F1 (many GUI applications) or Alt+h (like in zsh).
     bind --preset $argv -k f1 __fish_man_page
@@ -166,6 +166,39 @@ function __fish_shared_key_bindings -d "Bindings shared between emacs and vi mod
     # Only insert spaces if we're either quoted or not at the beginning of the commandline
     # - this strips leading spaces if they would trigger histignore.
     bind --preset -M paste " " self-insert-notfirst
+
+    # Bindings that are shared in text-insertion modes.
+    if not set -l index (contains --index -- -M $argv)
+        or test $argv[(math $index + 1)] = insert
+
+        # This is the default binding, i.e. the one used if no other binding matches
+        bind --preset $argv "" self-insert
+        or exit # protect against invalid $argv
+
+        # Space and other command terminators expands abbrs _and_ inserts itself.
+        bind --preset $argv " " self-insert expand-abbr
+        bind --preset $argv ";" self-insert expand-abbr
+        bind --preset $argv "|" self-insert expand-abbr
+        bind --preset $argv "&" self-insert expand-abbr
+        bind --preset $argv ">" self-insert expand-abbr
+        bind --preset $argv "<" self-insert expand-abbr
+        # Closing a command substitution expands abbreviations
+        bind --preset $argv ")" self-insert expand-abbr
+        # Ctrl-space inserts space without expanding abbrs
+        bind --preset $argv -k nul 'test -n "$(commandline)" && commandline -i " "'
+        # Shift-space (CSI u escape sequence) behaves like space because it's easy to mistype.
+        bind --preset $argv \e\[32\;2u 'commandline -i " "; commandline -f expand-abbr'
+
+
+        bind --preset $argv \n execute
+        bind --preset $argv \r execute
+        # Make Control+Return behave like Return because it's easy to mistype after accepting an autosuggestion.
+        bind --preset $argv \e\[27\;5\;13~ execute # Sent with XTerm.vt100.formatOtherKeys: 0
+        bind --preset $argv \e\[13\;5u execute # CSI u sequence, sent with XTerm.vt100.formatOtherKeys: 1
+        # Same for Shift+Return
+        bind --preset $argv \e\[27\;2\;13~ execute
+        bind --preset $argv \e\[13\;2u execute
+    end
 end
 
 function __fish_commandline_insert_escaped --description 'Insert the first arg escaped if a second arg is given'

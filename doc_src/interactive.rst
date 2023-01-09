@@ -1,7 +1,7 @@
 .. _interactive:
 
 Interactive use
-***************
+===============
 
 Fish prides itself on being really nice to use interactively. That's down to a few features we'll explain in the next few sections.
 
@@ -10,13 +10,13 @@ Fish is used by giving commands in the fish language, see :ref:`The Fish Languag
 Help
 ----
 
-Fish has an extensive help system. Use the :ref:`help <cmd-help>` command to obtain help on a specific subject or command. For instance, writing ``help syntax`` displays the :ref:`syntax section <syntax>` of this documentation.
+Fish has an extensive help system. Use the :doc:`help <cmds/help>` command to obtain help on a specific subject or command. For instance, writing ``help syntax`` displays the :ref:`syntax section <syntax>` of this documentation.
 
 Fish also has man pages for its commands, and translates the help pages to man pages. For example, ``man set`` will show the documentation for ``set`` as a man page.
 
-Help on a specific builtin can also be obtained with the ``-h`` parameter. For instance, to obtain help on the :ref:`fg <cmd-fg>` builtin, either type ``fg -h`` or ``help fg``.
+Help on a specific builtin can also be obtained with the ``-h`` parameter. For instance, to obtain help on the :doc:`fg <cmds/fg>` builtin, either type ``fg -h`` or ``help fg``.
 
-This page can be viewed via ``help index`` (or just ``help``) or ``man fish-doc``. The tutorial can be viewed with ``help tutorial`` or ``man fish-tutorial``.
+The main page can be viewed via ``help index`` (or just ``help``) or ``man fish-doc``. The tutorial can be viewed with ``help tutorial`` or ``man fish-tutorial``.
 
 .. _autosuggestions:
 
@@ -29,6 +29,9 @@ To accept the autosuggestion (replacing the command line contents), press :kbd:`
 
 Autosuggestions are a powerful way to quickly summon frequently entered commands, by typing the first few characters. They are also an efficient technique for navigating through directory hierarchies.
 
+If you don't like autosuggestions, you can disable them by setting ``$fish_autosuggestion_enabled`` to 0::
+
+  set -g fish_autosuggestion_enabled 0
 
 .. _tab-completion:
 
@@ -39,31 +42,21 @@ Tab completion is a time saving feature of any modern shell. When you type :kbd:
 
 The pager can be navigated with the arrow keys, :kbd:`Page Up` / :kbd:`Page Down`, :kbd:`Tab` or :kbd:`Shift`\ +\ :kbd:`Tab`. Pressing :kbd:`Control`\ +\ :kbd:`S` (the ``pager-toggle-search`` binding - :kbd:`/` in vi-mode) opens up a search menu that you can use to filter the list.
 
-Fish provides some general purpose completions:
+Fish provides some general purpose completions, like for commands, variable names, usernames or files.
 
-- Commands (builtins, functions and regular programs).
+It also provides a large number of program specific scripted completions. Most of these completions are simple options like the ``-l`` option for ``ls``, but a lot are more advanced. For example:
 
-- Shell variable names.
+- ``man`` and ``whatis`` show the installed manual pages as completions.
 
-- Usernames for tilde expansion.
+- ``make`` uses targets in the Makefile in the current directory as completions.
 
-- Filenames, even on strings with wildcards such as ``*`` and ``**``.
+- ``mount`` uses mount points specified in fstab as completions.
 
-It also provides a large number of program specific scripted completions. Most of these completions are simple options like the ``-l`` option for ``ls``, but some are more advanced. For example:
-
-- The programs ``man`` and ``whatis`` show all installed manual pages as completions.
-
-- The ``make`` program uses all targets in the Makefile in the current directory as completions.
-
-- The ``mount`` command uses all mount points specified in fstab as completions.
-
-- The ``ssh`` command uses all hosts that are stored in the known_hosts file as completions. (See the ssh documentation for more information)
-
-- The ``su`` command shows the users on the system
-
-- The ``apt-get``, ``rpm`` and ``yum`` commands show installed or installable packages
+- ``apt``, ``rpm`` and ``yum`` show installed or installable packages
 
 You can also write your own completions or install some you got from someone else. For that, see :ref:`Writing your own completions <completion-own>`.
+
+Completion scripts are loaded on demand, just like :ref:`functions are <syntax-function-autoloading>`. The difference is the ``$fish_complete_path`` :ref:`list <variables-lists>` is used instead of ``$fish_function_path``. Typically you can drop new completions in ~/.config/fish/completions/name-of-command.fish and fish will find them automatically.
 
 .. _color:
 
@@ -74,22 +67,29 @@ Fish interprets the command line as it is typed and uses syntax highlighting to 
 
 Detected errors include:
 
-- Non existing commands.
-- Reading from or appending to a non existing file.
+- Non-existing commands.
+- Reading from or appending to a non-existing file.
 - Incorrect use of output redirects
 - Mismatched parenthesis
 
-
-When the cursor is over a parenthesis or a quote, fish also highlights its matching quote or parenthesis.
-
 To customize the syntax highlighting, you can set the environment variables listed in the :ref:`Variables for changing highlighting colors <variables-color>` section.
+
+Fish also provides pre-made color themes you can pick with :doc:`fish_config <cmds/fish_config>`. Running just ``fish_config`` opens a browser interface, or you can use ``fish_config theme`` in the terminal.
+
+For example, to disable nearly all coloring::
+
+  fish_config theme choose none
+
+Or, to see all themes, right in your terminal::
+
+  fish_config theme show
 
 .. _variables-color:
 
 Syntax highlighting variables
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-The colors used by fish for syntax highlighting can be configured by changing the values of a various variables. The value of these variables can be one of the colors accepted by the :ref:`set_color <cmd-set_color>` command. The modifier switches accepted by ``set_color`` like ``--bold``, ``--dim``, ``--italics``, ``--reverse`` and ``--underline`` are also accepted.
+The colors used by fish for syntax highlighting can be configured by changing the values of various variables. The value of these variables can be one of the colors accepted by the :doc:`set_color <cmds/set_color>` command. The modifier switches accepted by ``set_color`` like ``--bold``, ``--dim``, ``--italics``, ``--reverse`` and ``--underline`` are also accepted.
 
 
 Example: to make errors highlighted and red, use::
@@ -99,31 +99,41 @@ Example: to make errors highlighted and red, use::
 
 The following variables are available to change the highlighting colors in fish:
 
-==========================================                 =====================================================================
-Variable                                                   Meaning
-==========================================                 =====================================================================
-``fish_color_normal``                                      default color
-``fish_color_command``                                     commands like echo
-``fish_color_keyword``                                     keywords like if - this falls back on the command color if unset
-``fish_color_quote``                                       quoted text like "abc"
-``fish_color_redirection``                                 IO redirections like >/dev/null
-``fish_color_end``                                         process separators like ';' and '&'
-``fish_color_error``                                       syntax errors
-``fish_color_param``                                       ordinary command parameters
-``fish_color_comment``                                     comments like '# important'
-``fish_color_selection``                                   selected text in vi visual mode
-``fish_color_operator``                                    parameter expansion operators like '*' and '~'
-``fish_color_escape``                                      character escapes like '\n' and '\x70'
-``fish_color_autosuggestion``                              autosuggestions (the proposed rest of a command)
-``fish_color_cwd``                                         the current working directory in the default prompt
-``fish_color_user``                                        the username in the default prompt
-``fish_color_host``                                        the hostname in the default prompt
-``fish_color_host_remote``                                 the hostname in the default prompt for remote sessions (like ssh)
-``fish_color_cancel``                                      the '^C' indicator on a canceled command
-``fish_color_search_match``                                history search matches and selected pager items (background only)
-==========================================                 =====================================================================
+==========================================        =====================================================================
+Variable                                          Meaning
+==========================================        =====================================================================
+.. envvar:: fish_color_normal                     default color
+.. envvar:: fish_color_command                    commands like echo
+.. envvar:: fish_color_keyword                    keywords like if - this falls back on the command color if unset
+.. envvar:: fish_color_quote                      quoted text like ``"abc"``
+.. envvar:: fish_color_redirection                IO redirections like >/dev/null
+.. envvar:: fish_color_end                        process separators like ``;`` and ``&``
+.. envvar:: fish_color_error                      syntax errors
+.. envvar:: fish_color_param                      ordinary command parameters
+.. envvar:: fish_color_valid_path                 parameters that are filenames (if the file exists)
+.. envvar:: fish_color_option                     options starting with "-", up to the first "--" parameter
+.. envvar:: fish_color_comment                    comments like '# important'
+.. envvar:: fish_color_selection                  selected text in vi visual mode
+.. envvar:: fish_color_operator                   parameter expansion operators like ``*`` and ``~``
+.. envvar:: fish_color_escape                     character escapes like ``\n`` and ``\x70``
+.. envvar:: fish_color_autosuggestion             autosuggestions (the proposed rest of a command)
+.. envvar:: fish_color_cwd                        the current working directory in the default prompt
+.. envvar:: fish_color_cwd_root                   the current working directory in the default prompt for the root user
+.. envvar:: fish_color_user                       the username in the default prompt
+.. envvar:: fish_color_host                       the hostname in the default prompt
+.. envvar:: fish_color_host_remote                the hostname in the default prompt for remote sessions (like ssh)
+.. envvar:: fish_color_status                     the last command's nonzero exit code in the default prompt
+.. envvar:: fish_color_cancel                     the '^C' indicator on a canceled command
+.. envvar:: fish_color_search_match               history search matches and selected pager items (background only)
 
-If a variable isn't set, fish usually tries ``$fish_color_normal``, except for ``$fish_color_keyword``, where it tries ``$fish_color_command`` first.
+==========================================        =====================================================================
+
+If a variable isn't set or is empty, fish usually tries ``$fish_color_normal``, except for:
+
+- ``$fish_color_keyword``, where it tries ``$fish_color_command`` first.
+- ``$fish_color_option``, where it tries ``$fish_color_param`` first.
+- For ``$fish_color_valid_path``, if that doesn't have a color, but only modifiers, it adds those to the color that would otherwise be used,
+  like ``$fish_color_param``. But if valid paths have a color, it uses that and adds in modifiers from the other color.
 
 .. _variables-color-pager:
 
@@ -146,61 +156,69 @@ To have black text on alternating white and gray backgrounds::
 
 Variables affecting the pager colors:
 
-==========================================                 ===========================================================
+===================================================        ===========================================================
 Variable                                                   Meaning
-==========================================                 ===========================================================
-``fish_pager_color_progress``                              the progress bar at the bottom left corner
-``fish_pager_color_background``                            the background color of a line
-``fish_pager_color_prefix``                                the prefix string, i.e. the string that is to be completed
-``fish_pager_color_completion``                            the completion itself, i.e. the proposed rest of the string
-``fish_pager_color_description``                           the completion description
-``fish_pager_color_selected_background``                   background of the selected completion
-``fish_pager_color_selected_prefix``                       prefix of the selected completion
-``fish_pager_color_selected_completion``                   suffix of the selected completion
-``fish_pager_color_selected_description``                  description of the selected completion
-``fish_pager_color_secondary_background``                  background of every second unselected completion
-``fish_pager_color_secondary_prefix``                      prefix of every second unselected completion
-``fish_pager_color_secondary_completion``                  suffix of every second unselected completion
-``fish_pager_color_secondary_description``                 description of every second unselected completion
-==========================================                 ===========================================================
+===================================================        ===========================================================
+.. envvar:: fish_pager_color_progress                      the progress bar at the bottom left corner
+.. envvar:: fish_pager_color_background                    the background color of a line
+.. envvar:: fish_pager_color_prefix                        the prefix string, i.e. the string that is to be completed
+.. envvar:: fish_pager_color_completion                    the completion itself, i.e. the proposed rest of the string
+.. envvar:: fish_pager_color_description                   the completion description
+.. envvar:: fish_pager_color_selected_background           background of the selected completion
+.. envvar:: fish_pager_color_selected_prefix               prefix of the selected completion
+.. envvar:: fish_pager_color_selected_completion           suffix of the selected completion
+.. envvar:: fish_pager_color_selected_description          description of the selected completion
+.. envvar:: fish_pager_color_secondary_background          background of every second unselected completion
+.. envvar:: fish_pager_color_secondary_prefix              prefix of every second unselected completion
+.. envvar:: fish_pager_color_secondary_completion          suffix of every second unselected completion
+.. envvar:: fish_pager_color_secondary_description         description of every second unselected completion
+===================================================        ===========================================================
 
-When the secondary or selected variables aren't set, the normal variables are used, except for ``$fish_pager_color_selected_background``, where the background of ``$fish_color_search_match`` is tried first.
+When the secondary or selected variables aren't set or are empty, the normal variables are used, except for ``$fish_pager_color_selected_background``, where the background of ``$fish_color_search_match`` is tried first.
 
 .. _abbreviations:
 
 Abbreviations
 -------------
 
-To avoid needless typing, a frequently-run command like ``git checkout`` can be abbreviated to ``gco`` using the :ref:`abbr <cmd-abbr>` command.
+To avoid needless typing, a frequently-run command like ``git checkout`` can be abbreviated to ``gco`` using the :doc:`abbr <cmds/abbr>` command.
 
 ::
 
   abbr -a gco git checkout
 
-After entering ``gco`` and pressing :kbd:`Space` or :kbd:`Enter`, the full text ``git checkout`` will appear in the command line.
+After entering ``gco`` and pressing :kbd:`Space` or :kbd:`Enter`, a ``gco`` in command position will turn into ``git checkout`` in the command line. If you want to use a literal ``gco`` sometimes, use :kbd:`Control`\ +\ :kbd:`Space` [#]_.
 
-This is an alternative to aliases, and has the advantage that you see the actual command before using it, and the actual command will be stored in history.
+This is a lot more powerful, for example you can make going up a number of directories easier with this::
+
+  function multicd
+      echo cd (string repeat -n (math (string length -- $argv[1]) - 1) ../)
+  end
+  abbr --add dotdot --regex '^\.\.+$' --function multicd
+
+Now, ``..`` transforms to ``cd ../``, while ``...`` turns into ``cd ../../`` and ``....`` expands to ``cd ../../../``.
+
+The advantage over aliases is that you can see the actual command before using it, add to it or change it, and the actual command will be stored in history.
+
+.. [#] Any binding that executes the ``expand-abbr`` or ``execute`` :doc:`bind function <cmds/bind>` will expand abbreviations. By default :kbd:`Control`\ +\ :kbd:`Space` is bound to just inserting a space.
 
 .. _title:
 
 Programmable title
 ------------------
 
-When using most virtual terminals, it is possible to set the message displayed in the titlebar of the terminal window. This can be done automatically in fish by defining the :ref:`fish_title <cmd-fish_title>` function. The :ref:`fish_title <cmd-fish_title>` function is executed before and after a new command is executed or put into the foreground and the output is used as a titlebar message. The :ref:`status current-command <cmd-status>` builtin will always return the name of the job to be put into the foreground (or ``fish`` if control is returning to the shell) when the `fish_prompt <cmd-fish_prompt>` function is called. The first argument to fish_title will contain the most recently executed foreground command as a string, starting with fish 2.2.
+When using most virtual terminals, it is possible to set the message displayed in the titlebar of the terminal window. This can be done automatically in fish by defining the :doc:`fish_title <cmds/fish_title>` function. The :doc:`fish_title <cmds/fish_title>` function is executed before and after a new command is executed or put into the foreground and the output is used as a titlebar message. The :doc:`status current-command <cmds/status>` builtin will always return the name of the job to be put into the foreground (or ``fish`` if control is returning to the shell) when the :doc:`fish_prompt <cmds/fish_prompt>` function is called. The first argument to fish_title will contain the most recently executed foreground command as a string.
+
+The default fish title shows the hostname if connected via ssh, the currently running command (unless it is fish) and the current working directory. All of this is shortened to not make the tab too wide.
 
 Examples:
-The default fish title is::
 
+To show the last command and working directory in the title::
 
     function fish_title
-        echo (status current-command) ' '
+        # `prompt_pwd` shortens the title. This helps prevent tabs from becoming very wide.
+        echo $argv[1] (prompt_pwd)
         pwd
-    end
-
-To show the last command in the title::
-
-    function fish_title
-        echo $argv[1]
     end
 
 .. _prompt:
@@ -208,14 +226,16 @@ To show the last command in the title::
 Programmable prompt
 -------------------
 
-When fish waits for input, it will display a prompt by evaluating the :ref:`fish_prompt <cmd-fish_prompt>` and :ref:`fish_right_prompt <cmd-fish_right_prompt>` functions. The output of the former is displayed on the left and the latter's output on the right side of the terminal. The output of :ref:`fish_mode_prompt <cmd-fish_mode_prompt>` will be prepended on the left, though the default function only does this when in :ref:`vi-mode <vi-mode>`.
+When it is fish's turn to ask for input (like after it started or the command ended), it will show a prompt. It does this by running the :doc:`fish_prompt <cmds/fish_prompt>` and :doc:`fish_right_prompt <cmds/fish_right_prompt>` functions.
+
+The output of the former is displayed on the left and the latter's output on the right side of the terminal. The output of :doc:`fish_mode_prompt <cmds/fish_mode_prompt>` will be prepended on the left, though the default function only does this when in :ref:`vi-mode <vi-mode>`.
 
 .. _greeting:
 
 Configurable greeting
 ---------------------
 
-If a function named :ref:`fish_greeting <cmd-fish_greeting>` exists, it will be run when entering interactive mode. Otherwise, if an environment variable named :ref:`fish_greeting <cmd-fish_greeting>` exists, it will be printed.
+When it is started interactively, fish tries to run the :doc:`fish_greeting <cmds/fish_greeting>` function. The default fish_greeting prints a simple greeting. You can change its text by changing the ``$fish_greeting`` variable.
 
 .. _private-mode:
 
@@ -252,11 +272,11 @@ While the key bindings included with fish include many of the shortcuts popular 
 .. _shared-binds:
 
 Shared bindings
----------------
+^^^^^^^^^^^^^^^
 
 Some bindings are common across Emacs and Vi mode, because they aren't text editing bindings, or because what Vi/Vim does for a particular key doesn't make sense for a shell.
 
-- :kbd:`Tab` :ref:`completes <tab-completion>` the current token. :kbd:`Shift`\ +\ :kbd:`Tab` completes the current token and starts the pager's search mode.
+- :kbd:`Tab` :ref:`completes <tab-completion>` the current token. :kbd:`Shift`\ +\ :kbd:`Tab` completes the current token and starts the pager's search mode. :kbd:`Tab` is the same as :kbd:`Control`\ +\ :kbd:`I`.
 
 - :kbd:`←` (Left) and :kbd:`→` (Right) move the cursor left or right by one character. If the cursor is already at the end of the line, and an autosuggestion is available, :kbd:`→` accepts the autosuggestion.
 
@@ -274,19 +294,17 @@ Some bindings are common across Emacs and Vi mode, because they aren't text edit
 
 - :kbd:`Alt`\ +\ :kbd:`↑` and :kbd:`Alt`\ +\ :kbd:`↓` search the command history for the previous/next token containing the token under the cursor before the search was started. If the commandline was not on a token when the search started, all tokens match. See the :ref:`history <history-search>` section for more information on history searching.
 
-- :kbd:`Control`\ +\ :kbd:`C` cancels the entire line.
+- :kbd:`Control`\ +\ :kbd:`C` interrupt/kill whatever is running (SIGINT).
 
 - :kbd:`Control`\ +\ :kbd:`D` delete one character to the right of the cursor. If the command line is empty, :kbd:`Control`\ +\ :kbd:`D` will exit fish.
 
-- :kbd:`Control`\ +\ :kbd:`U` moves contents from the beginning of line to the cursor to the :ref:`killring <killring>`.
+- :kbd:`Control`\ +\ :kbd:`U` removes contents from the beginning of line to the cursor (moving it to the :ref:`killring <killring>`).
 
 - :kbd:`Control`\ +\ :kbd:`L` clears and repaints the screen.
 
-- :kbd:`Control`\ +\ :kbd:`R` searches the history if there is something in the commandline. This is mainly to ease the transition from other shells, where ctrl+r initiates the history search.
+- :kbd:`Control`\ +\ :kbd:`W` removes the previous path component (everything up to the previous "/", ":" or "@") (moving it to the :ref:`killring`).
 
-- :kbd:`Control`\ +\ :kbd:`W` moves the previous path component (everything up to the previous "/", ":" or "@") to the :ref:`killring`.
-
-- :kbd:`Control`\ +\ :kbd:`X` copies the current buffer to the system's clipboard, :kbd:`Control`\ +\ :kbd:`V` inserts the clipboard contents.
+- :kbd:`Control`\ +\ :kbd:`X` copies the current buffer to the system's clipboard, :kbd:`Control`\ +\ :kbd:`V` inserts the clipboard contents. (see :doc:`fish_clipboard_copy <cmds/fish_clipboard_copy>` and :doc:`fish_clipboard_paste <cmds/fish_clipboard_paste>`)
 
 - :kbd:`Alt`\ +\ :kbd:`D` moves the next word to the :ref:`killring`.
 
@@ -311,7 +329,9 @@ Some bindings are common across Emacs and Vi mode, because they aren't text edit
 .. _emacs-mode:
 
 Emacs mode commands
--------------------
+^^^^^^^^^^^^^^^^^^^
+
+To enable emacs mode, use ``fish_default_key_bindings``. This is also the default.
 
 - :kbd:`Home` or :kbd:`Control`\ +\ :kbd:`A` moves the cursor to the beginning of the line.
 
@@ -321,9 +341,13 @@ Emacs mode commands
 
 - :kbd:`Control`\ +\ :kbd:`N`, :kbd:`Control`\ +\ :kbd:`P` move the cursor up/down or through history, like the up and down arrow shared bindings.
 
-- :kbd:`Delete` or :kbd:`Backspace` removes one character forwards or backwards respectively.
+- :kbd:`Delete` or :kbd:`Backspace` removes one character forwards or backwards respectively. This also goes for :kbd:`Control`\ +\ :kbd:`H`, which is indistinguishable from backspace.
 
-- :kbd:`Control`\ +\ :kbd:`K` moves contents from the cursor to the end of line to the :ref:`killring`.
+- :kbd:`Alt`\ +\ :kbd:`Backspace` removes one word backwards.
+
+- :kbd:`Alt`\ +\ :kbd:`<` moves to the beginning of the commandline, :kbd:`Alt`\ +\ :kbd:`>` moves to the end.
+
+- :kbd:`Control`\ +\ :kbd:`K` deletes from the cursor to the end of line (moving it to the :ref:`killring`).
 
 - :kbd:`Alt`\ +\ :kbd:`C` capitalizes the current word.
 
@@ -337,16 +361,20 @@ Emacs mode commands
 
 - :kbd:`Alt`\ +\ :kbd:`/` reverts the most recent undo.
 
+- :kbd:`Control`\ +\ :kbd:`R` opens the history in a pager. This will show history entries matching the search, a few at a time. Pressing :kbd:`Control`\ +\ :kbd:`R` again will search older entries, pressing :kbd:`Control`\ +\ :kbd:`S` (that otherwise toggles pager search) will go to newer entries. The search bar will always be selected.
 
-You can change these key bindings using the :ref:`bind <cmd-bind>` builtin.
+
+You can change these key bindings using the :doc:`bind <cmds/bind>` builtin.
 
 
 .. _vi-mode:
 
 Vi mode commands
-----------------
+^^^^^^^^^^^^^^^^
 
 Vi mode allows for the use of Vi-like commands at the prompt. Initially, :ref:`insert mode <vi-mode-insert>` is active. :kbd:`Escape` enters :ref:`command mode <vi-mode-command>`. The commands available in command, insert and visual mode are described below. Vi mode shares :ref:`some bindings <shared-binds>` with :ref:`Emacs mode <emacs-mode>`.
+
+To enable vi mode, use ``fish_vi_key_bindings``.
 
 It is also possible to add all emacs-mode bindings to vi-mode by using something like::
 
@@ -363,9 +391,9 @@ It is also possible to add all emacs-mode bindings to vi-mode by using something
     end
 
 
-When in vi-mode, the :ref:`fish_mode_prompt <cmd-fish_mode_prompt>` function will display a mode indicator to the left of the prompt. To disable this feature, override it with an empty function. To display the mode elsewhere (like in your right prompt), use the output of the ``fish_default_mode_prompt`` function.
+When in vi-mode, the :doc:`fish_mode_prompt <cmds/fish_mode_prompt>` function will display a mode indicator to the left of the prompt. To disable this feature, override it with an empty function. To display the mode elsewhere (like in your right prompt), use the output of the ``fish_default_mode_prompt`` function.
 
-When a binding switches the mode, it will repaint the mode-prompt if it exists, and the rest of the prompt only if it doesn't. So if you want a mode-indicator in your ``fish_prompt``, you need to erase ``fish_mode_prompt`` e.g. by adding an empty file at ``~/.config/fish/functions/fish_mode_prompt.fish``. (Bindings that change the mode are supposed to call the `repaint-mode` bind function, see :ref:`bind <cmd-bind>`)
+When a binding switches the mode, it will repaint the mode-prompt if it exists, and the rest of the prompt only if it doesn't. So if you want a mode-indicator in your ``fish_prompt``, you need to erase ``fish_mode_prompt`` e.g. by adding an empty file at ``~/.config/fish/functions/fish_mode_prompt.fish``. (Bindings that change the mode are supposed to call the `repaint-mode` bind function, see :doc:`bind <cmds/bind>`)
 
 The ``fish_vi_cursor`` function will be used to change the cursor's shape depending on the mode in supported terminals. The following snippet can be used to manually configure cursors after enabling vi-mode::
 
@@ -387,40 +415,46 @@ If the cursor shape does not appear to be changing after setting the above varia
 .. _vi-mode-command:
 
 Command mode
-^^^^^^^^^^^^
+""""""""""""
 
 Command mode is also known as normal mode.
 
-- :kbd:`H` moves the cursor left.
+- :kbd:`h` moves the cursor left.
 
-- :kbd:`L` moves the cursor right.
+- :kbd:`l` moves the cursor right.
 
-- :kbd:`I` enters :ref:`insert mode <vi-mode-insert>` at the current cursor position.
+- :kbd:`k` and :kbd:`j` search the command history for the previous/next command containing the string that was specified on the commandline before the search was started. If the commandline was empty when the search started, all commands match. See the :ref:`history <history-search>` section for more information on history searching. In multi-line commands, they move the cursor up and down respectively.
 
-- :kbd:`V` enters :ref:`visual mode <vi-mode-visual>` at the current cursor position.
+- :kbd:`i` enters :ref:`insert mode <vi-mode-insert>` at the current cursor position.
 
-- :kbd:`A` enters :ref:`insert mode <vi-mode-insert>` after the current cursor position.
+- :kbd:`Shift`\ +\ :kbd:`R` enters :ref:`insert mode <vi-mode-insert>` at the beginning of the line.
+
+- :kbd:`v` enters :ref:`visual mode <vi-mode-visual>` at the current cursor position.
+
+- :kbd:`a` enters :ref:`insert mode <vi-mode-insert>` after the current cursor position.
 
 - :kbd:`Shift`\ +\ :kbd:`A` enters :ref:`insert mode <vi-mode-insert>` at the end of the line.
 
 - :kbd:`0` (zero) moves the cursor to beginning of line (remaining in command mode).
 
-- :kbd:`D`\ +\ :kbd:`D` deletes the current line and moves it to the :ref:`killring`.
+- :kbd:`d`\ +\ :kbd:`d` deletes the current line and moves it to the :ref:`killring`.
 
 - :kbd:`Shift`\ +\ :kbd:`D` deletes text after the current cursor position and moves it to the :ref:`killring`.
 
-- :kbd:`P` pastes text from the :ref:`killring`.
+- :kbd:`p` pastes text from the :ref:`killring`.
 
-- :kbd:`U` search history backwards.
+- :kbd:`u` undoes the most recent edit of the command line.
 
 - :kbd:`[` and :kbd:`]` search the command history for the previous/next token containing the token under the cursor before the search was started. See the :ref:`history <history-search>` section for more information on history searching.
+
+- :kbd:`/` opens the history in a pager. This will show history entries matching the search, a few at a time. Pressing it again will search older entries, pressing :kbd:`Control`\ +\ :kbd:`S` (that otherwise toggles pager search) will go to newer entries. The search bar will always be selected.
 
 - :kbd:`Backspace` moves the cursor left.
 
 .. _vi-mode-insert:
 
 Insert mode
-^^^^^^^^^^^
+"""""""""""
 
 - :kbd:`Escape` enters :ref:`command mode <vi-mode-command>`.
 
@@ -429,53 +463,55 @@ Insert mode
 .. _vi-mode-visual:
 
 Visual mode
-^^^^^^^^^^^
+"""""""""""
 
 - :kbd:`←` (Left) and :kbd:`→` (Right) extend the selection backward/forward by one character.
 
-- :kbd:`B` and :kbd:`W` extend the selection backward/forward by one word.
+- :kbd:`h` moves the cursor left.
 
-- :kbd:`D` and :kbd:`X` move the selection to the :ref:`killring` and enter :ref:`command mode <vi-mode-command>`.
+- :kbd:`l` moves the cursor right.
+
+- :kbd:`k` moves the cursor up.
+
+- :kbd:`j` moves the cursor down.
+
+- :kbd:`b` and :kbd:`w` extend the selection backward/forward by one word.
+
+- :kbd:`d` and :kbd:`x` move the selection to the :ref:`killring` and enter :ref:`command mode <vi-mode-command>`.
 
 - :kbd:`Escape` and :kbd:`Control`\ +\ :kbd:`C` enter :ref:`command mode <vi-mode-command>`.
 
-- :kbd:`c` and :kbd:`s` remove the selection and switch to insert mode
+- :kbd:`c` and :kbd:`s` remove the selection and switch to insert mode.
 
-- :kbd:`d` and :kbd:`x` remove the selection and switch to normal mode
+- :kbd:`X` moves the entire line to the :ref:`killring`, and enters :ref:`command mode <vi-mode-command>`.
 
-- :kbd:`X` removes the entire line and switches to normal mode
+- :kbd:`y` copies the selection to the :ref:`killring`, and enters :ref:`command mode <vi-mode-command>`.
 
-- :kbd:`y` copies the selection and switches to normal mode
+- :kbd:`~` toggles the case (upper/lower) on the selection, and enters :ref:`command mode <vi-mode-command>`.
 
-- :kbd:`~` toggles the case (upper/lower) on the selection and switches to normal mode
-
-- :kbd:`"*y` copies the selection to the clipboard and switches to normal mode
+- :kbd:`"*y` copies the selection to the clipboard, and enters :ref:`command mode <vi-mode-command>`.
 
 .. _custom-binds:
 
 Custom bindings
----------------
+^^^^^^^^^^^^^^^
 
-In addition to the standard bindings listed here, you can also define your own with :ref:`bind <cmd-bind>`::
+In addition to the standard bindings listed here, you can also define your own with :doc:`bind <cmds/bind>`::
 
   # Just clear the commandline on control-c
   bind \cc 'commandline -r ""'
 
 Put ``bind`` statements into :ref:`config.fish <configuration>` or a function called ``fish_user_key_bindings``.
 
-The key sequence (the ``\cc``) here depends on your setup, in particular the terminal. To find out what the terminal sends use :ref:`fish_key_reader <cmd-fish_key_reader>`::
+The key sequence (the ``\cc``) here depends on your setup, in particular the terminal. To find out what the terminal sends use :doc:`fish_key_reader <cmds/fish_key_reader>`::
 
   > fish_key_reader # pressing control-c
   Press a key:
-              hex:    3  char: \cC
   Press [ctrl-C] again to exit
   bind \cC 'do something'
 
   > fish_key_reader # pressing the right-arrow
   Press a key:
-              hex:   1B  char: \c[  (or \e)
-  (  0.077 ms)  hex:   5B  char: [
-  (  0.037 ms)  hex:   43  char: C
   bind \e\[C 'do something'
 
 Note that some key combinations are indistinguishable or unbindable. For instance control-i *is the same* as the tab key. This is a terminal limitation that fish can't do anything about.
@@ -489,7 +525,7 @@ If you want to be able to press :kbd:`Escape` and then a character and have it c
 .. _killring:
 
 Copy and paste (Kill Ring)
---------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Fish uses an Emacs-style kill ring for copy and paste functionality. For example, use :kbd:`Control`\ +\ :kbd:`K` (`kill-line`) to cut from the current cursor position to the end of the line. The string that is cut (a.k.a. killed in emacs-ese) is inserted into a list of kills, called the kill ring. To paste the latest value from the kill ring (emacs calls this "yanking") use :kbd:`Control`\ +\ :kbd:`Y` (the ``yank`` input function). After pasting, use :kbd:`Alt`\ +\ :kbd:`Y` (``yank-pop``) to rotate to the previous kill.
 
@@ -497,16 +533,19 @@ Copy and paste from outside are also supported, both via the :kbd:`Control`\ +\ 
 In addition, when pasting inside single quotes, pasted single quotes and backslashes are automatically escaped so that the result can be used as a single token simply by closing the quote after.
 Kill ring entries are stored in ``fish_killring`` variable.
 
+The commands ``begin-selection`` and ``end-selection`` (unbound by default; used for selection in vi visual mode) control text selection together with cursor movement commands that extend the current selection.
+The variable :envvar:`fish_cursor_selection_mode` can be used to configure if that selection should include the character under the cursor (``inclusive``) or not (``exclusive``). The default is ``exclusive``, which works well with any cursor shape. For vi mode, and particularly for the ``block`` or ``underscore`` cursor shapes you may prefer ``inclusive``.
+
 .. [#] These rely on external tools. Currently xsel, xclip, wl-copy/wl-paste and pbcopy/pbpaste are supported.
 
 .. _multiline:
 
 Multiline editing
------------------
+^^^^^^^^^^^^^^^^^
 
 The fish commandline editor can be used to work on commands that are several lines long. There are three ways to make a command span more than a single line:
 
-- Pressing the :kbd:`Enter` key while a block of commands is unclosed, such as when one or more block commands such as ``for``, ``begin`` or ``if`` do not have a corresponding :ref:`end <cmd-end>` command.
+- Pressing the :kbd:`Enter` key while a block of commands is unclosed, such as when one or more block commands such as ``for``, ``begin`` or ``if`` do not have a corresponding :doc:`end <cmds/end>` command.
 
 - Pressing :kbd:`Alt`\ +\ :kbd:`Enter` instead of pressing the :kbd:`Enter` key.
 
@@ -517,22 +556,24 @@ The fish commandline editor works exactly the same in single line mode and in mu
 .. _history-search:
 
 Searchable command history
---------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 After a command has been executed, it is remembered in the history list. Any duplicate history items are automatically removed. By pressing the up and down keys, you can search forwards and backwards in the history. If the current command line is not empty when starting a history search, only the commands containing the string entered into the command line are shown.
 
 By pressing :kbd:`Alt`\ +\ :kbd:`↑` and :kbd:`Alt`\ +\ :kbd:`↓`, a history search is also performed, but instead of searching for a complete commandline, each commandline is broken into separate elements just like it would be before execution, and the history is searched for an element matching that under the cursor.
 
+For more complicated searches, you can press :kbd:`Ctrl`\ +\ :kbd:`R` to open a pager that allows you to search the history. It shows a limited number of entries in one page, press :kbd:`Ctrl`\ +\ :kbd:`R` [#]_ again to move to the next page and :kbd:`Ctrl`\ +\ :kbd:`S` [#]_ to move to the previous page. You can change the text to refine your search.
+
 History searches are case-insensitive unless the search string contains an uppercase character. You can stop a search to edit your search string by pressing :kbd:`Esc` or :kbd:`Page Down`.
 
-Prefixing the commandline with a space will prevent the entire line from being stored in the history.
+Prefixing the commandline with a space will prevent the entire line from being stored in the history. It will still be available for recall until the next command is executed, but will not be stored on disk. This is to allow you to fix misspellings and such.
 
 The command history is stored in the file ``~/.local/share/fish/fish_history`` (or
 ``$XDG_DATA_HOME/fish/fish_history`` if that variable is set) by default. However, you can set the
 ``fish_history`` environment variable to change the name of the history session (resulting in a
 ``<session>_history`` file); both before starting the shell and while the shell is running.
 
-See the :ref:`history <cmd-history>` command for other manipulations.
+See the :doc:`history <cmds/history>` command for other manipulations.
 
 Examples:
 
@@ -540,32 +581,37 @@ To search for previous entries containing the word 'make', type ``make`` in the 
 
 If the commandline reads ``cd m``, place the cursor over the ``m`` character and press :kbd:`Alt`\ +\ :kbd:`↑` to search for previously typed words containing 'm'.
 
+.. [#] Or another binding that triggers the ``history-pager`` input function. See :doc:`bind <cmds/bind>` for a list.
+.. [#] Or another binding that triggers the ``pager-toggle-search`` input function.
+
 Navigating directories
 ----------------------
 
 .. _directory-history:
 
-The current working directory can be displayed with the :ref:`pwd <cmd-pwd>` command, or the ``$PWD`` :ref:`special variable <variables-special>`.
+Navigating directories is usually done with the :doc:`cd <cmds/cd>` command, but fish offers some advanced features as well.
+
+The current working directory can be displayed with the :doc:`pwd <cmds/pwd>` command, or the ``$PWD`` :ref:`special variable <variables-special>`. Usually your prompt already does this.
 
 Directory history
------------------
+^^^^^^^^^^^^^^^^^
 
-Fish automatically keeps a trail of the recent visited directories with :ref:`cd <cmd-cd>` by storing this history in the ``dirprev`` and ``dirnext`` variables.
+Fish automatically keeps a trail of the recent visited directories with :doc:`cd <cmds/cd>` by storing this history in the ``dirprev`` and ``dirnext`` variables.
 
 Several commands are provided to interact with this directory history:
 
-- :ref:`dirh <cmd-dirh>` prints the history
-- :ref:`cdh <cmd-cdh>` displays a prompt to quickly navigate the history
-- :ref:`prevd <cmd-prevd>` moves backward through the history. It is bound to :kbd:`Alt`\ +\ :kbd:`←`
-- :ref:`nextd <cmd-nextd>` moves forward through the history. It is bound to :kbd:`Alt`\ +\ :kbd:`→`
+- :doc:`dirh <cmds/dirh>` prints the history
+- :doc:`cdh <cmds/cdh>` displays a prompt to quickly navigate the history
+- :doc:`prevd <cmds/prevd>` moves backward through the history. It is bound to :kbd:`Alt`\ +\ :kbd:`←`
+- :doc:`nextd <cmds/nextd>` moves forward through the history. It is bound to :kbd:`Alt`\ +\ :kbd:`→`
 
 .. _directory-stack:
 
 Directory stack
----------------
+^^^^^^^^^^^^^^^
 
 Another set of commands, usually also available in other shells like bash, deal with the directory stack. Stack handling is not automatic and needs explicit calls of the following commands:
 
-- :ref:`dirs <cmd-dirs>` prints the stack
-- :ref:`pushd <cmd-pushd>` adds a directory on top of the stack and makes it the current working directory
-- :ref:`popd <cmd-popd>` removes the directory on top of the stack and changes the current working directory
+- :doc:`dirs <cmds/dirs>` prints the stack
+- :doc:`pushd <cmds/pushd>` adds a directory on top of the stack and makes it the current working directory
+- :doc:`popd <cmds/popd>` removes the directory on top of the stack and changes the current working directory

@@ -4,11 +4,10 @@
 #include "color.h"
 
 #include <algorithm>
-#include <cstddef>
 #include <cstdint>
 #include <cstdlib>
 #include <cwchar>  // IWYU pragma: keep
-#include <cwctype>
+#include <iterator>
 
 #include "common.h"
 #include "fallback.h"  // IWYU pragma: keep
@@ -56,68 +55,6 @@ bool rgb_color_t::try_parse_special(const wcstring &special) {
     return this->type != type_none;
 }
 
-static int parse_hex_digit(wchar_t x) {
-    switch (x) {
-        case L'0': {
-            return 0x0;
-        }
-        case L'1': {
-            return 0x1;
-        }
-        case L'2': {
-            return 0x2;
-        }
-        case L'3': {
-            return 0x3;
-        }
-        case L'4': {
-            return 0x4;
-        }
-        case L'5': {
-            return 0x5;
-        }
-        case L'6': {
-            return 0x6;
-        }
-        case L'7': {
-            return 0x7;
-        }
-        case L'8': {
-            return 0x8;
-        }
-        case L'9': {
-            return 0x9;
-        }
-        case L'a':
-        case L'A': {
-            return 0xA;
-        }
-        case L'b':
-        case L'B': {
-            return 0xB;
-        }
-        case L'c':
-        case L'C': {
-            return 0xC;
-        }
-        case L'd':
-        case L'D': {
-            return 0xD;
-        }
-        case L'e':
-        case L'E': {
-            return 0xE;
-        }
-        case L'f':
-        case L'F': {
-            return 0xF;
-        }
-        default: {
-            return -1;
-        }
-    }
-}
-
 static unsigned long squared_difference(long p1, long p2) {
     auto diff = static_cast<unsigned long>(labs(p1 - p2));
     return diff * diff;
@@ -158,7 +95,7 @@ bool rgb_color_t::try_parse_rgb(const wcstring &name) {
     if (len - digit_idx == 3) {
         // Format: FA3
         for (i = 0; i < 3; i++) {
-            int val = parse_hex_digit(name.at(digit_idx++));
+            int val = convert_digit(name.at(digit_idx++), 16);
             if (val < 0) break;
             data.color.rgb[i] = val * 16 + val;
         }
@@ -166,8 +103,8 @@ bool rgb_color_t::try_parse_rgb(const wcstring &name) {
     } else if (len - digit_idx == 6) {
         // Format: F3A035
         for (i = 0; i < 3; i++) {
-            int hi = parse_hex_digit(name.at(digit_idx++));
-            int lo = parse_hex_digit(name.at(digit_idx++));
+            int hi = convert_digit(name.at(digit_idx++), 16);
+            int lo = convert_digit(name.at(digit_idx++), 16);
             if (lo < 0 || hi < 0) break;
             data.color.rgb[i] = hi * 16 + lo;
         }
@@ -200,7 +137,7 @@ static constexpr named_color_t named_colors[] = {
     {L"purple", 5, {0x80, 0x00, 0x80}, true},      {L"red", 1, {0x80, 0x00, 0x00}, false},
     {L"white", 7, {0xC0, 0xC0, 0xC0}, false},      {L"yellow", 3, {0x80, 0x80, 0x00}, false},
 };
-ASSERT_SORT_ORDER(named_colors, .name);
+ASSERT_SORTED_BY_NAME(named_colors);
 
 wcstring_list_t rgb_color_t::named_color_names() {
     wcstring_list_t result;

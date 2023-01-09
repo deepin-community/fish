@@ -12,7 +12,7 @@ To provide a list of possible completions for myprog, use the ``-a`` switch. If 
   complete -c myprog -s o -l output -a "yes no"
 
 
-There are also special switches for specifying that a switch requires an argument, to disable filename completion, to create completions that are only available in some combinations, etc..  For a complete description of the various switches accepted by the ``complete`` command, see the documentation for the :ref:`complete <cmd-complete>` builtin, or write ``complete --help`` inside the ``fish`` shell.
+There are also special switches for specifying that a switch requires an argument, to disable filename completion, to create completions that are only available in some combinations, etc..  For a complete description of the various switches accepted by the ``complete`` command, see the documentation for the :doc:`complete <cmds/complete>` builtin, or write ``complete --help`` inside the ``fish`` shell.
 
 As a more comprehensive example, here's a commented excerpt of the completions for systemd's ``timedatectl``::
 
@@ -94,7 +94,7 @@ Functions beginning with the string ``__fish_print_`` print a newline separated 
 
 - ``__fish_print_filesystems`` prints a list of all known file systems. Currently, this is a static list, and not dependent on what file systems the host operating system actually understands.
 
-- ``__fish_print_hostnames`` prints a list of all known hostnames. This functions searches the fstab for nfs servers, ssh for known hosts and checks the ``/etc/hosts`` file.
+- ``__fish_print_hostnames`` prints a list of all known hostnames. This function searches the fstab for nfs servers, ssh for known hosts and checks the ``/etc/hosts`` file.
 
 - ``__fish_print_interfaces`` prints a list of all known network interfaces.
 
@@ -111,6 +111,7 @@ By default, Fish searches the following for completions, using the first availab
 
 - A directory for end-users to keep their own completions, usually ``~/.config/fish/completions`` (controlled by the ``XDG_CONFIG_HOME`` environment variable);
 - A directory for systems administrators to install completions for all users on the system, usually ``/etc/fish/completions``;
+- A user-specified directory for third-party vendor completions, usually ``~/.local/share/fish/vendor_completions.d`` (controlled by the ``XDG_DATA_HOME`` environment variable);
 - A directory for third-party software vendors to ship their own completions for their software, usually ``/usr/share/fish/vendor_completions.d``;
 - The completions shipped with fish, usually installed in ``/usr/share/fish/completions``; and
 - Completions automatically generated from the operating system's manual, usually stored in ``~/.local/share/fish/generated_completions``.

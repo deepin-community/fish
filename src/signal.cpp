@@ -2,18 +2,19 @@
 #include "config.h"  // IWYU pragma: keep
 
 #include <errno.h>
-#include <signal.h>
-#include <stdio.h>
 #ifdef HAVE_SIGINFO_H
 #include <siginfo.h>
 #endif
-#include <pthread.h>
+#include <unistd.h>
+
+#include <csignal>
+#include <cwchar>
+#include <mutex>
 
 #include "common.h"
 #include "event.h"
 #include "fallback.h"  // IWYU pragma: keep
-#include "parser.h"
-#include "proc.h"
+#include "global_safety.h"
 #include "reader.h"
 #include "signal.h"
 #include "termsize.h"
@@ -232,14 +233,13 @@ static void fish_signal_handler(int sig, siginfo_t *info, void *context) {
     switch (sig) {
 #ifdef SIGWINCH
         case SIGWINCH:
-            /// Respond to a winch signal by telling the termsize container.
+            // Respond to a winch signal by telling the termsize container.
             termsize_container_t::handle_winch();
             break;
 #endif
 
         case SIGHUP:
-            /// Respond to a hup signal by exiting, unless it is caught by a shellscript function,
-            /// in which case we do nothing.
+            // Exit unless the signal was trapped.
             if (!observed) {
                 reader_sighup();
             }
@@ -247,16 +247,19 @@ static void fish_signal_handler(int sig, siginfo_t *info, void *context) {
             break;
 
         case SIGTERM:
-            /// Handle sigterm. The only thing we do is restore the front process ID, then die.
-            restore_term_foreground_process_group_for_exit();
-            signal(SIGTERM, SIG_DFL);
-            raise(SIGTERM);
+            // Handle sigterm. The only thing we do is restore the front process ID, then die.
+            if (!observed) {
+                restore_term_foreground_process_group_for_exit();
+                signal(SIGTERM, SIG_DFL);
+                raise(SIGTERM);
+            }
             break;
 
         case SIGINT:
-            /// Interactive mode ^C handler. Respond to int signal by setting interrupted-flag and
-            /// stopping all loops and conditionals.
-            s_cancellation_signal = SIGINT;
+            // Cancel unless the signal was trapped.
+            if (!observed) {
+                s_cancellation_signal = SIGINT;
+            }
             reader_handle_sigint();
             topic_monitor_t::principal().post(topic_t::sighupint);
             break;
@@ -363,6 +366,18 @@ void signal_set_handlers(bool interactive) {
     if (interactive) {
         set_interactive_handlers();
     }
+
+#ifdef FISH_TSAN_WORKAROUNDS
+    // Work around the following TSAN bug:
+    // The structure containing signal information for a thread is lazily allocated by TSAN.
+    // It is possible for the same thread to receive two allocations, if the signal handler
+    // races with other allocation paths (e.g. a blocking call). This results in the first signal
+    // being potentially dropped.
+    // The workaround is to send ourselves a SIGCHLD signal now, to force the allocation to happen.
+    // As no child is associated with this signal, it is OK if it is dropped, so long as the
+    // allocation happens.
+    (void)kill(getpid(), SIGCHLD);
+#endif
 }
 
 void signal_set_handlers_once(bool interactive) {

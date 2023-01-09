@@ -54,6 +54,18 @@ expect_prompt()
 expect_marker(2)
 print_var_contents("foo", "bar")
 
+# read -c (see #8633)
+sendline(r"read -c init_text somevar && echo $somevar")
+expect_re("\r\n?read> init_text$")
+sendline("someval")
+expect_prompt("someval\r\n")
+
+sendline(r"read --command='some other text' somevar && echo $somevar")
+expect_re("\r\n?read> some other text$")
+sendline("another value")
+expect_prompt("another value\r\n")
+
+
 # read -s
 
 sendline("read -s foo")
@@ -132,3 +144,17 @@ expect_read_prompt()
 send("jkl\n")
 expect_str("ghi then jkl\r\n")
 expect_prompt()
+
+# Long line so we don't have to count prompts
+sendline(
+    """set -g fish_prompt_fired 0; function dontfire --on-event fish_prompt; set -g fish_prompt_fired (math $fish_prompt_fired + 1); end; function dofire --on-event fish_read; set -g fish_read_fired 1; end"""
+)
+
+expect_prompt()
+sendline("read foo")
+expect_read_prompt()
+sendline("text")
+expect_prompt()
+# Once for right after setting the listener, another for after the read.
+print_var_contents("fish_prompt_fired", "2")
+print_var_contents("fish_read_fired", "1")

@@ -22,56 +22,55 @@
 
 #include <unistd.h>
 
-#include <algorithm>
 #include <cerrno>
-#include <cstdlib>
 #include <cstring>
 #include <cwchar>
+#include <deque>
 #include <memory>
 #include <string>
 
-#include "builtin_argparse.h"
-#include "builtin_bg.h"
-#include "builtin_bind.h"
-#include "builtin_block.h"
-#include "builtin_builtin.h"
-#include "builtin_cd.h"
-#include "builtin_command.h"
-#include "builtin_commandline.h"
-#include "builtin_complete.h"
-#include "builtin_contains.h"
-#include "builtin_disown.h"
-#include "builtin_echo.h"
-#include "builtin_emit.h"
-#include "builtin_eval.h"
-#include "builtin_exit.h"
-#include "builtin_fg.h"
-#include "builtin_functions.h"
-#include "builtin_history.h"
-#include "builtin_jobs.h"
-#include "builtin_math.h"
-#include "builtin_printf.h"
-#include "builtin_pwd.h"
-#include "builtin_random.h"
-#include "builtin_read.h"
-#include "builtin_realpath.h"
-#include "builtin_return.h"
-#include "builtin_set.h"
-#include "builtin_set_color.h"
-#include "builtin_source.h"
-#include "builtin_status.h"
-#include "builtin_string.h"
-#include "builtin_test.h"
-#include "builtin_type.h"
-#include "builtin_ulimit.h"
-#include "builtin_wait.h"
-#include "common.h"
+#include "builtins/abbr.h"
+#include "builtins/argparse.h"
+#include "builtins/bg.h"
+#include "builtins/bind.h"
+#include "builtins/block.h"
+#include "builtins/builtin.h"
+#include "builtins/cd.h"
+#include "builtins/command.h"
+#include "builtins/commandline.h"
+#include "builtins/complete.h"
+#include "builtins/contains.h"
+#include "builtins/disown.h"
+#include "builtins/echo.h"
+#include "builtins/emit.h"
+#include "builtins/eval.h"
+#include "builtins/exit.h"
+#include "builtins/fg.h"
+#include "builtins/functions.h"
+#include "builtins/history.h"
+#include "builtins/jobs.h"
+#include "builtins/math.h"
+#include "builtins/path.h"
+#include "builtins/printf.h"
+#include "builtins/pwd.h"
+#include "builtins/random.h"
+#include "builtins/read.h"
+#include "builtins/realpath.h"
+#include "builtins/return.h"
+#include "builtins/set.h"
+#include "builtins/set_color.h"
+#include "builtins/source.h"
+#include "builtins/status.h"
+#include "builtins/string.h"
+#include "builtins/test.h"
+#include "builtins/type.h"
+#include "builtins/ulimit.h"
+#include "builtins/wait.h"
 #include "complete.h"
-#include "exec.h"
 #include "fallback.h"  // IWYU pragma: keep
 #include "flog.h"
-#include "intern.h"
 #include "io.h"
+#include "null_terminated_array.h"
 #include "parse_constants.h"
 #include "parse_util.h"
 #include "parser.h"
@@ -79,14 +78,6 @@
 #include "reader.h"
 #include "wgetopt.h"
 #include "wutil.h"  // IWYU pragma: keep
-
-bool builtin_data_t::operator<(const wcstring &other) const {
-    return std::wcscmp(this->name, other.c_str()) < 0;
-}
-
-bool builtin_data_t::operator<(const builtin_data_t *other) const {
-    return std::wcscmp(this->name, other->name) < 0;
-}
 
 /// Counts the number of arguments in the specified null-terminated array
 int builtin_count_args(const wchar_t *const *argv) {
@@ -101,10 +92,10 @@ int builtin_count_args(const wchar_t *const *argv) {
 
 /// This function works like wperror, but it prints its result into the streams.err string instead
 /// to stderr. Used by the builtin commands.
-void builtin_wperror(const wchar_t *s, io_streams_t &streams) {
+void builtin_wperror(const wchar_t *program_name, io_streams_t &streams) {
     char *err = std::strerror(errno);
-    if (s != nullptr) {
-        streams.err.append(s);
+    if (program_name != nullptr) {
+        streams.err.append(program_name);
         streams.err.append(L": ");
     }
     if (err != nullptr) {
@@ -115,8 +106,7 @@ void builtin_wperror(const wchar_t *s, io_streams_t &streams) {
 }
 
 static const wchar_t *const short_options = L"+:h";
-static const struct woption long_options[] = {{L"help", no_argument, nullptr, 'h'},
-                                              {nullptr, 0, nullptr, 0}};
+static const struct woption long_options[] = {{L"help", no_argument, 'h'}, {}};
 
 int parse_help_only_cmd_opts(struct help_only_cmd_opts_t &opts, int *optind, int argc,
                              const wchar_t **argv, parser_t &parser, io_streams_t &streams) {
@@ -157,34 +147,40 @@ void builtin_print_help(parser_t &parser, const io_streams_t &streams, const wch
                         wcstring *error_message) {
     // This won't ever work if no_exec is set.
     if (no_exec()) return;
-    const wcstring name_esc = escape_string(name, ESCAPE_ALL);
+    const wcstring name_esc = escape_string(name);
     wcstring cmd = format_string(L"__fish_print_help %ls ", name_esc.c_str());
     io_chain_t ios;
     if (error_message) {
-        cmd.append(escape_string(*error_message, ESCAPE_ALL));
+        cmd.append(escape_string(*error_message));
         // If it's an error, redirect the output of __fish_print_help to stderr
         ios.push_back(std::make_shared<io_fd_t>(STDOUT_FILENO, STDERR_FILENO));
     }
     auto res = parser.eval(cmd, ios);
-    if (res.status.exit_code() == 2) {
+    if (res.status.normal_exited() && res.status.exit_code() == 2) {
         streams.err.append_format(BUILTIN_ERR_MISSING_HELP, name_esc.c_str(), name_esc.c_str());
     }
 }
 
 /// Perform error reporting for encounter with unknown option.
 void builtin_unknown_option(parser_t &parser, io_streams_t &streams, const wchar_t *cmd,
-                            const wchar_t *opt) {
+                            const wchar_t *opt, bool print_hints) {
     streams.err.append_format(BUILTIN_ERR_UNKNOWN, cmd, opt);
-    builtin_print_error_trailer(parser, streams.err, cmd);
+    if (print_hints) {
+        builtin_print_error_trailer(parser, streams.err, cmd);
+    }
 }
 
 /// Perform error reporting for encounter with missing argument.
 void builtin_missing_argument(parser_t &parser, io_streams_t &streams, const wchar_t *cmd,
                               const wchar_t *opt, bool print_hints) {
     if (opt[0] == L'-' && opt[1] != L'-') {
+        // if c in -qc '-qc' is missing the argument, now opt is just 'c'
         opt += std::wcslen(opt) - 1;
-    }
-    streams.err.append_format(BUILTIN_ERR_MISSING, cmd, opt);
+        // now prepend - to output -c
+        streams.err.append_format(BUILTIN_ERR_MISSING, cmd, wcstring(L"-").append(opt).c_str());
+    } else
+        streams.err.append_format(BUILTIN_ERR_MISSING, cmd, opt);
+
     if (print_hints) {
         builtin_print_error_trailer(parser, streams.err, cmd);
     }
@@ -202,7 +198,7 @@ void builtin_print_error_trailer(parser_t &parser, output_stream_t &b, const wch
     b.append_format(_(L"(Type 'help %ls' for related documentation)\n"), cmd);
 }
 
-/// A generic bultin that only supports showing a help message. This is only a placeholder that
+/// A generic builtin that only supports showing a help message. This is only a placeholder that
 /// prints the help message. Useful for commands that live in the parser.
 static maybe_t<int> builtin_generic(parser_t &parser, io_streams_t &streams, const wchar_t **argv) {
     const wchar_t *cmd = argv[0];
@@ -249,7 +245,7 @@ static maybe_t<int> builtin_count(parser_t &parser, io_streams_t &streams, const
                 return STATUS_CMD_ERROR;
             }
             for (int i = 0; i < n; i++) {
-                if (buf[i] == L'\n') {
+                if (buf[i] == '\n') {
                     argc++;
                 }
             }
@@ -277,6 +273,7 @@ static maybe_t<int> builtin_break_continue(parser_t &parser, io_streams_t &strea
     }
 
     // Paranoia: ensure we have a real loop.
+    // This is checked in the AST but we may be invoked dynamically, e.g. just via "eval break".
     bool has_loop = false;
     for (const auto &b : parser.blocks()) {
         if (b.type() == block_type_t::while_block || b.type() == block_type_t::for_block) {
@@ -324,23 +321,22 @@ static maybe_t<int> builtin_breakpoint(parser_t &parser, io_streams_t &streams,
     return parser.get_last_status();
 }
 
-maybe_t<int> builtin_true(parser_t &parser, io_streams_t &streams, const wchar_t **argv) {
+static maybe_t<int> builtin_true(parser_t &parser, io_streams_t &streams, const wchar_t **argv) {
     UNUSED(parser);
     UNUSED(streams);
     UNUSED(argv);
     return STATUS_CMD_OK;
 }
 
-maybe_t<int> builtin_false(parser_t &parser, io_streams_t &streams, const wchar_t **argv) {
+static maybe_t<int> builtin_false(parser_t &parser, io_streams_t &streams, const wchar_t **argv) {
     UNUSED(parser);
     UNUSED(streams);
     UNUSED(argv);
     return STATUS_CMD_ERROR;
 }
 
-maybe_t<int> builtin_gettext(parser_t &parser, io_streams_t &streams, const wchar_t **argv) {
+static maybe_t<int> builtin_gettext(parser_t &parser, io_streams_t &streams, const wchar_t **argv) {
     UNUSED(parser);
-    UNUSED(streams);
     for (int i = 1; i < builtin_count_args(argv); i++) {
         streams.out.append(_(argv[i]));
     }
@@ -354,29 +350,28 @@ maybe_t<int> builtin_gettext(parser_t &parser, io_streams_t &streams, const wcha
 // Data about all the builtin commands in fish.
 // Functions that are bound to builtin_generic are handled directly by the parser.
 // NOTE: These must be kept in sorted order!
-static const builtin_data_t builtin_datas[] = {
+static constexpr builtin_data_t builtin_datas[] = {
     {L".", &builtin_source, N_(L"Evaluate contents of file")},
     {L":", &builtin_true, N_(L"Return a successful result")},
     {L"[", &builtin_test, N_(L"Test a condition")},
     {L"_", &builtin_gettext, N_(L"Translate a string")},
-    {L"and", &builtin_generic, N_(L"Execute command if previous command succeeded")},
+    {L"abbr", &builtin_abbr, N_(L"Manage abbreviations")},
+    {L"and", &builtin_generic, N_(L"Run command if last command succeeded")},
     {L"argparse", &builtin_argparse, N_(L"Parse options in fish script")},
     {L"begin", &builtin_generic, N_(L"Create a block of code")},
     {L"bg", &builtin_bg, N_(L"Send job to background")},
     {L"bind", &builtin_bind, N_(L"Handle fish key bindings")},
     {L"block", &builtin_block, N_(L"Temporarily block delivery of events")},
     {L"break", &builtin_break_continue, N_(L"Stop the innermost loop")},
-    {L"breakpoint", &builtin_breakpoint,
-     N_(L"Temporarily halt execution of a script and launch an interactive debug prompt")},
-    {L"builtin", &builtin_builtin, N_(L"Run a builtin command instead of a function")},
-    {L"case", &builtin_generic, N_(L"Conditionally execute a block of commands")},
+    {L"breakpoint", &builtin_breakpoint, N_(L"Halt execution and start debug prompt")},
+    {L"builtin", &builtin_builtin, N_(L"Run a builtin specifically")},
+    {L"case", &builtin_generic, N_(L"Block of code to run conditionally")},
     {L"cd", &builtin_cd, N_(L"Change working directory")},
-    {L"command", &builtin_command, N_(L"Run a program instead of a function or builtin")},
+    {L"command", &builtin_command, N_(L"Run a command specifically")},
     {L"commandline", &builtin_commandline, N_(L"Set or get the commandline")},
     {L"complete", &builtin_complete, N_(L"Edit command specific completions")},
     {L"contains", &builtin_contains, N_(L"Search for a specified string in a list")},
-    {L"continue", &builtin_break_continue,
-     N_(L"Skip the rest of the current lap of the innermost loop")},
+    {L"continue", &builtin_break_continue, N_(L"Skip over remaining innermost loop")},
     {L"count", &builtin_count, N_(L"Count the number of arguments")},
     {L"disown", &builtin_disown, N_(L"Remove job from job list")},
     {L"echo", &builtin_echo, N_(L"Print arguments")},
@@ -397,26 +392,28 @@ static const builtin_data_t builtin_datas[] = {
     {L"math", &builtin_math, N_(L"Evaluate math expressions")},
     {L"not", &builtin_generic, N_(L"Negate exit status of job")},
     {L"or", &builtin_generic, N_(L"Execute command if previous command failed")},
+    {L"path", &builtin_path, N_(L"Handle paths")},
     {L"printf", &builtin_printf, N_(L"Prints formatted text")},
     {L"pwd", &builtin_pwd, N_(L"Print the working directory")},
     {L"random", &builtin_random, N_(L"Generate random number")},
     {L"read", &builtin_read, N_(L"Read a line of input into variables")},
-    {L"realpath", &builtin_realpath, N_(L"Convert path to absolute path without symlinks")},
+    {L"realpath", &builtin_realpath, N_(L"Show absolute path sans symlinks")},
     {L"return", &builtin_return, N_(L"Stop the currently evaluated function")},
     {L"set", &builtin_set, N_(L"Handle environment variables")},
     {L"set_color", &builtin_set_color, N_(L"Set the terminal color")},
     {L"source", &builtin_source, N_(L"Evaluate contents of file")},
     {L"status", &builtin_status, N_(L"Return status information about fish")},
     {L"string", &builtin_string, N_(L"Manipulate strings")},
-    {L"switch", &builtin_generic, N_(L"Conditionally execute a block of commands")},
+    {L"switch", &builtin_generic, N_(L"Conditionally run blocks of code")},
     {L"test", &builtin_test, N_(L"Test a condition")},
     {L"time", &builtin_generic, N_(L"Measure how long a command or block takes")},
     {L"true", &builtin_true, N_(L"Return a successful result")},
     {L"type", &builtin_type, N_(L"Check if a thing is a thing")},
-    {L"ulimit", &builtin_ulimit, N_(L"Set or get the shells resource usage limits")},
+    {L"ulimit", &builtin_ulimit, N_(L"Get/set resource usage limits")},
     {L"wait", &builtin_wait, N_(L"Wait for background processes completed")},
     {L"while", &builtin_generic, N_(L"Perform a command multiple times")},
 };
+ASSERT_SORTED_BY_NAME(builtin_datas);
 
 #define BUILTIN_COUNT (sizeof builtin_datas / sizeof *builtin_datas)
 
@@ -429,22 +426,7 @@ static const builtin_data_t builtin_datas[] = {
 ///    Pointer to a builtin_data_t
 ///
 static const builtin_data_t *builtin_lookup(const wcstring &name) {
-    const builtin_data_t *array_end = builtin_datas + BUILTIN_COUNT;
-    const builtin_data_t *found = std::lower_bound(builtin_datas, array_end, name);
-    if (found != array_end && name == found->name) {
-        return found;
-    }
-    return nullptr;
-}
-
-/// Initialize builtin data.
-void builtin_init() {
-    for (size_t i = 0; i < BUILTIN_COUNT; i++) {
-        const wchar_t *name = builtin_datas[i].name;
-        intern_static(name);
-        assert((i == 0 || std::wcscmp(builtin_datas[i - 1].name, name) < 0) &&
-               "builtins are not sorted alphabetically");
-    }
+    return get_by_sorted_name(name.c_str(), builtin_datas);
 }
 
 /// Is there a builtin command with the given name?
@@ -480,7 +462,7 @@ proc_status_t builtin_run(parser_t &parser, const wcstring_list_t &argv, io_stre
         // Resolve our status code.
         // If the builtin itself produced an error, use that error.
         // Otherwise use any errors from writing to out and writing to err, in that order.
-        int code = builtin_ret ? *builtin_ret : 0;
+        int code = builtin_ret.has_value() ? *builtin_ret : 0;
         if (code == 0) code = out_ret;
         if (code == 0) code = err_ret;
 
@@ -491,6 +473,9 @@ proc_status_t builtin_run(parser_t &parser, const wcstring_list_t &argv, io_stre
         // Handle the case of an empty status.
         if (code == 0 && !builtin_ret.has_value()) {
             return proc_status_t::empty();
+        }
+        if (code < 0) {
+            FLOGF(warning, "builtin %ls returned invalid exit code %d", cmdname.c_str(), code);
         }
         return proc_status_t::from_exit_code(code);
     }

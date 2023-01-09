@@ -1,4 +1,5 @@
-# RUN: env XDG_CONFIG_HOME="$(mktemp -d)" FISH=%fish %fish %s
+# Explicitly overriding HOME/XDG_CONFIG_HOME is only required if not invoking via `make test`
+# RUN: env FISH=%fish %fish %s
 # Environment variable tests
 
 # Test if variables can be properly set
@@ -414,9 +415,29 @@ set --unpath __fish_test_PATH $__fish_test_PATH
 echo "$__fish_test_path_not $__fish_test_PATH" $__fish_test_path_not $__fish_test_PATH
 # CHECK: a b c 1 2 3 a b c 1 2 3
 
+set -q --path __fish_test_PATH
+and echo __fish_test_PATH is a pathvar
+or echo __fish_test_PATH is not a pathvar
+# CHECK: __fish_test_PATH is not a pathvar
+
+set -q --unpath __fish_test_PATH
+and echo __fish_test_PATH is not a pathvar
+or echo __fish_test_PATH is not not a pathvar
+# CHECK: __fish_test_PATH is not a pathvar
+
 set --path __fish_test_path_not $__fish_test_path_not
 echo "$__fish_test_path_not $__fish_test_PATH" $__fish_test_path_not $__fish_test_PATH
 # CHECK: a:b:c 1 2 3 a b c 1 2 3
+
+set -q --path __fish_test_path_not
+and echo __fish_test_path_not is a pathvar
+or echo __fish_test_path_not is not a pathvar
+# CHECK: __fish_test_path_not is a pathvar
+
+set -q --unpath __fish_test_path_not
+and echo __fish_test_path_not is not a pathvar
+or echo __fish_test_path_not is not not a pathvar
+# CHECK: __fish_test_path_not is not not a pathvar
 
 set --path __fish_test_PATH $__fish_test_PATH
 echo "$__fish_test_path_not $__fish_test_PATH" $__fish_test_path_not $__fish_test_PATH
@@ -450,11 +471,9 @@ env | grep __fish_empty_uvar
 for a,b in y 1 z 3
     echo $a,$b
 end
-# CHECKERR: {{.*}} for: Variable name 'a,b' is not valid. See `help identifiers`.
-# CHECKERR:
+# CHECKERR: {{.*}} for: a,b: invalid variable name. See `help identifiers`
 # CHECKERR: for a,b in y 1 z 3
-# CHECKERR:     ^
-
+# CHECKERR:     ^~^
 
 # Global vs Universal Unspecified Scopes
 set -U __fish_test_global_vs_universal universal
@@ -476,7 +495,7 @@ echo "global-vs-universal 4: $__fish_test_global_vs_universal"
 
 set -e -U __fish_test_global_vs_universal
 echo "global-vs-universal 5: $__fish_test_global_vs_universal"
-# CHECK: global-vs-universal 5: 
+# CHECK: global-vs-universal 5:
 
 # Export local variables from all parent scopes (issue #6153).
 function func
@@ -511,7 +530,7 @@ sh -c "EDITOR='vim -g' $FISH -c "'\'set -S EDITOR\'' | string match -r -e 'globa
 
 # Verify behavior of `set --show` given an invalid var name
 set --show 'argle bargle'
-#CHECKERR: set: Variable name 'argle bargle' is not valid. See `help identifiers`.
+#CHECKERR: set: argle bargle: invalid variable name. See `help identifiers`
 #CHECKERR: {{.*}}set.fish (line {{\d+}}):
 #CHECKERR: set --show 'argle bargle'
 #CHECKERR: ^
@@ -534,7 +553,7 @@ set --show var1
 #CHECK: $var1: set in local scope, unexported, with 0 elements
 #CHECK: $var1: set in global scope, unexported, with 2 elements
 #CHECK: $var1[1]: |goodbye|
-#CHECK: $var1[2]: |and don\'t come back|
+#CHECK: $var1[2]: |and don't come back|
 #CHECK: $var1: set in universal scope, unexported, with 1 elements
 #CHECK: $var1[1]: |hello|
 
@@ -616,6 +635,34 @@ end
 #CHECK: $var6[1]: |ghi|
 #CHECK: $var6[2]: |jkl|
 
+# `and` creates no new scope on its own
+true; and set -l var7a 89 179
+set -q var7a
+echo $status
+#CHECK: 0
+
+# `begin` of an `and` creates a new scope
+true; and begin
+    set -l var7b 359 719
+end
+set -q var7b
+echo $status
+#CHECK: 1
+
+# `or` creates no new scope on its own
+false; or set -l var8a 1439 2879
+set -q var8a
+echo $status
+#CHECK: 0
+
+# `begin` of an `or` creates a new scope
+false; or begin
+    set -l var8b 9091 9901
+end
+set -q var8b
+echo $status
+#CHECK: 1
+
 # Exporting works
 set -x TESTVAR0
 set -x TESTVAR1 a
@@ -663,8 +710,14 @@ env | string match -e __fish_test_universal_exported_var
 # If they can be set they can only be set in global scope,
 # so they should only be shown in global scope.
 set -S status
-#CHECK: $status: set in global scope, unexported, with 1 elements
+#CHECK: $status: set in global scope, unexported, with 1 elements (read-only)
 #CHECK: $status[1]: |0|
+
+# PWD is also read-only.
+set -S PWD
+#CHECK: $PWD: set in global scope, exported, with 1 elements (read-only)
+#CHECK: $PWD[1]: |{{.*}}|
+#CHECK: $PWD: originally inherited as |{{.*}}|
 
 set -ql history
 echo $status
@@ -703,19 +756,26 @@ echo $status
 true
 
 set "" foo
-#CHECKERR: set: Variable name '' is not valid. See `help identifiers`.
-#CHECKERR: {{.*}}set.fish (line {{\d+}}): 
+#CHECKERR: set: : invalid variable name. See `help identifiers`
+#CHECKERR: {{.*}}set.fish (line {{\d+}}):
 #CHECKERR: set "" foo
 #CHECKERR: ^
 #CHECKERR: (Type 'help set' for related documentation)
 
 set --show ""
-#CHECKERR: set: Variable name '' is not valid. See `help identifiers`.
-#CHECKERR: {{.*}}set.fish (line {{\d+}}): 
+#CHECKERR: set: : invalid variable name. See `help identifiers`
+#CHECKERR: {{.*}}set.fish (line {{\d+}}):
 #CHECKERR: set --show ""
 #CHECKERR: ^
 #CHECKERR: (Type 'help set' for related documentation)
 
+set foo="ba nana"
+#CHECKERR: set: foo=ba nana: invalid variable name. See `help identifiers`
+#CHECKERR: set: Did you mean `set foo 'ba nana'`?
+#CHECKERR: {{.*}}set.fish (line {{\d+}}):
+#CHECKERR: set foo="ba nana"
+#CHECKERR: ^
+#CHECKERR: (Type 'help set' for related documentation)
 # Test path splitting
 begin
     set -l PATH /usr/local/bin:/usr/bin
@@ -725,3 +785,156 @@ begin
     echo $CDPATH
     # CHECK: . /usr
 end
+
+# Function scope:
+set -f actuallystilllocal "this one is still local"
+set -ql actuallystilllocal
+and echo "Yep, it's local"
+# CHECK: Yep, it's local
+set -S actuallystilllocal
+#CHECK: $actuallystilllocal: set in local scope, unexported, with 1 elements
+#CHECK: $actuallystilllocal[1]: |this one is still local|
+
+# Blocks aren't functions, "function" scope is still top-level local:
+begin
+    set -f stilllocal "as local as the moon is wet"
+    echo $stilllocal
+    # CHECK: as local as the moon is wet
+end
+set -S stilllocal
+#CHECK: $stilllocal: set in local scope, unexported, with 1 elements
+#CHECK: $stilllocal[1]: |as local as the moon is wet|
+
+set -g globalvar global
+
+function test-function-scope
+    set -f funcvar "function"
+    echo $funcvar
+    # CHECK: function
+    set -S funcvar
+    #CHECK: $funcvar: set in local scope, unexported, with 1 elements
+    #CHECK: $funcvar[1]: |function|
+    begin
+        set -l funcvar "block"
+        echo $funcvar
+        # CHECK: block
+        set -S funcvar
+        #CHECK: $funcvar: set in local scope, unexported, with 1 elements
+        #CHECK: $funcvar[1]: |block|
+    end
+    echo $funcvar
+    # CHECK: function
+
+    begin
+        set -f funcvar2 "function from block"
+        echo $funcvar2
+        # CHECK: function from block
+        set -S funcvar2
+        #CHECK: $funcvar2: set in local scope, unexported, with 1 elements
+        #CHECK: $funcvar2[1]: |function from block|
+    end
+    echo $funcvar2
+    # CHECK: function from block
+    set -S funcvar2
+    #CHECK: $funcvar2: set in local scope, unexported, with 1 elements
+    #CHECK: $funcvar2[1]: |function from block|
+
+    set -l fruit banana
+    if true
+        set -f fruit orange
+    end
+    echo $fruit #orange
+    # function scope *is* the outermost local scope,
+    # so that `set -f` altered the same funcvariable as that `set -l` outside!
+    # CHECK: orange
+
+    set -f globalvar function
+    set -S globalvar
+    #CHECK: $globalvar: set in local scope, unexported, with 1 elements
+    #CHECK: $globalvar[1]: |function|
+    #CHECK: $globalvar: set in global scope, unexported, with 1 elements
+    #CHECK: $globalvar[1]: |global|
+end
+
+test-function-scope
+echo $funcvar $funcvar2
+# CHECK:
+
+function erase-funcvar
+    set -l banana 1
+    begin
+        set -l banana 2
+        set -ef banana
+        echo $banana
+        # CHECK: 2
+    end
+    echo $banana
+    # CHECK:
+end
+
+erase-funcvar
+
+set -f foo
+set -l banana
+set -g global
+begin
+    set -qf foo
+    and echo foo is function scoped
+    # CHECK: foo is function scoped
+
+    set -l localvar414
+    set -qf localvar414
+    or echo localvar414 is not function scoped
+    # CHECK: localvar414 is not function scoped
+
+    set -qf banana
+    and echo banana is function scoped
+    # CHECK: banana is function scoped
+
+    set -l global
+    set -qf global
+    or echo global is not function scoped
+    # CHECK: global is not function scoped
+end
+
+set --query $this_is_not_set
+echo $status
+# CHECK: 255
+
+set --query
+echo $status
+# CHECK: 255
+
+set -U status
+# CHECKERR: set: Tried to modify the special variable 'status' with the wrong scope
+set -S status
+# CHECK: $status: set in global scope, unexported, with 1 elements (read-only)
+# CHECK: $status[1]: |2|
+
+# See that we show inherited variables correctly:
+foo=bar $FISH -c 'set foo 1 2 3; set --show foo'
+# CHECK: $foo: set in global scope, exported, with 3 elements
+# CHECK: $foo[1]: |1|
+# CHECK: $foo[2]: |2|
+# CHECK: $foo[3]: |3|
+# CHECK: $foo: originally inherited as |bar|
+
+# Verify behavior of erasing in multiple scopes simultaneously
+set -U marbles global
+set -g marbles global
+set -l marbles local
+
+set -eUg marbles
+set -ql marbles || echo "erased in more scopes than it should!"
+set -qg marbles && echo "didn't erase from global scope!"
+set -qU marbles && echo "didn't erase from universal scope!"
+
+begin
+    set -l secret local 4 8 15 16 23 42
+    set -g secret global 4 8 15 16 23 42
+    set -egl secret[3..5]
+    echo $secret
+    # CHECK: local 4 23 42
+end
+echo $secret
+# CHECK: global 4 23 42

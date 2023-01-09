@@ -18,6 +18,10 @@ function __fish_adb_get_devices -d 'Run adb devices and parse output'
     end
 end
 
+function __fish_adb_get_tcpip_devices -d 'Get list of devices connected via TCP/IP'
+    __fish_adb_get_devices | string match -r '^\d+\.\d+\.\d+\.\d+:\d+\t.*'
+end
+
 function __fish_adb_run_command -d 'Runs adb with any -s parameters already given on the command line'
     set -l sopt
     set -l sopt_is_next
@@ -75,11 +79,15 @@ function __fish_adb_list_files
     __fish_adb_run_command find -H "$token*" -maxdepth 0 -type f 2\>/dev/null
 end
 
-
 # Generic options, must come before command
-complete -n __fish_adb_no_subcommand -c adb -s s -x -a "(__fish_adb_get_devices)" -d 'Device to communicate with'
-complete -n __fish_adb_no_subcommand -c adb -s d -d 'Communicate with first USB device'
-complete -n __fish_adb_no_subcommand -c adb -s e -d 'Communicate with emulator'
+complete -n __fish_adb_no_subcommand -c adb -o a -d 'Listen on all network interfaces'
+complete -n __fish_adb_no_subcommand -c adb -o d -d 'Use first USB device'
+complete -n __fish_adb_no_subcommand -c adb -o e -d 'Use first TCP/IP device'
+complete -n __fish_adb_no_subcommand -c adb -o s -x -a "(__fish_adb_get_devices)" -d 'Use device with given serial'
+complete -n __fish_adb_no_subcommand -c adb -o t -d 'Use device with given transport id'
+complete -n __fish_adb_no_subcommand -c adb -o H -d 'Name of adb server host'
+complete -n __fish_adb_no_subcommand -c adb -o P -d 'Port of adb server'
+complete -n __fish_adb_no_subcommand -c adb -o L -d 'Listen on given socket for adb server'
 
 # Commands
 complete -f -n __fish_adb_no_subcommand -c adb -a connect -d 'Connect to device'
@@ -123,16 +131,18 @@ complete -n '__fish_seen_subcommand_from install' -c adb -s s -d 'Install on SD 
 complete -n '__fish_seen_subcommand_from install' -c adb -l algo -d 'Algorithm name'
 complete -n '__fish_seen_subcommand_from install' -c adb -l key -d 'Hex-encoded key'
 complete -n '__fish_seen_subcommand_from install' -c adb -l iv -d 'Hex-encoded iv'
+complete -n '__fish_seen_subcommand_from install' -c adb -ka '(__fish_complete_suffix .apk)'
 
 # uninstall
 complete -n '__fish_seen_subcommand_from uninstall' -c adb -s k -d 'Keep the data and cache directories'
 complete -n '__fish_seen_subcommand_from uninstall' -c adb -f -a "(__fish_adb_list_uninstallable_packages)"
 
 # devices
+complete -n '__fish_seen_subcommand_from devices' -c adb -f
 complete -n '__fish_seen_subcommand_from devices' -c adb -s l -d 'Also list device qualifiers'
 
 # disconnect
-complete -n '__fish_seen_subcommand_from disconnect' -c adb -x -a "(__fish_adb_get_devices)" -d 'Device to disconnect'
+complete -n '__fish_seen_subcommand_from disconnect' -c adb -x -a "(__fish_adb_get_tcpip_devices)" -d 'Device to disconnect'
 
 # backup
 complete -n '__fish_seen_subcommand_from backup' -c adb -s f -d 'File to write backup data to'
@@ -148,7 +158,7 @@ complete -n '__fish_seen_subcommand_from backup' -c adb -o nosystem -d 'Exclude 
 complete -n '__fish_seen_subcommand_from backup' -c adb -f -a "(__fish_adb_list_packages)" -d 'Package(s) to backup'
 
 # reboot
-complete -n '__fish_seen_subcommand_from reboot' -c adb -x -a 'bootloader recovery'
+complete -n '__fish_seen_subcommand_from reboot' -c adb -x -a 'bootloader recovery fastboot'
 
 # forward
 complete -n '__fish_seen_subcommand_from forward' -c adb -l list -d 'List all forward socket connections'
@@ -164,4 +174,36 @@ complete -n '__fish_seen_subcommand_from reconnect' -c adb -x -a device -d 'Kick
 
 # commands that accept listing device files
 complete -n '__fish_seen_subcommand_from shell' -c adb -f -a "(__fish_adb_list_files)" -d 'File on device'
-complete -n '__fish_seen_subcommand_from pull' -c adb -f -a "(__fish_adb_list_files)" -d 'File on device'
+complete -n '__fish_seen_subcommand_from pull' -c adb -F -a "(__fish_adb_list_files)" -d 'File on device'
+complete -n '__fish_seen_subcommand_from push' -c adb -F -a "(__fish_adb_list_files)" -d 'File on device'
+
+# logcat
+complete -n '__fish_seen_subcommand_from logcat' -c adb -f
+# general options
+complete -n '__fish_seen_subcommand_from logcat' -c adb -s L -l last -d 'Dump logs from prior to last reboot from pstore'
+complete -n '__fish_seen_subcommand_from logcat' -c adb -s b -l buffer -d ' Request alternate ring buffer(s)' -xa '(__fish_complete_list ,  "echo main\nsystem\nradio\nevents\ncrash\ndefault\nall")'
+complete -n '__fish_seen_subcommand_from logcat' -c adb -s c -l clear -d 'Clear (flush) the entire log and exit'
+complete -n '__fish_seen_subcommand_from logcat' -c adb -s d -d 'Dump the log and then exit (don\'t block)'
+complete -n '__fish_seen_subcommand_from logcat' -c adb -l pid -d 'Only print the logs for the given PID'
+complete -n '__fish_seen_subcommand_from logcat' -c adb -l wrap -d 'Sleep for 2 hours or when buffer about to wrap whichever comes first'
+# formatting
+complete -n '__fish_seen_subcommand_from logcat' -c adb -s v -l format -d 'Sets log print format verb and adverbs' -xa ' brief help long process raw tag thread threadtime time color descriptive epoch monotonic printable uid usec UTC year zone'
+complete -n '__fish_seen_subcommand_from logcat' -c adb -s D -l dividers -d 'Print dividers between each log buffer'
+complete -n '__fish_seen_subcommand_from logcat' -c adb -s B -l binary -d 'Output the log in binary'
+# outfile files
+complete -n '__fish_seen_subcommand_from logcat' -c adb -s f -l file -d 'Log to file instead of stdout'
+complete -n '__fish_seen_subcommand_from logcat' -c adb -s r -l rotate-kbytes -d 'Rotate log every kbytes, requires -f'
+complete -n '__fish_seen_subcommand_from logcat' -c adb -s n -l rotate-count -d 'Sets number of rotated logs to keep, default 4'
+complete -n '__fish_seen_subcommand_from logcat' -c adb -l id -d ' If the signature <id> for logging to file changes, then clear the associated files and continue'
+# logd control
+complete -n '__fish_seen_subcommand_from logcat' -c adb -s g -l buffer-size -d 'Get the size of the ring buffers within logd'
+complete -n '__fish_seen_subcommand_from logcat' -c adb -s G -l buffer-size -d 'Set size of a ring buffer in logd'
+complete -n '__fish_seen_subcommand_from logcat' -c adb -s S -l statistics -d 'Output statistics'
+complete -n '__fish_seen_subcommand_from logcat' -c adb -s p -l prune -d 'Print prune rules'
+complete -n '__fish_seen_subcommand_from logcat' -c adb -s P -l prune -d 'Set prune rules'
+# filtering
+complete -n '__fish_seen_subcommand_from logcat' -c adb -s s -d 'Set default filter to silent'
+complete -n '__fish_seen_subcommand_from logcat' -c adb -s e -l regex -d 'Only print lines where the log message matches'
+complete -n '__fish_seen_subcommand_from logcat' -c adb -s m -l max-count -d 'Quit after print <count> lines'
+complete -n '__fish_seen_subcommand_from logcat' -c adb -l print -d 'Print all message even if they do not matches, requires --regex and --max-count'
+complete -n '__fish_seen_subcommand_from logcat' -c adb -l uid -d 'Only display log messages from UIDs present in the comma separate list <uids>'

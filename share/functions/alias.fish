@@ -35,10 +35,10 @@ function alias --description 'Creates a function wrapping a command'
 
     # sanity check
     if test -z "$name"
-        printf ( _ "%s: Name cannot be empty\n") alias >&2
+        printf ( _ "%s: name cannot be empty\n") alias >&2
         return 1
     else if test -z "$body"
-        printf ( _ "%s: Body cannot be empty\n") alias >&2
+        printf ( _ "%s: body cannot be empty\n") alias >&2
         return 1
     end
 
@@ -67,7 +67,8 @@ function alias --description 'Creates a function wrapping a command'
         set wraps --wraps (string escape -- $body)
     end
 
-    echo "function $name $wraps --description $cmd_string; $prefix $body \$argv; end" | source
+    echo "function $name $wraps --description $cmd_string; $prefix $body \$argv
+        end" | source # The function definition in split in two lines to ensure that a '#' can be put in the body.
     if set -q _flag_save
         funcsave $name
     end

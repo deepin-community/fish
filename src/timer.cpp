@@ -3,23 +3,19 @@
 
 #include "timer.h"
 
+#include <stdint.h>
+#include <stdio.h>
 #include <string.h>
 
 #include <algorithm>
-#include <cerrno>
 #include <chrono>
-#include <cstddef>
-#include <ctime>
+#include <cwchar>
+#include <functional>
+#include <string>
 
-#include "builtin.h"
 #include "common.h"
-#include "exec.h"
 #include "fallback.h"  // IWYU pragma: keep
-#include "io.h"
-#include "parser.h"
-#include "proc.h"
-#include "wgetopt.h"
-#include "wutil.h"  // IWYU pragma: keep
+#include "wutil.h"     // IWYU pragma: keep
 
 // Measuring time is always complicated with many caveats. Quite apart from the typical
 // gotchas faced by developers attempting to choose between monotonic vs non-monotonic and system vs
@@ -157,9 +153,9 @@ wcstring timer_snapshot_t::print_delta(const timer_snapshot_t &t1, const timer_s
 
     auto wall_unit = get_unit(net_wall_micros);
     auto cpu_unit = get_unit(std::max(net_sys_micros, net_usr_micros));
-    auto wall_time = convert(net_wall_micros, wall_unit);
-    auto usr_time = convert(net_usr_micros, cpu_unit);
-    auto sys_time = convert(net_sys_micros, cpu_unit);
+    double wall_time = convert(net_wall_micros, wall_unit);
+    double usr_time = convert(net_usr_micros, cpu_unit);
+    double sys_time = convert(net_sys_micros, cpu_unit);
 
     wcstring output;
     if (!verbose) {
@@ -174,12 +170,12 @@ wcstring timer_snapshot_t::print_delta(const timer_snapshot_t &t1, const timer_s
     } else {
         auto fish_unit = get_unit(std::max(fish_sys_micros, fish_usr_micros));
         auto child_unit = get_unit(std::max(child_sys_micros, child_usr_micros));
-        auto fish_usr_time = convert(fish_usr_micros, fish_unit);
-        auto fish_sys_time = convert(fish_sys_micros, fish_unit);
-        auto child_usr_time = convert(child_usr_micros, child_unit);
-        auto child_sys_time = convert(child_sys_micros, child_unit);
+        double fish_usr_time = convert(fish_usr_micros, fish_unit);
+        double fish_sys_time = convert(fish_sys_micros, fish_unit);
+        double child_usr_time = convert(child_usr_micros, child_unit);
+        double child_sys_time = convert(child_sys_micros, child_unit);
 
-        auto column2_unit_len =
+        int column2_unit_len =
             std::max(strlen(unit_short_name(wall_unit)), strlen(unit_short_name(cpu_unit)));
         append_format(output,
                       L"\n________________________________________________________"
@@ -188,21 +184,16 @@ wcstring timer_snapshot_t::print_delta(const timer_snapshot_t &t1, const timer_s
                       L"\n   sys time  %6.2F %-*s  %6.2F %s  %6.2F %s"
                       L"\n",
                       wall_time, column2_unit_len, unit_short_name(wall_unit),
-                      strlen(unit_short_name(fish_unit)) + 7, "fish", "external",            //
-                      usr_time, column2_unit_len, unit_short_name(cpu_unit), fish_usr_time,  //
+                      static_cast<int>(strlen(unit_short_name(fish_unit))) + 7, "fish", "external",
+                      usr_time, column2_unit_len, unit_short_name(cpu_unit), fish_usr_time,
                       unit_short_name(fish_unit), child_usr_time, unit_short_name(child_unit),
                       sys_time, column2_unit_len, unit_short_name(cpu_unit), fish_sys_time,
                       unit_short_name(fish_unit), child_sys_time, unit_short_name(child_unit));
     }
-
     return output;
 };
 
-static std::vector<timer_snapshot_t> active_timers;
-
-static void pop_timer() {
-    auto t1 = active_timers.back();
-    active_timers.pop_back();
+static void timer_finished(const timer_snapshot_t &t1) {
     auto t2 = timer_snapshot_t::take();
 
     // Well, this is awkward. By defining `time` as a decorator and not a built-in, there's
@@ -213,6 +204,7 @@ static void pop_timer() {
 
 cleanup_t push_timer(bool enabled) {
     if (!enabled) return {[] {}};
-    active_timers.emplace_back(timer_snapshot_t::take());
-    return {[] { pop_timer(); }};
+
+    auto t1 = timer_snapshot_t::take();
+    return {[=] { timer_finished(t1); }};
 }

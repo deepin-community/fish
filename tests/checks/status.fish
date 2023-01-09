@@ -21,14 +21,13 @@ and echo '"status is-interactive" unexpectedly returned true for a non-interacti
 
 # We should get an error message about an invalid combination of flags.
 status --is-interactive --is-login
-#CHECKERR: status: Invalid combination of options,
-#CHECKERR: you cannot do both 'is-interactive' and 'is-login' in the same invocation
+#CHECKERR: status: is-interactive is-login: options cannot be used together
 
 # We should get an error message about an unexpected arg for `status
 # is-block`.
 status -b is-interactive
-#CHECKERR: status: Invalid combination of options,
-#CHECKERR: you cannot do both 'is-block' and 'is-interactive' in the same invocation
+#CHECKERR: status: is-block is-interactive: options cannot be used together
+# XXX this would be better if it referred to -b rather than what it is
 
 # Try to set the job control to an invalid mode.
 status job-control full1
@@ -54,9 +53,10 @@ eval test_function
 
 # Future Feature Flags
 status features
-#CHECK: stderr-nocaret	on	3.0	^ no longer redirects stderr
-#CHECK: qmark-noglob	off	3.0	? no longer globs
-#CHECK: regex-easyesc	off	3.1	string replace -r needs fewer \'s
+#CHECK: stderr-nocaret          on  3.0 ^ no longer redirects stderr (historical, can no longer be changed)
+#CHECK: qmark-noglob            off 3.0 ? no longer globs
+#CHECK: regex-easyesc           on  3.1 string replace -r needs fewer \'s
+#CHECK: ampersand-nobg-in-token on  3.4 & only backgrounds if followed by a separator
 status test-feature stderr-nocaret
 echo $status
 #CHECK: 0

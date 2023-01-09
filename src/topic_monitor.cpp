@@ -2,11 +2,13 @@
 
 #include "topic_monitor.h"
 
-#include <limits.h>
 #include <unistd.h>
+
+#include <cerrno>
 
 #include "flog.h"
 #include "iothread.h"
+#include "maybe.h"
 #include "wcstringutil.h"
 #include "wutil.h"
 
@@ -89,14 +91,14 @@ void binary_semaphore_t::wait() {
 #ifdef FISH_TSAN_WORKAROUNDS
             // Under tsan our notifying pipe is non-blocking, so we would busy-loop on the read()
             // call until data is available (that is, fish would use 100% cpu while waiting for
-            // processes). The select prevents that.
-            (void)select_wrapper_t::is_fd_readable(fd, select_wrapper_t::kNoTimeout);
+            // processes). This call prevents that.
+            (void)fd_readable_set_t::is_fd_readable(fd, fd_readable_set_t::kNoTimeout);
 #endif
             uint8_t ignored;
             auto amt = read(fd, &ignored, sizeof ignored);
             if (amt == 1) break;
             // EAGAIN should only be returned in TSan case.
-            if (amt < 0 && errno != EINTR && errno != EAGAIN) die(L"read");
+            if (amt < 0 && errno != EINTR && errno != EAGAIN && errno != EWOULDBLOCK) die(L"read");
         }
     }
 }

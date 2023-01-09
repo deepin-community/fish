@@ -5,13 +5,13 @@
 
 #include <array>
 #include <atomic>
-#include <bitset>
-#include <condition_variable>
+#include <condition_variable>  // IWYU pragma: keep
+#include <cstdint>
 #include <limits>
-#include <numeric>
+#include <mutex>
 
 #include "common.h"
-#include "io.h"
+#include "fds.h"
 
 /** Topic monitoring support. Topics are conceptually "a thing that can happen." For example,
  delivery of a SIGINT, a child process exits, etc. It is possible to post to a topic, which means
@@ -151,7 +151,7 @@ class binary_semaphore_t {
     // Whether our semaphore was successfully initialized.
     bool sem_ok_{};
 
-    // The semaphore, if initalized.
+    // The semaphore, if initialized.
     sem_t sem_{};
 
     // Pipes used to emulate a semaphore, if not initialized.
@@ -171,7 +171,7 @@ class binary_semaphore_t {
 ///   up. If if failed, then either a post() call updated the status values (so perhaps there is a
 ///   new topic post) or some other thread won the race and called wait() on the semaphore. Here our
 ///   thread will wait on the data_notifier_ queue.
-class topic_monitor_t {
+class topic_monitor_t : noncopyable_t, nonmovable_t {
    private:
     using topic_bitmask_t = uint8_t;
 
@@ -235,12 +235,6 @@ class topic_monitor_t {
    public:
     topic_monitor_t();
     ~topic_monitor_t();
-
-    /// topic_monitors should not be copied, and there should be no reason to move one.
-    void operator=(const topic_monitor_t &) = delete;
-    topic_monitor_t(const topic_monitor_t &) = delete;
-    void operator=(topic_monitor_t &&) = delete;
-    topic_monitor_t(topic_monitor_t &&) = delete;
 
     /// The principal topic_monitor. This may be fetched from a signal handler.
     static topic_monitor_t &principal();

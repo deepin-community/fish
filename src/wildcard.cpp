@@ -4,53 +4,30 @@
 
 #include "wildcard.h"
 
-#include <dirent.h>
 #include <errno.h>
-#include <stddef.h>
+#include <stdint.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
 
+#include <algorithm>
 #include <cwchar>
-#include <memory>
+#include <functional>
 #include <string>
 #include <unordered_set>
 #include <utility>
+#include <vector>
 
 #include "common.h"
 #include "complete.h"
+#include "enum_set.h"
 #include "expand.h"
 #include "fallback.h"  // IWYU pragma: keep
 #include "future_feature_flags.h"
+#include "maybe.h"
 #include "path.h"
-#include "reader.h"
 #include "wcstringutil.h"
 #include "wutil.h"  // IWYU pragma: keep
-
-/// Description for generic executable.
-#define COMPLETE_EXEC_DESC _(L"Executable")
-/// Description for link to executable.
-#define COMPLETE_EXEC_LINK_DESC _(L"Executable link")
-/// Description for regular file.
-#define COMPLETE_FILE_DESC _(L"File")
-/// Description for character device.
-#define COMPLETE_CHAR_DESC _(L"Character device")
-/// Description for block device.
-#define COMPLETE_BLOCK_DESC _(L"Block device")
-/// Description for fifo buffer.
-#define COMPLETE_FIFO_DESC _(L"Fifo")
-/// Description for symlink.
-#define COMPLETE_SYMLINK_DESC _(L"Symbolic link")
-/// Description for symlink.
-#define COMPLETE_DIRECTORY_SYMLINK_DESC _(L"Symbolic link to directory")
-/// Description for Rotten symlink.
-#define COMPLETE_ROTTEN_SYMLINK_DESC _(L"Rotten symbolic link")
-/// Description for symlink loop.
-#define COMPLETE_LOOP_SYMLINK_DESC _(L"Symbolic link loop")
-/// Description for socket files.
-#define COMPLETE_SOCKET_DESC _(L"Socket")
-/// Description for directories.
-#define COMPLETE_DIRECTORY_DESC _(L"Directory")
 
 /// Finds an internal (ANY_STRING, etc.) style wildcard, or wcstring::npos.
 static size_t wildcard_find(const wchar_t *wc) {
@@ -62,34 +39,29 @@ static size_t wildcard_find(const wchar_t *wc) {
     return wcstring::npos;
 }
 
-/// Implementation of wildcard_has. Needs to take the length to handle embedded nulls (issue #1631).
-static bool wildcard_has_impl(const wchar_t *str, size_t len, bool internal) {
-    assert(str != nullptr);
-    bool qmark_is_wild = !feature_test(features_t::qmark_noglob);
-    const wchar_t *end = str + len;
-    if (internal) {
-        for (; str < end; str++) {
-            if ((*str == ANY_CHAR) || (*str == ANY_STRING) || (*str == ANY_STRING_RECURSIVE))
-                return true;
-        }
-    } else {
-        wchar_t prev = 0;
-        for (; str < end; str++) {
-            if (((*str == L'*') || (*str == L'?' && qmark_is_wild)) && (prev != L'\\')) return true;
-            prev = *str;
+bool wildcard_has_internal(const wchar_t *s, size_t len) {
+    for (size_t i = 0; i < len; i++) {
+        wchar_t c = s[i];
+        if (c == ANY_CHAR || c == ANY_STRING || c == ANY_STRING_RECURSIVE) {
+            return true;
         }
     }
-
     return false;
 }
 
-bool wildcard_has(const wchar_t *str, bool internal) {
+// Note we want to handle embedded nulls (issue #1631).
+bool wildcard_has(const wchar_t *str, size_t len) {
     assert(str != nullptr);
-    return wildcard_has_impl(str, std::wcslen(str), internal);
-}
-
-bool wildcard_has(const wcstring &str, bool internal) {
-    return wildcard_has_impl(str.data(), str.size(), internal);
+    const wchar_t *end = str + len;
+    bool qmark_is_wild = !feature_test(features_t::qmark_noglob);
+    // Fast check for * or ?; if none there is no wildcard.
+    // Note some strings contain * but no wildcards, e.g. if they are quoted.
+    if (std::find(str, end, L'*') == end && (!qmark_is_wild || std::find(str, end, L'?') == end)) {
+        return false;
+    }
+    wcstring unescaped;
+    unescape_string(str, len, &unescaped, UNESCAPE_SPECIAL);
+    return wildcard_has_internal(unescaped);
 }
 
 /// Check whether the string str matches the wildcard string wc.
@@ -101,21 +73,21 @@ bool wildcard_has(const wcstring &str, bool internal) {
 bool wildcard_match(const wcstring &str, const wcstring &wc, bool leading_dots_fail_to_match) {
     // Hackish fix for issue #270. Prevent wildcards from matching . or .., but we must still allow
     // literal matches.
-    if (leading_dots_fail_to_match && str[0] == L'.' &&
-        (str[1] == L'\0' || (str[1] == L'.' && str[2] == L'\0'))) {
+    if (leading_dots_fail_to_match && (str == L"." || str == L"..")) {
         // The string is '.' or '..' so the only possible match is an exact match.
         return str == wc;
     }
 
     // Near Linear implementation as proposed here https://research.swtch.com/glob.
+    const wchar_t *const str_start = str.c_str();
     const wchar_t *wc_x = wc.c_str();
-    const wchar_t *str_x = str.c_str();
+    const wchar_t *str_x = str_start;
     const wchar_t *restart_wc_x = wc.c_str();
-    const wchar_t *restart_str_x = str.c_str();
+    const wchar_t *restart_str_x = str_start;
 
     bool restart_is_out_of_str = false;
     for (; *wc_x != 0 || *str_x != 0;) {
-        bool is_first = (str_x == str);
+        bool is_first = (str_x == str_start);
         if (*wc_x != 0) {
             if (*wc_x == ANY_STRING || *wc_x == ANY_STRING_RECURSIVE) {
                 // Ignore hidden file
@@ -177,6 +149,7 @@ static wcstring resolve_description(const wcstring &full_completion, wcstring *c
     return wcstring{};
 }
 
+namespace {
 // A transient parameter pack needed by wildcard_complete.
 struct wc_complete_pack_t {
     const wcstring &orig;                 // the original string, transient
@@ -185,6 +158,7 @@ struct wc_complete_pack_t {
     wc_complete_pack_t(const wcstring &str, const description_func_t &df, expand_flags_t fl)
         : orig(str), desc_func(df), expand_flags(fl) {}
 };
+}  // namespace
 
 // Weirdly specific and non-reusable helper function that makes its one call site much clearer.
 static bool has_prefix_match(const completion_receiver_t *comps, size_t first) {
@@ -434,7 +408,7 @@ static const wchar_t *file_get_desc(int lstat_res, const struct stat &lbuf, int 
             return COMPLETE_SYMLINK_DESC;
         }
 
-        if (err == ENOENT) return COMPLETE_ROTTEN_SYMLINK_DESC;
+        if (err == ENOENT) return COMPLETE_BROKEN_SYMLINK_DESC;
         if (err == ELOOP) return COMPLETE_LOOP_SYMLINK_DESC;
         // On unknown errors we do nothing. The file will be given the default 'File'
         // description or one based on the suffix.
@@ -460,7 +434,17 @@ static const wchar_t *file_get_desc(int lstat_res, const struct stat &lbuf, int 
 /// up. Note that the filename came from a readdir() call, so we know it exists.
 static bool wildcard_test_flags_then_complete(const wcstring &filepath, const wcstring &filename,
                                               const wchar_t *wc, expand_flags_t expand_flags,
-                                              completion_receiver_t *out) {
+                                              completion_receiver_t *out, bool known_dir) {
+    const bool executables_only = expand_flags & expand_flag::executables_only;
+    const bool need_directory = expand_flags & expand_flag::directories_only;
+    // Fast path: If we need directories, and we already know it is one,
+    // and we don't need to do anything else, just return it.
+    // This is a common case for cd completions, and removes the `stat` entirely in case the system
+    // supports it.
+    if (known_dir && !executables_only && !(expand_flags & expand_flag::gen_descriptions)) {
+        return wildcard_complete(filename + L'/', wc, const_desc(L""), out, expand_flags,
+                                 COMPLETE_NO_SPACE) == wildcard_result_t::match;
+    }
     // Check if it will match before stat().
     if (wildcard_complete(filename, wc, {}, nullptr, expand_flags, 0) != wildcard_result_t::match) {
         return false;
@@ -475,7 +459,7 @@ static bool wildcard_test_flags_then_complete(const wcstring &filepath, const wc
             stat_res = wstat(filepath, &stat_buf);
 
             if (stat_res < 0) {
-                // In order to differentiate between e.g. rotten symlinks and symlink loops, we also
+                // In order to differentiate between e.g. broken symlinks and symlink loops, we also
                 // need to know the error status of wstat.
                 stat_errno = errno;
             }
@@ -489,17 +473,15 @@ static bool wildcard_test_flags_then_complete(const wcstring &filepath, const wc
     const bool is_directory = stat_res == 0 && S_ISDIR(stat_buf.st_mode);
     const bool is_executable = stat_res == 0 && S_ISREG(stat_buf.st_mode);
 
-    const bool need_directory = expand_flags & expand_flag::directories_only;
     if (need_directory && !is_directory) {
         return false;
     }
 
-    const bool executables_only = expand_flags & expand_flag::executables_only;
     if (executables_only && (!is_executable || fast_waccess(stat_buf, X_OK) != 0)) {
         return false;
     }
 
-    if (is_windows_subsystem_for_linux() &&
+    if (executables_only && is_windows_subsystem_for_linux() &&
         string_suffixes_string_case_insensitive(L".dll", filename)) {
         return false;
     }
@@ -509,7 +491,7 @@ static bool wildcard_test_flags_then_complete(const wcstring &filepath, const wc
     if (expand_flags & expand_flag::gen_descriptions) {
         desc = file_get_desc(lstat_res, lstat_buf, stat_res, stat_buf, stat_errno);
 
-        if (file_size >= 0) {
+        if (!is_directory && !is_executable && file_size >= 0) {
             if (!desc.empty()) desc.append(L", ");
             desc.append(format_size(file_size));
         }
@@ -526,6 +508,7 @@ static bool wildcard_test_flags_then_complete(const wcstring &filepath, const wc
            wildcard_result_t::match;
 }
 
+namespace {
 class wildcard_expander_t {
     // A function to call to check cancellation.
     cancel_checker_t cancel_checker;
@@ -553,27 +536,28 @@ class wildcard_expander_t {
     /// We are a trailing slash - expand at the end.
     void expand_trailing_slash(const wcstring &base_dir, const wcstring &prefix);
 
-    /// Given a directory base_dir, which is opened as base_dir_fp, expand an intermediate segment
+    /// Given a directory base_dir, which is opened as base_dir_iter, expand an intermediate segment
     /// of the wildcard. Treat ANY_STRING_RECURSIVE as ANY_STRING. wc_segment is the wildcard
     /// segment for this directory, wc_remainder is the wildcard for subdirectories,
     /// prefix is the prefix for completions.
-    void expand_intermediate_segment(const wcstring &base_dir, DIR *base_dir_fp,
+    void expand_intermediate_segment(const wcstring &base_dir, dir_iter_t &base_dir_iter,
                                      const wcstring &wc_segment, const wchar_t *wc_remainder,
                                      const wcstring &prefix);
 
     /// Given a directory base_dir, which is opened as base_dir_fp, expand an intermediate literal
     /// segment. Use a fuzzy matching algorithm.
-    void expand_literal_intermediate_segment_with_fuzz(const wcstring &base_dir, DIR *base_dir_fp,
+    void expand_literal_intermediate_segment_with_fuzz(const wcstring &base_dir,
+                                                       dir_iter_t &base_dir_iter,
                                                        const wcstring &wc_segment,
                                                        const wchar_t *wc_remainder,
                                                        const wcstring &prefix);
 
-    /// Given a directory base_dir, which is opened as base_dir_fp, expand the last segment of the
+    /// Given a directory base_dir, which is opened as base_dir_iter, expand the last segment of the
     /// wildcard. Treat ANY_STRING_RECURSIVE as ANY_STRING. wc is the wildcard segment to use for
     /// matching, wc_remainder is the wildcard for subdirectories, prefix is the prefix for
     /// completions.
-    void expand_last_segment(const wcstring &base_dir, DIR *base_dir_fp, const wcstring &wc,
-                             const wcstring &prefix);
+    void expand_last_segment(const wcstring &base_dir, dir_iter_t &base_dir_iter,
+                             const wcstring &wc, const wcstring &prefix);
 
     /// Indicate whether we should cancel wildcard expansion. This latches 'interrupt'.
     bool interrupted_or_overflowed() {
@@ -602,48 +586,55 @@ class wildcard_expander_t {
         wcstring unique_hierarchy;
         wcstring abs_unique_hierarchy = start_point;
 
-        bool stop_descent = false;
-        DIR *dir;
-        while (!stop_descent && (dir = wopendir(abs_unique_hierarchy))) {
+        // Ensure we don't fall into a symlink loop.
+        // Ideally we would compare both devices and inodes, but devices require a stat call, so we
+        // use inodes exclusively.
+        std::unordered_set<ino_t> visited_inodes;
+
+        for (;;) {
             // We keep track of the single unique_entry entry. If we get more than one, it's not
             // unique and we stop the descent.
             wcstring unique_entry;
-
-            bool child_is_dir;
-            wcstring child_entry;
-            while (wreaddir_resolving(dir, abs_unique_hierarchy, child_entry, &child_is_dir)) {
-                if (child_entry.empty() || child_entry.at(0) == L'.') {
+            dir_iter_t dir(abs_unique_hierarchy);
+            if (!dir.valid()) {
+                break;
+            }
+            while (const auto *entry = dir.next()) {
+                if (entry->name.empty() || entry->name.at(0) == L'.') {
                     continue;  // either hidden, or . and .. entries -- skip them
-                } else if (child_is_dir && unique_entry.empty()) {
-                    unique_entry = child_entry;  // first candidate
+                }
+                if (!visited_inodes.insert(entry->inode).second) {
+                    // Either we've visited this inode already or there's multiple files;
+                    // either way stop.
+                    break;
+                } else if (entry->is_dir() && unique_entry.empty()) {
+                    unique_entry = entry->name;  // first candidate
                 } else {
                     // We either have two or more candidates, or the child is not a directory. We're
                     // done.
-                    stop_descent = true;
+                    unique_entry.clear();
                     break;
                 }
             }
 
             // We stop if we got two or more entries; also stop if we got zero or were interrupted
             if (unique_entry.empty() || interrupted_or_overflowed()) {
-                stop_descent = true;
+                break;
             }
 
-            if (!stop_descent) {
-                // We have an entry in the unique hierarchy!
-                append_path_component(unique_hierarchy, unique_entry);
-                unique_hierarchy.push_back(L'/');
+            // We have an entry in the unique hierarchy!
+            append_path_component(unique_hierarchy, unique_entry);
+            unique_hierarchy.push_back(L'/');
 
-                append_path_component(abs_unique_hierarchy, unique_entry);
-                abs_unique_hierarchy.push_back(L'/');
-            }
-            closedir(dir);
+            append_path_component(abs_unique_hierarchy, unique_entry);
+            abs_unique_hierarchy.push_back(L'/');
         }
         return unique_hierarchy;
     }
 
     void try_add_completion_result(const wcstring &filepath, const wcstring &filename,
-                                   const wcstring &wildcard, const wcstring &prefix) {
+                                   const wcstring &wildcard, const wcstring &prefix,
+                                   bool known_dir) {
         // This function is only for the completions case.
         assert(this->flags & expand_flag::for_completions);
 
@@ -655,7 +646,7 @@ class wildcard_expander_t {
 
         size_t before = this->resolved_completions->size();
         if (wildcard_test_flags_then_complete(abs_path, filename, wildcard.c_str(), this->flags,
-                                              this->resolved_completions)) {
+                                              this->resolved_completions, known_dir)) {
             // Hack. We added this completion result based on the last component of the wildcard.
             // Prepend our prefix to each wildcard that replaces its token.
             // Note that prepend_token_prefix is a no-op unless COMPLETE_REPLACES_TOKEN is set
@@ -688,7 +679,7 @@ class wildcard_expander_t {
     }
 
     // Helper to resolve using our prefix.
-    DIR *open_dir(const wcstring &base_dir) const {
+    dir_iter_t open_dir(const wcstring &base_dir) const {
         wcstring path = this->working_directory;
         append_path_component(path, base_dir);
         if (flags & expand_flag::special_for_cd) {
@@ -696,7 +687,7 @@ class wildcard_expander_t {
             // for example, cd ../<tab> should complete "without resolving symlinks".
             path = normalize_path(path);
         }
-        return wopendir(path);
+        return dir_iter_t(path);
     }
 
    public:
@@ -740,39 +731,59 @@ void wildcard_expander_t::expand_trailing_slash(const wcstring &base_dir, const 
         }
     } else {
         // Trailing slashes and accepting incomplete, e.g. `echo /xyz/<tab>`. Everything is added.
-        DIR *dir = open_dir(base_dir);
-        if (dir) {
-            wcstring next;
-            while (wreaddir(dir, next) && !interrupted_or_overflowed()) {
-                if (!next.empty() && next.at(0) != L'.') {
-                    this->try_add_completion_result(base_dir + next, next, L"", prefix);
+        dir_iter_t dir = open_dir(base_dir);
+        if (dir.valid()) {
+            // wreaddir_resolving without the out argument is just wreaddir.
+            // So we can use the information in case we need it.
+            bool need_dir = flags & expand_flag::directories_only;
+            wcstring path = base_dir;
+            if (flags & expand_flag::special_for_cd) {
+                path = this->working_directory;
+                append_path_component(path, base_dir);
+                // cd operates on logical paths.
+                // for example, cd ../<tab> should complete "without resolving symlinks".
+                path = normalize_path(path);
+            }
+            while (const auto *entry = dir.next()) {
+                if (interrupted_or_overflowed()) {
+                    break;
+                }
+                // Note that is_dir() may cause a stat() call.
+                bool known_dir = need_dir ? entry->is_dir() : false;
+                if (need_dir && !known_dir) continue;
+                if (!entry->name.empty() && entry->name.at(0) != L'.') {
+                    this->try_add_completion_result(base_dir + entry->name, entry->name, L"",
+                                                    prefix, known_dir);
                 }
             }
-            closedir(dir);
         }
     }
 }
 
-void wildcard_expander_t::expand_intermediate_segment(const wcstring &base_dir, DIR *base_dir_fp,
+void wildcard_expander_t::expand_intermediate_segment(const wcstring &base_dir,
+                                                      dir_iter_t &base_dir_iter,
                                                       const wcstring &wc_segment,
                                                       const wchar_t *wc_remainder,
                                                       const wcstring &prefix) {
-    wcstring name_str;
-    while (!interrupted_or_overflowed() && wreaddir_for_dirs(base_dir_fp, &name_str)) {
+    std::string narrow;
+    const dir_iter_t::entry_t *entry{};
+    while (!interrupted_or_overflowed() && (entry = base_dir_iter.next())) {
         // Note that it's critical we ignore leading dots here, else we may descend into . and ..
-        if (!wildcard_match(name_str, wc_segment, true)) {
+        if (!wildcard_match(entry->name, wc_segment, true)) {
             // Doesn't match the wildcard for this segment, skip it.
             continue;
         }
 
-        wcstring full_path = base_dir + name_str;
-        struct stat buf;
-        if (0 != wstat(full_path, &buf) || !S_ISDIR(buf.st_mode)) {
-            // We either can't stat it, or we did but it's not a directory.
+        if (!entry->is_dir()) {
             continue;
         }
 
-        const file_id_t file_id = file_id_t::from_stat(buf);
+        auto statbuf = entry->stat();
+        if (!statbuf) {
+            continue;
+        }
+
+        const file_id_t file_id = file_id_t::from_stat(*statbuf);
         if (!this->visited_files.insert(file_id).second) {
             // Symlink loop! This directory was already visited, so skip it.
             continue;
@@ -780,6 +791,7 @@ void wildcard_expander_t::expand_intermediate_segment(const wcstring &base_dir, 
 
         // We made it through. Perform normal wildcard expansion on this new directory, starting at
         // our tail_wc, which includes the ANY_STRING_RECURSIVE guy.
+        wcstring full_path = base_dir + entry->name;
         full_path.push_back(L'/');
         this->expand(full_path, wc_remainder, prefix + wc_segment + L'/');
 
@@ -790,40 +802,33 @@ void wildcard_expander_t::expand_intermediate_segment(const wcstring &base_dir, 
 }
 
 void wildcard_expander_t::expand_literal_intermediate_segment_with_fuzz(const wcstring &base_dir,
-                                                                        DIR *base_dir_fp,
+                                                                        dir_iter_t &base_dir_iter,
                                                                         const wcstring &wc_segment,
                                                                         const wchar_t *wc_remainder,
                                                                         const wcstring &prefix) {
-    // This only works with tab completions. Ordinary wildcard expansion should never go fuzzy.
-    wcstring name_str;
-
     // Mark that we are fuzzy for the duration of this function
     const scoped_push<bool> scoped_fuzzy(&this->has_fuzzy_ancestor, true);
-
-    while (!interrupted_or_overflowed() && wreaddir_for_dirs(base_dir_fp, &name_str)) {
+    const dir_iter_t::entry_t *entry{};
+    while (!interrupted_or_overflowed() && (entry = base_dir_iter.next())) {
         // Don't bother with . and ..
-        if (name_str == L"." || name_str == L"..") {
+        if (entry->name == L"." || entry->name == L"..") {
             continue;
         }
 
-        // Skip cases that don't match or match exactly. The match-exactly case was handled directly
-        // in expand().
-        const maybe_t<string_fuzzy_match_t> match = string_fuzzy_match_string(wc_segment, name_str);
+        const auto match = string_fuzzy_match_string(wc_segment, entry->name);
         if (!match || match->is_samecase_exact()) continue;
 
-        wcstring new_full_path = base_dir + name_str;
-        new_full_path.push_back(L'/');
-        struct stat buf;
-        if (0 != wstat(new_full_path, &buf) || !S_ISDIR(buf.st_mode)) {
-            /* We either can't stat it, or we did but it's not a directory */
-            continue;
-        }
+        // Note is_dir() may trigger a stat call.
+        if (!entry->is_dir()) continue;
 
         // Determine the effective prefix for our children.
         // Normally this would be the wildcard segment, but here we know our segment doesn't have
         // wildcards ("literal") and we are doing fuzzy expansion, which means we replace the
         // segment with files found through fuzzy matching.
-        const wcstring child_prefix = prefix + name_str + L'/';
+        const wcstring child_prefix = prefix + entry->name + L'/';
+
+        wcstring new_full_path = base_dir + entry->name;
+        new_full_path.push_back(L'/');
 
         // Ok, this directory matches. Recurse to it. Then mark each resulting completion as fuzzy.
         const size_t before = this->resolved_completions->size();
@@ -848,16 +853,21 @@ void wildcard_expander_t::expand_literal_intermediate_segment_with_fuzz(const wc
     }
 }
 
-void wildcard_expander_t::expand_last_segment(const wcstring &base_dir, DIR *base_dir_fp,
+void wildcard_expander_t::expand_last_segment(const wcstring &base_dir, dir_iter_t &base_dir_iter,
                                               const wcstring &wc, const wcstring &prefix) {
-    wcstring name_str;
-    while (!interrupted_or_overflowed() && wreaddir(base_dir_fp, name_str)) {
+    bool is_dir = false;
+    bool need_dir = flags & expand_flag::directories_only;
+
+    const dir_iter_t::entry_t *entry{};
+    while (!interrupted_or_overflowed() && (entry = base_dir_iter.next())) {
+        if (need_dir && !entry->is_dir()) continue;
         if (flags & expand_flag::for_completions) {
-            this->try_add_completion_result(base_dir + name_str, name_str, wc, prefix);
+            this->try_add_completion_result(base_dir + entry->name, entry->name, wc, prefix,
+                                            is_dir);
         } else {
             // Normal wildcard expansion, not for completions.
-            if (wildcard_match(name_str, wc, true /* skip files with leading dots */)) {
-                this->add_expansion_result(base_dir + name_str);
+            if (wildcard_match(entry->name, wc, true /* skip files with leading dots */)) {
+                this->add_expansion_result(base_dir + entry->name);
             }
         }
     }
@@ -888,8 +898,7 @@ void wildcard_expander_t::expand(const wcstring &base_dir, const wchar_t *wc,
     const bool is_last_segment = (next_slash == nullptr);
     const size_t wc_segment_len = next_slash ? next_slash - wc : std::wcslen(wc);
     const wcstring wc_segment = wcstring(wc, wc_segment_len);
-    const bool segment_has_wildcards =
-        wildcard_has(wc_segment, true /* internal, i.e. look for ANY_CHAR instead of ? */);
+    const bool segment_has_wildcards = wildcard_has_internal(wc_segment);  // e.g. ANY_STRING.
     const wchar_t *const wc_remainder = next_slash ? next_slash + 1 : nullptr;
 
     if (wc_segment.empty()) {
@@ -921,11 +930,10 @@ void wildcard_expander_t::expand(const wcstring &base_dir, const wchar_t *wc,
         if (allow_fuzzy && this->resolved_completions->size() == before &&
             waccess(intermediate_dirpath, F_OK) != 0) {
             assert(this->flags & expand_flag::for_completions);
-            DIR *base_dir_fd = open_dir(base_dir);
-            if (base_dir_fd != nullptr) {
+            dir_iter_t base_dir_iter = open_dir(base_dir);
+            if (base_dir_iter.valid()) {
                 this->expand_literal_intermediate_segment_with_fuzz(
-                    base_dir, base_dir_fd, wc_segment, wc_remainder, effective_prefix);
-                closedir(base_dir_fd);
+                    base_dir, base_dir_iter, wc_segment, wc_remainder, effective_prefix);
             }
         }
     } else {
@@ -944,8 +952,8 @@ void wildcard_expander_t::expand(const wcstring &base_dir, const wchar_t *wc,
             }
         }
 
-        DIR *dir = open_dir(base_dir);
-        if (dir) {
+        dir_iter_t dir = open_dir(base_dir);
+        if (dir.valid()) {
             if (is_last_segment) {
                 // Last wildcard segment, nonempty wildcard.
                 this->expand_last_segment(base_dir, dir, wc_segment, effective_prefix);
@@ -967,14 +975,14 @@ void wildcard_expander_t::expand(const wcstring &base_dir, const wchar_t *wc,
                 assert(head_any.at(head_any.size() - 1) == ANY_STRING_RECURSIVE);
                 assert(any_tail[0] == ANY_STRING_RECURSIVE);
 
-                rewinddir(dir);
+                dir.rewind();
                 this->expand_intermediate_segment(base_dir, dir, head_any, any_tail,
                                                   effective_prefix);
             }
-            closedir(dir);
         }
     }
 }
+}  // namespace
 
 wildcard_result_t wildcard_expand_string(const wcstring &wc, const wcstring &working_directory,
                                          expand_flags_t flags,

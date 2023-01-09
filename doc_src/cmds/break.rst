@@ -6,18 +6,20 @@ break - stop the current inner loop
 Synopsis
 --------
 
-::
+.. synopsis::
 
-    LOOP_CONSTRUCT; [COMMANDS...] break; [COMMANDS...] end
-
+    LOOP_CONSTRUCT
+       [COMMANDS ...]
+       break
+       [COMMANDS ...]
+    end
 
 Description
 -----------
 
-``break`` halts a currently running loop, such as a :ref:`switch <cmd-switch>`, :ref:`for <cmd-for>` or :ref:`while <cmd-while>` loop. It is usually added inside of a conditional block such as an :ref:`if <cmd-if>` block.
+``break`` halts a currently running loop (*LOOP_CONSTRUCT*), such as a :doc:`for <for>` or :doc:`while <while>` loop. It is usually added inside of a conditional block such as an :doc:`if <if>` block.
 
 There are no parameters for ``break``.
-
 
 Example
 -------
@@ -35,4 +37,4 @@ The following code searches all .c files for "smurf", and halts at the first occ
 See Also
 --------
 
-- the :ref:`continue <cmd-continue>` command, to skip the remainder of the current iteration of the current inner loop
+- the :doc:`continue <continue>` command, to skip the remainder of the current iteration of the current inner loop

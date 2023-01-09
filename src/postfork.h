@@ -5,16 +5,15 @@
 
 #include "config.h"
 
-#include <stddef.h>
-#include <unistd.h>
-
-#include "maybe.h"
 #ifdef HAVE_SPAWN_H
 #include <spawn.h>
 #endif
 #ifndef FISH_USE_POSIX_SPAWN
 #define FISH_USE_POSIX_SPAWN HAVE_SPAWN_H
 #endif
+
+#include "common.h"
+#include "maybe.h"
 
 class dup2_list_t;
 class job_t;
@@ -34,16 +33,12 @@ void report_setpgid_error(int err, bool is_parent, pid_t desired_pgid, const job
                           const process_t *p);
 
 /// Initialize a new child process. This should be called right away after forking in the child
-/// process. If job control is enabled for this job, the process is put in the process group of the
-/// job, all signal handlers are reset, signals are unblocked (this function may only be called
-/// inside the exec function, which blocks all signals), and all IO redirections and other file
-/// descriptor actions are performed.
+/// process. This resets signal handlers and applies IO redirections.
 ///
-/// Assign the terminal to new_termowner unless it is INVALID_PID.
+/// If \p claim_tty_from is >= 0 and owns the tty, use tcsetpgrp() to claim it.
 ///
-/// \return 0 on success, -1 on failure. When this function returns, signals are always unblocked.
-/// On failure, signal handlers, io redirections and process group of the process is undefined.
-int child_setup_process(pid_t new_termowner, pid_t fish_pgrp, const job_t &job, bool is_forked,
+/// \return 0 on success, -1 on failure, in which case an error will be printed.
+int child_setup_process(pid_t claim_tty_from, const job_t &job, bool is_forked,
                         const dup2_list_t &dup2s);
 
 /// Call fork(), retrying on failure a few times.
@@ -55,7 +50,7 @@ void safe_report_exec_error(int err, const char *actual_cmd, const char *const *
 
 #if FISH_USE_POSIX_SPAWN
 /// A RAII type which wraps up posix_spawn's data structures.
-class posix_spawner_t {
+class posix_spawner_t : noncopyable_t, nonmovable_t {
    public:
     /// Attempt to construct from a job and dup2 list.
     /// The caller must check the error function, as this may fail.
@@ -70,11 +65,6 @@ class posix_spawner_t {
     maybe_t<pid_t> spawn(const char *cmd, char *const argv[], char *const envp[]);
 
     ~posix_spawner_t();
-
-    posix_spawner_t(const posix_spawner_t &) = delete;
-    void operator=(const posix_spawner_t &) = delete;
-    void operator=(posix_spawner_t &&) = delete;
-    posix_spawner_t(posix_spawner_t &&) = delete;
 
    private:
     bool check_fail(int err);

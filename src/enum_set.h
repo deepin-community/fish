@@ -3,7 +3,6 @@
 
 #include <array>
 #include <bitset>
-#include <cassert>
 #include <iterator>
 
 /// A type (to specialize) that provides a count for an enum.
@@ -121,7 +120,7 @@ class enum_iter_t {
             return *this;
         }
 
-        iterator_t operator++(int) {
+        const iterator_t operator++(int) {
             auto res = *this;
             v_ += 1;
             return res;

@@ -5,60 +5,13 @@
 #include "config.h"  // IWYU pragma: keep
 
 #include <atomic>
-#include <cassert>
 
 #include "common.h"
 
-// fish is multithreaded. Global (which includes function and file-level statics) when used naively
-// may therefore lead to data races. Use the following types to characterize and enforce correct
-// access patterns.
-
-namespace detail {
-// An empty value type that cannot be copied or moved.
-// Include this as an instance variable to prevent globals from being copied or moved.
-struct fixed_t {
-    fixed_t(const fixed_t &) = delete;
-    fixed_t(fixed_t &&) = delete;
-    fixed_t &operator=(fixed_t &&) = delete;
-    fixed_t &operator=(const fixed_t &) = delete;
-    fixed_t() = default;
-};
-}  // namespace detail
-
-/// A mainthread_t variable may only be accessed on the main thread.
+/// A latch variable may only be set once.
+/// The value is immortal.
 template <typename T>
-class mainthread_t : detail::fixed_t {
-    T value_{};
-
-   public:
-    mainthread_t(T value) : value_(std::move(value)) {}
-    mainthread_t() = default;
-
-    T *operator->() {
-        ASSERT_IS_MAIN_THREAD();
-        return &value_;
-    }
-
-    operator T &() {
-        ASSERT_IS_MAIN_THREAD();
-        return value_;
-    }
-
-    operator const T &() const {
-        ASSERT_IS_MAIN_THREAD();
-        return value_;
-    }
-
-    void operator=(T value) {
-        ASSERT_IS_MAIN_THREAD();
-        value_ = std::move(value);
-    }
-};
-
-/// A latch variable may only be set once, on the main thread.
-/// The value is a immortal.
-template <typename T>
-class latch_t : detail::fixed_t {
+class latch_t : noncopyable_t, nonmovable_t {
     T *value_{};
 
    public:
@@ -68,8 +21,9 @@ class latch_t : detail::fixed_t {
     T *operator->() { return value_; }
     const T *operator->() const { return value_; }
 
+    bool is_set() const { return value_ != nullptr; }
+
     void operator=(std::unique_ptr<T> value) {
-        ASSERT_IS_MAIN_THREAD();
         assert(value_ == nullptr && "Latch variable initialized multiple times");
         assert(value != nullptr && "Latch variable initialized with null");
         // Note: deliberate leak.
@@ -77,11 +31,6 @@ class latch_t : detail::fixed_t {
     }
 
     void operator=(T &&value) { *this = make_unique<T>(std::move(value)); }
-
-    template <typename... Args>
-    void emplace(Args &&...args) {
-        *this = make_unique<T>(std::forward<Args>(args)...);
-    }
 };
 
 /// An atomic type that always use relaxed reads.
@@ -105,9 +54,11 @@ class relaxed_atomic_t {
 
     // postincrement
     T operator++(int) { return value_.fetch_add(1, std::memory_order_relaxed); }
+    T operator--(int) { return value_.fetch_sub(1, std::memory_order_relaxed); }
 
     // preincrement
-    T operator++() { return 1 + value_.fetch_add(1, std::memory_order_relaxed); }
+    T operator++() { return value_.fetch_add(1, std::memory_order_relaxed) + 1; }
+    T operator--() { return value_.fetch_sub(1, std::memory_order_relaxed) - 1; }
 };
 
 using relaxed_atomic_bool_t = relaxed_atomic_t<bool>;

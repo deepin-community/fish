@@ -3,11 +3,14 @@
 
 #include "fd_monitor.h"
 
-#include <cstring>
+#include <errno.h>
+
+#include <algorithm>
+#include <iterator>
 #include <thread>  //this_thread::sleep_for
+#include <type_traits>
 
 #include "flog.h"
-#include "io.h"
 #include "iothread.h"
 #include "wutil.h"
 
@@ -16,7 +19,7 @@ static constexpr uint64_t kUsecPerMsec = 1000;
 fd_monitor_t::fd_monitor_t() = default;
 
 fd_monitor_t::~fd_monitor_t() {
-    // In orindary usage, we never invoke the dtor.
+    // In ordinary usage, we never invoke the dtor.
     // This is used in the tests to not leave stale fds around.
     // That is why this is very hacky!
     data_.acquire()->terminate = true;
@@ -87,7 +90,7 @@ uint64_t fd_monitor_item_t::usec_remaining(const time_point_t &now) const {
     return since >= timeout_usec ? 0 : timeout_usec - since;
 }
 
-bool fd_monitor_item_t::service_item(const select_wrapper_t &fds, const time_point_t &now) {
+bool fd_monitor_item_t::service_item(const fd_readable_set_t &fds, const time_point_t &now) {
     bool should_retain = true;
     bool readable = fds.test(fd.fd());
     bool timed_out = !readable && usec_remaining(now) == 0;
@@ -113,11 +116,11 @@ bool fd_monitor_item_t::poke_item(const poke_list_t &pokelist) {
 void fd_monitor_t::run_in_background() {
     ASSERT_IS_BACKGROUND_THREAD();
     poke_list_t pokelist;
-    select_wrapper_t fds;
+    fd_readable_set_t fds;
     for (;;) {
         // Poke any items that need it.
         if (!pokelist.empty()) {
-            this->poke_in_background(std::move(pokelist));
+            this->poke_in_background(pokelist);
             pokelist.clear();
         }
 
@@ -136,20 +139,19 @@ void fd_monitor_t::run_in_background() {
             timeout_usec = std::min(timeout_usec, item.usec_remaining(now));
         }
 
-        // If we have only one item, it means that we are not actively monitoring any fds other than
-        // our self-pipe. In this case we wish to allow the thread to exit, but after a time, so we
+        // If we have no items, then we wish to allow the thread to exit, but after a time, so we
         // aren't spinning up and tearing down the thread repeatedly.
-        // Set a timeout of 16 msec; if nothing becomes readable by then we will exit.
+        // Set a timeout of 256 msec; if nothing becomes readable by then we will exit.
         // We refer to this as the wait-lap.
-        bool is_wait_lap = (items_.size() == 1);
+        bool is_wait_lap = (items_.size() == 0);
         if (is_wait_lap) {
             assert(timeout_usec == fd_monitor_item_t::kNoTimeout &&
                    "Should not have a timeout on wait-lap");
-            timeout_usec = 16 * kUsecPerMsec;
+            timeout_usec = 256 * kUsecPerMsec;
         }
 
         // Call select().
-        int ret = fds.select(timeout_usec);
+        int ret = fds.check_readable(timeout_usec);
         if (ret < 0 && errno != EINTR) {
             // Surprising error.
             wperror(L"select");
@@ -170,7 +172,8 @@ void fd_monitor_t::run_in_background() {
 
         // Handle any changes if the change signaller was set. Alternatively this may be the wait
         // lap, in which case we might want to commit to exiting.
-        if (fds.test(change_signal_fd) || is_wait_lap) {
+        bool change_signalled = fds.test(change_signal_fd);
+        if (change_signalled || is_wait_lap) {
             // Clear the change signaller before processing incoming changes.
             change_signaller_.try_consume();
             auto data = data_.acquire();
@@ -185,7 +188,8 @@ void fd_monitor_t::run_in_background() {
             pokelist = std::move(data->pokelist);
             data->pokelist.clear();
 
-            if (data->terminate || (is_wait_lap && items_.empty())) {
+            if (data->terminate ||
+                (is_wait_lap && items_.empty() && pokelist.empty() && !change_signalled)) {
                 // Maybe terminate is set.
                 // Alternatively, maybe we had no items, waited a bit, and still have no items.
                 // It's important to do this while holding the lock, otherwise we race with new

@@ -3,11 +3,8 @@
 
 #include "config.h"
 
-#include <stddef.h>
-#include <stdint.h>
-#include <unistd.h>
 // The following include must be kept despite what IWYU says. That's because of the interaction
-// between the weak linking of `wcsdup` and `wcscasecmp` via `#define`s below and the declarations
+// between the weak linking of `wcscasecmp` via `#define`s below and the declarations
 // in <wchar.h>. At least on OS X if we don't do this we get compilation errors do to the macro
 // substitution if wchar.h is included after this header.
 #include <cwchar>  // IWYU pragma: keep
@@ -20,9 +17,6 @@ extern int g_fish_ambiguous_width;
 /// different things. See issues like #4539 and https://github.com/neovim/neovim/issues/4976 for how
 /// painful this is. A value of 0 means to use the guessed value.
 extern int g_fish_emoji_width;
-
-/// The guessed value of the emoji width based on TERM.
-extern int g_guessed_fish_emoji_width;
 
 /// fish's internal versions of wcwidth and wcswidth, which can use an internal implementation if
 /// the system one is busted.
@@ -50,13 +44,12 @@ int fish_mkstemp_cloexec(char *);
 #define WCHAR_MAX INT_MAX
 #endif
 
-/// Under curses, tputs expects an int (*func)(char) as its last parameter, but in ncurses, tputs
-/// expects a int (*func)(int) as its last parameter. tputs_arg_t is defined to always be what tputs
-/// expects. Hopefully.
-#if defined(NCURSES_VERSION) || defined(__NetBSD__)
-typedef int tputs_arg_t;
+/// Both ncurses and NetBSD curses expect an int (*func)(int) as the last parameter for tputs.
+/// Apparently OpenIndiana's curses still uses int (*func)(char) here.
+#if TPUTS_USES_INT_ARG
+using tputs_arg_t = int;
 #else
-typedef char tputs_arg_t;
+using tputs_arg_t = char;
 #endif
 
 #ifndef HAVE_WINSIZE
@@ -72,21 +65,15 @@ struct winsize {
 
 #if defined(TPARM_SOLARIS_KLUDGE)
 /// Solaris tparm has a set fixed of parameters in its curses implementation, work around this here.
-#define tparm tparm_solaris_kludge
+#define fish_tparm tparm_solaris_kludge
 char *tparm_solaris_kludge(char *str, long p1 = 0, long p2 = 0, long p3 = 0, long p4 = 0,
                            long p5 = 0, long p6 = 0, long p7 = 0, long p8 = 0, long p9 = 0);
+#else
+#define fish_tparm tparm
 #endif
 
 /// These functions are missing from Solaris 10, and only accessible from
 /// Solaris 11 in the std:: namespace.
-#ifndef HAVE_WCSDUP
-#ifdef HAVE_STD__WCSDUP
-using std::wcsdup;
-#else
-wchar_t *wcsdup(const wchar_t *in);
-#endif  // HAVE_STD__WCSDUP
-#endif  // HAVE_WCSDUP
-
 #ifndef HAVE_WCSCASECMP
 #ifdef HAVE_STD__WCSCASECMP
 using std::wcscasecmp;
@@ -109,25 +96,6 @@ int wcsncasecmp(const wchar_t *s1, const wchar_t *s2, size_t n);
 #else
 #define dirfd(d) (d->d_fd)
 #endif
-#endif
-#endif
-
-#ifndef HAVE_WCSNDUP
-/// Fallback for wcsndup function. Returns a copy of \c in, truncated to a maximum length of \c c.
-wchar_t *wcsndup(const wchar_t *in, size_t c);
-#endif
-
-#ifndef HAVE_WCSLCPY
-/// Copy src to string dst of size siz.  At most siz-1 characters will be copied.  Always NUL
-/// terminates (unless siz == 0).  Returns std::wcslen(src); if retval >= siz, truncation occurred.
-///
-/// This is the OpenBSD strlcpy function, modified for wide characters, and renamed to reflect this
-/// change.
-size_t wcslcpy(wchar_t *dst, const wchar_t *src, size_t siz);
-#endif
-
-#ifndef HAVE_FUTIMES
-int futimes(int fd, const struct timeval *times);
 #endif
 
 // autoconf may fail to detect gettext (645), so don't define a function call gettext or we'll get
@@ -175,3 +143,5 @@ double wcstod_l(const wchar_t *enptr, wchar_t **endptr, locale_t loc);
 }
 #define wcstod_l(x, y, z) fish_compat::wcstod_l(x, y, z)
 #endif
+
+#endif  // FISH_FALLBACK_H

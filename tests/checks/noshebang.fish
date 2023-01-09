@@ -1,5 +1,9 @@
 # RUN: %fish %s
 
+# Do not run under sanitizers in CI, as they intercept a busted posix_spawn
+# which mishandles shebangless scripts.
+# REQUIRES: sh 'test -z $FISH_CI_SAN'
+
 # Test for shebangless scripts - see 7802.
 
 set testdir (mktemp -d)
@@ -47,14 +51,12 @@ set -g fish_use_posix_spawn 1
 echo $status
 rm file.fish
 #CHECK: 126
-#CHECKERR: Failed {{.*}}
+#CHECKERR: exec: {{.*}}{{.*}}
 #CHECKERR: exec: {{.*}}
-#CHECKERR: {{.*}}
 
 #CHECK: 126
-#CHECKERR: Failed {{.*}}
 #CHECKERR: exec: {{.*}}
-#CHECKERR: {{.*}}
+#CHECKERR: exec: {{.*}}
 
 
 # On to NUL bytes.
@@ -70,25 +72,27 @@ echo -n -e 'true\x00' >file
 sleep 0.1
 runfile
 #CHECK: 126
-#CHECKERR: Failed {{.*}}
 #CHECKERR: exec: {{.*}}
-#CHECKERR: {{.*}}
 
 #CHECK: 126
-#CHECKERR: Failed {{.*}}
 #CHECKERR: exec: {{.*}}
-#CHECKERR: {{.*}}
 
 # Doesn't meet our heuristic as there is no lowercase before newline.
 echo -n -e 'NOPE\n\x00' >file
 sleep 0.1
 runfile
 #CHECK: 126
-#CHECKERR: Failed {{.*}}
 #CHECKERR: exec: {{.*}}
-#CHECKERR: {{.*}}
 
 #CHECK: 126
-#CHECKERR: Failed {{.*}}
 #CHECKERR: exec: {{.*}}
-#CHECKERR: {{.*}}
+
+echo 'echo foo' >./-
+sleep 0.1
+chmod +x ./-
+set PATH ./ $PATH
+sleep 0.1
+-
+#CHECK: foo
+echo $status
+#CHECK: 0

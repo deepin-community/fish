@@ -2,7 +2,7 @@
 
 function __fish_mix_needs_command
     set -l cmd (commandline -opc)
-    if [ (count $cmd) -eq 1 ]
+    if test (count $cmd) -eq 1
         return 0
     end
     return 1
@@ -10,8 +10,8 @@ end
 
 function __fish_mix_using_command
     set -l cmd (commandline -opc)
-    if [ (count $cmd) -gt 1 ]
-        if [ $argv[1] = $cmd[2] ]
+    if test (count $cmd) -gt 1
+        if test $argv[1] = $cmd[2]
             return 0
         end
     end
@@ -59,7 +59,7 @@ complete -f -c mix -n '__fish_mix_using_command escript.build' -l force -d "forc
 complete -f -c mix -n '__fish_mix_using_command escript.build' -l no-compile -d "skips compilation to .beam files"
 
 # new subcommand
-complete -f -c mix -n '__fish_mix_using_command new' -l sup -d "can be given to generate an OTP application skeleton including a supervision tree"
+complete -f -c mix -n '__fish_mix_using_command new' -l sup -d "generate an OTP application skeleton with a supervision tree"
 complete -f -c mix -n '__fish_mix_using_command new' -l umbrella -d "can be given to generate an umbrella project"
 complete -f -c mix -n '__fish_mix_using_command new' -l app -d "can be given in order to name the OTP application"
 complete -f -c mix -n '__fish_mix_using_command new' -l module -d "can be given in order to name the modules in the generated code skeleton"

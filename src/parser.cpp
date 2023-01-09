@@ -8,81 +8,39 @@
 
 #include <algorithm>
 #include <cwchar>
+#include <functional>
+#include <iterator>
 #include <memory>
+#include <string>
+#include <type_traits>
 #include <utility>
 
 #include "ast.h"
 #include "common.h"
+#include "complete.h"
 #include "env.h"
 #include "event.h"
 #include "expand.h"
 #include "fallback.h"  // IWYU pragma: keep
+#include "fds.h"
 #include "flog.h"
 #include "function.h"
-#include "intern.h"
 #include "job_group.h"
 #include "parse_constants.h"
 #include "parse_execution.h"
-#include "parse_util.h"
 #include "proc.h"
-#include "reader.h"
-#include "sanity.h"
 #include "signal.h"
 #include "wutil.h"  // IWYU pragma: keep
 
 class io_chain_t;
-
-/// Error for evaluating in illegal scope.
-#define INVALID_SCOPE_ERR_MSG _(L"Tried to evaluate commands using invalid block type '%ls'")
-
-/// While block description.
-#define WHILE_BLOCK N_(L"'while' block")
-
-/// For block description.
-#define FOR_BLOCK N_(L"'for' block")
-
-/// Breakpoint block.
-#define BREAKPOINT_BLOCK N_(L"block created by breakpoint")
-
-/// Variable assignment block.
-#define VARIABLE_ASSIGNMENT_BLOCK N_(L"block created by variable assignment prefixing a command")
-
-/// If block description.
-#define IF_BLOCK N_(L"'if' conditional block")
-
-/// Function invocation block description.
-#define FUNCTION_CALL_BLOCK N_(L"function invocation block")
-
-/// Function invocation block description.
-#define FUNCTION_CALL_NO_SHADOW_BLOCK N_(L"function invocation block with no variable shadowing")
-
-/// Switch block description.
-#define SWITCH_BLOCK N_(L"'switch' block")
-
-/// Top block description.
-#define TOP_BLOCK N_(L"global root block")
-
-/// Command substitution block description.
-#define SUBST_BLOCK N_(L"command substitution block")
-
-/// Begin block description.
-#define BEGIN_BLOCK N_(L"'begin' unconditional block")
-
-/// Source block description.
-#define SOURCE_BLOCK N_(L"block created by the . builtin")
-
-/// Source block description.
-#define EVENT_BLOCK N_(L"event handler block")
-
-/// Unknown block description.
-#define UNKNOWN_BLOCK N_(L"unknown/invalid block")
 
 // Given a file path, return something nicer. Currently we just "unexpand" tildes.
 static wcstring user_presentable_path(const wcstring &path, const environment_t &vars) {
     return replace_home_directory_with_tilde(path, vars);
 }
 
-parser_t::parser_t(std::shared_ptr<env_stack_t> vars) : variables(std::move(vars)) {
+parser_t::parser_t(std::shared_ptr<env_stack_t> vars, bool is_principal)
+    : variables(std::move(vars)), is_principal_(is_principal) {
     assert(variables.get() && "Null variables in parser initializer");
     int cwd = open_cloexec(".", O_RDONLY);
     if (cwd < 0) {
@@ -92,23 +50,22 @@ parser_t::parser_t(std::shared_ptr<env_stack_t> vars) : variables(std::move(vars
     libdata().cwd_fd = std::make_shared<const autoclose_fd_t>(cwd);
 }
 
-parser_t::parser_t() : parser_t(env_stack_t::principal_ref()) {}
-
 // Out of line destructor to enable forward declaration of parse_execution_context_t
 parser_t::~parser_t() = default;
 
-std::shared_ptr<parser_t> parser_t::principal{new parser_t()};
-
 parser_t &parser_t::principal_parser() {
-    ASSERT_IS_MAIN_THREAD();
+    static const std::shared_ptr<parser_t> principal{
+        new parser_t(env_stack_t::principal_ref(), true)};
+    principal->assert_can_execute();
     return *principal;
 }
 
+void parser_t::assert_can_execute() const { ASSERT_IS_MAIN_THREAD(); }
+
 int parser_t::set_var_and_fire(const wcstring &key, env_mode_flags_t mode, wcstring_list_t vals) {
-    std::vector<event_t> events;
-    int res = vars().set(key, mode, std::move(vals), &events);
-    for (const auto &evt : events) {
-        event_fire(*this, evt);
+    int res = vars().set(key, mode, std::move(vals));
+    if (res == ENV_OK) {
+        event_fire(*this, event_t::variable_set(key));
     }
     return res;
 }
@@ -119,106 +76,35 @@ int parser_t::set_var_and_fire(const wcstring &key, env_mode_flags_t mode, wcstr
     return set_var_and_fire(key, mode, std::move(vals));
 }
 
-int parser_t::set_empty_var_and_fire(const wcstring &key, env_mode_flags_t mode) {
-    return set_var_and_fire(key, mode, wcstring_list_t{});
+void parser_t::sync_uvars_and_fire(bool always) {
+    if (this->syncs_uvars_) {
+        auto evts = this->vars().universal_sync(always);
+        for (const auto &evt : evts) {
+            event_fire(*this, evt);
+        }
+    }
 }
 
-// Given a new-allocated block, push it onto our block list, acquiring ownership.
 block_t *parser_t::push_block(block_t &&block) {
-    block_t new_current{block};
-    const enum block_type_t type = new_current.type();
-    new_current.src_lineno = parser_t::get_lineno();
-
-    wcstring func = new_current.function_name;
-
-    const wchar_t *filename = parser_t::current_filename();
-    if (filename != nullptr) {
-        new_current.src_filename = intern(filename);
-    }
-
-    // Types top and subst are not considered blocks for the purposes of `status is-block`.
-    if (type != block_type_t::top && type != block_type_t::subst) {
-        libdata().is_block = true;
-    }
-
-    if (type == block_type_t::breakpoint) {
-        libdata().is_breakpoint = true;
-    }
-
-    if (new_current.type() != block_type_t::top) {
-        bool shadow = (type == block_type_t::function_call);
-        vars().push(shadow);
-        new_current.wants_pop_env = true;
+    block.src_lineno = parser_t::get_lineno();
+    block.src_filename = parser_t::current_filename();
+    if (block.type() != block_type_t::top) {
+        bool new_scope = (block.type() == block_type_t::function_call);
+        vars().push(new_scope);
+        block.wants_pop_env = true;
     }
 
     // Push it onto our list and return a pointer to it.
     // Note that deques do not move their contents so this is safe.
-    this->block_list.push_front(std::move(new_current));
+    this->block_list.push_front(std::move(block));
     return &this->block_list.front();
 }
 
 void parser_t::pop_block(const block_t *expected) {
-    assert(expected == this->current_block());
-    assert(!block_list.empty() && "empty block list");
-
-    // Acquire ownership out of the block list.
-    block_t old = block_list.front();
-    block_list.pop_front();
-
-    if (old.wants_pop_env) vars().pop();
-
-    // Figure out if `status is-block` should consider us to be in a block now.
-    bool new_is_block = false;
-    for (const auto &b : block_list) {
-        if (b.type() != block_type_t::top && b.type() != block_type_t::subst) {
-            new_is_block = true;
-            break;
-        }
-    }
-    libdata().is_block = new_is_block;
-
-    // Are we still in a breakpoint?
-    bool new_is_breakpoint = false;
-    for (const auto &b : block_list) {
-        if (b.type() == block_type_t::breakpoint) {
-            new_is_breakpoint = true;
-            break;
-        }
-    }
-    libdata().is_breakpoint = new_is_breakpoint;
-}
-
-const wchar_t *parser_t::get_block_desc(block_type_t block) {
-    switch (block) {
-        case block_type_t::while_block:
-            return WHILE_BLOCK;
-        case block_type_t::for_block:
-            return FOR_BLOCK;
-        case block_type_t::if_block:
-            return IF_BLOCK;
-        case block_type_t::function_call:
-            return FUNCTION_CALL_BLOCK;
-
-        case block_type_t::function_call_no_shadow:
-            return FUNCTION_CALL_NO_SHADOW_BLOCK;
-        case block_type_t::switch_block:
-            return SWITCH_BLOCK;
-        case block_type_t::subst:
-            return SUBST_BLOCK;
-        case block_type_t::top:
-            return TOP_BLOCK;
-        case block_type_t::begin:
-            return BEGIN_BLOCK;
-        case block_type_t::source:
-            return SOURCE_BLOCK;
-        case block_type_t::event:
-            return EVENT_BLOCK;
-        case block_type_t::breakpoint:
-            return BREAKPOINT_BLOCK;
-        case block_type_t::variable_assignment:
-            return VARIABLE_ASSIGNMENT_BLOCK;
-    }
-    return _(UNKNOWN_BLOCK);
+    assert(expected && expected == &this->block_list.at(0) && "Unexpected block");
+    bool pop_env = expected->wants_pop_env;
+    block_list.pop_front();  // beware, this deallocates 'expected'.
+    if (pop_env) vars().pop();
 }
 
 const block_t *parser_t::block_at_index(size_t idx) const {
@@ -228,8 +114,6 @@ const block_t *parser_t::block_at_index(size_t idx) const {
 block_t *parser_t::block_at_index(size_t idx) {
     return idx < block_list.size() ? &block_list[idx] : nullptr;
 }
-
-block_t *parser_t::current_block() { return block_at_index(0); }
 
 /// Print profiling information to the specified stream.
 static void print_profile(const std::deque<profile_item_t> &items, FILE *out) {
@@ -341,7 +225,7 @@ static void append_block_description_to_stack_trace(const parser_t &parser, cons
                 // We can't quote the arguments because we print this in quotes.
                 // As a special-case, add the empty argument as "".
                 if (!arg.empty()) {
-                    args_str.append(escape_string(arg, ESCAPE_ALL | ESCAPE_NO_QUOTED));
+                    args_str.append(escape_string(arg, ESCAPE_NO_QUOTED));
                 } else {
                     args_str.append(L"\"\"");
                 }
@@ -360,9 +244,9 @@ static void append_block_description_to_stack_trace(const parser_t &parser, cons
             break;
         }
         case block_type_t::source: {
-            const wchar_t *source_dest = b.sourced_file;
+            const filename_ref_t &source_dest = b.sourced_file;
             append_format(trace, _(L"from sourcing file %ls\n"),
-                          user_presentable_path(source_dest, parser.vars()).c_str());
+                          user_presentable_path(*source_dest, parser.vars()).c_str());
             print_call_site = true;
             break;
         }
@@ -387,11 +271,11 @@ static void append_block_description_to_stack_trace(const parser_t &parser, cons
 
     if (print_call_site) {
         // Print where the function is called.
-        const wchar_t *file = b.src_filename;
+        const auto &file = b.src_filename;
         if (file) {
             append_format(trace, _(L"\tcalled on line %d of file %ls\n"), b.src_lineno,
-                          user_presentable_path(file, parser.vars()).c_str());
-        } else if (is_within_fish_initialization()) {
+                          user_presentable_path(*file, parser.vars()).c_str());
+        } else if (parser.libdata().within_fish_init) {
             append_format(trace, _(L"\tcalled during startup\n"));
         }
     }
@@ -412,30 +296,50 @@ wcstring parser_t::stack_trace() const {
     return trace;
 }
 
-/// Returns the name of the currently evaluated function if we are currently evaluating a function,
-/// NULL otherwise. This is tested by moving down the block-scope-stack, checking every block if it
-/// is of type FUNCTION_CALL. If the caller doesn't specify a starting position in the stack we
-/// begin with the current block.
-const wchar_t *parser_t::is_function(size_t idx) const {
-    // PCA: Have to make this a string somehow.
-    ASSERT_IS_MAIN_THREAD();
-
-    for (size_t block_idx = idx; block_idx < block_list.size(); block_idx++) {
-        const block_t &b = block_list[block_idx];
+bool parser_t::is_function() const {
+    for (const auto &b : block_list) {
         if (b.is_function_call()) {
-            return b.function_name.c_str();
+            return true;
         } else if (b.type() == block_type_t::source) {
-            // If a function sources a file, obviously that function's offset doesn't
-            // contribute.
+            // If a function sources a file, don't descend further.
             break;
         }
     }
-    return nullptr;
+    return false;
 }
 
-/// Return the function name for the specified stack frame. Default is zero (current frame).
-/// The special value zero means the function frame immediately above the closest breakpoint frame.
-const wchar_t *parser_t::get_function_name(int level) {
+bool parser_t::is_block() const {
+    // Note historically this has descended into 'source', unlike 'is_function'.
+    for (const auto &b : block_list) {
+        if (b.type() != block_type_t::top && b.type() != block_type_t::subst) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool parser_t::is_breakpoint() const {
+    for (const auto &b : block_list) {
+        if (b.type() == block_type_t::breakpoint) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool parser_t::is_command_substitution() const {
+    for (const auto &b : block_list) {
+        if (b.type() == block_type_t::subst) {
+            return true;
+        } else if (b.type() == block_type_t::source) {
+            // If a function sources a file, don't descend further.
+            break;
+        }
+    }
+    return false;
+}
+
+maybe_t<wcstring> parser_t::get_function_name(int level) {
     if (level == 0) {
         // Return the function name for the level preceding the most recent breakpoint. If there
         // isn't one return the function name for the current level.
@@ -445,13 +349,10 @@ const wchar_t *parser_t::get_function_name(int level) {
             if (b.type() == block_type_t::breakpoint) {
                 found_breakpoint = true;
             } else if (found_breakpoint && b.is_function_call()) {
-                return b.function_name.c_str();
+                return b.function_name;
             }
         }
-        return nullptr;  // couldn't find a breakpoint frame
-    } else if (level == 1) {
-        // Return the function name for the current level.
-        return this->is_function();
+        return none();  // couldn't find a breakpoint frame
     }
 
     // Level 1 is the topmost function call. Level 2 is its caller. Etc.
@@ -460,11 +361,15 @@ const wchar_t *parser_t::get_function_name(int level) {
         if (b.is_function_call()) {
             funcs_seen++;
             if (funcs_seen == level) {
-                return b.function_name.c_str();
+                return b.function_name;
             }
+        } else if (b.type() == block_type_t::source && level == 1) {
+            // Historical: If we want the topmost function, but we are really in a file sourced by a
+            // function, don't consider ourselves to be in a function.
+            break;
         }
     }
-    return nullptr;  // couldn't find that function level
+    return none();
 }
 
 int parser_t::get_lineno() const {
@@ -475,12 +380,11 @@ int parser_t::get_lineno() const {
     return lineno;
 }
 
-const wchar_t *parser_t::current_filename() const {
-    ASSERT_IS_MAIN_THREAD();
-
+filename_ref_t parser_t::current_filename() const {
     for (const auto &b : block_list) {
         if (b.is_function_call()) {
-            return function_get_definition_file(b.function_name);
+            auto props = function_get_props(b.function_name);
+            return props ? props->definition_file : nullptr;
         } else if (b.type() == block_type_t::source) {
             return b.sourced_file;
         }
@@ -514,7 +418,7 @@ wcstring parser_t::current_line() {
     }
 
     const int lineno = this->get_lineno();
-    const wchar_t *file = this->current_filename();
+    filename_ref_t file = this->current_filename();
 
     wcstring prefix;
 
@@ -522,8 +426,8 @@ wcstring parser_t::current_line() {
     if (!is_interactive() || is_function()) {
         if (file) {
             append_format(prefix, _(L"%ls (line %d): "),
-                          user_presentable_path(file, vars()).c_str(), lineno);
-        } else if (is_within_fish_initialization()) {
+                          user_presentable_path(*file, vars()).c_str(), lineno);
+        } else if (libdata().within_fish_init) {
             append_format(prefix, L"%ls (line %d): ", _(L"Startup"), lineno);
         } else {
             append_format(prefix, L"%ls (line %d): ", _(L"Standard input"), lineno);
@@ -569,13 +473,6 @@ void parser_t::job_promote(job_t *job) {
 const job_t *parser_t::job_with_id(job_id_t id) const {
     for (const auto &job : job_list) {
         if (id <= 0 || job->job_id() == id) return job.get();
-    }
-    return nullptr;
-}
-
-const job_t *parser_t::job_with_internal_id(internal_job_id_t id) const {
-    for (const auto &job : job_list) {
-        if (job->internal_job_id == id) return job.get();
     }
     return nullptr;
 }
@@ -654,16 +551,12 @@ eval_res_t parser_t::eval_node(const parsed_source_ref_t &ps, const T &node,
     // Note this only happens in interactive sessions. In non-interactive sessions, SIGINT will
     // cause fish to exit.
     if (int sig = signal_check_cancel()) {
-        if (this == principal.get() && block_list.empty()) {
+        if (is_principal_ && block_list.empty()) {
             signal_clear_cancel();
         } else {
             return proc_status_t::from_signal(sig);
         }
     }
-
-    // If we are provided a cancellation group, use it; otherwise create one.
-    cancellation_group_ref_t cancel_group =
-        job_group ? job_group->cancel_group : cancellation_group_t::create();
 
     // A helper to detect if we got a signal.
     // This includes both signals sent to fish (user hit control-C while fish is foreground) and
@@ -672,7 +565,7 @@ eval_res_t parser_t::eval_node(const parsed_source_ref_t &ps, const T &node,
         // Did fish itself get a signal?
         int sig = signal_check_cancel();
         // Has this job group been cancelled?
-        if (!sig) sig = cancel_group->get_cancel_signal();
+        if (!sig && job_group) sig = job_group->get_cancel_signal();
         return sig;
     };
 
@@ -687,7 +580,7 @@ eval_res_t parser_t::eval_node(const parsed_source_ref_t &ps, const T &node,
     operation_context_t op_ctx = this->context();
     block_t *scope_block = this->push_block(block_t::scope_block(block_type));
 
-    // Propogate our job group.
+    // Propagate our job group.
     op_ctx.job_group = job_group;
 
     // Replace the context's cancel checker with one that checks the job group's signal.
@@ -695,8 +588,8 @@ eval_res_t parser_t::eval_node(const parsed_source_ref_t &ps, const T &node,
 
     // Create and set a new execution context.
     using exc_ctx_ref_t = std::unique_ptr<parse_execution_context_t>;
-    scoped_push<exc_ctx_ref_t> exc(&execution_context, make_unique<parse_execution_context_t>(
-                                                           ps, op_ctx, cancel_group, block_io));
+    scoped_push<exc_ctx_ref_t> exc(&execution_context,
+                                   make_unique<parse_execution_context_t>(ps, op_ctx, block_io));
 
     // Check the exec count so we know if anything got executed.
     const size_t prev_exec_count = libdata().exec_count;
@@ -747,14 +640,15 @@ void parser_t::get_backtrace(const wcstring &src, const parse_error_list_t &erro
         }
 
         wcstring prefix;
-        const wchar_t *filename = this->current_filename();
+        filename_ref_t filename = this->current_filename();
         if (filename) {
             if (which_line > 0) {
-                prefix = format_string(_(L"%ls (line %lu): "),
-                                       user_presentable_path(filename, vars()).c_str(), which_line);
+                prefix =
+                    format_string(_(L"%ls (line %lu): "),
+                                  user_presentable_path(*filename, vars()).c_str(), which_line);
             } else {
                 prefix =
-                    format_string(_(L"%ls: "), user_presentable_path(filename, vars()).c_str());
+                    format_string(_(L"%ls: "), user_presentable_path(*filename, vars()).c_str());
             }
         } else {
             prefix = L"fish: ";
@@ -771,8 +665,6 @@ void parser_t::get_backtrace(const wcstring &src, const parse_error_list_t &erro
 }
 
 block_t::block_t(block_type_t t) : block_type(t) {}
-
-block_t::~block_t() = default;
 
 wcstring block_t::description() const {
     wcstring result;
@@ -834,8 +726,8 @@ wcstring block_t::description() const {
     if (this->src_lineno >= 0) {
         append_format(result, L" (line %d)", this->src_lineno);
     }
-    if (this->src_filename != nullptr) {
-        append_format(result, L" (file %ls)", this->src_filename);
+    if (this->src_filename) {
+        append_format(result, L" (file %ls)", this->src_filename->c_str());
     }
     return result;
 }
@@ -846,7 +738,7 @@ block_t block_t::if_block() { return block_t(block_type_t::if_block); }
 
 block_t block_t::event_block(event_t evt) {
     block_t b{block_type_t::event};
-    b.event = std::move(evt);
+    b.event.reset(new event_t(std::move(evt)));
     return b;
 }
 
@@ -857,9 +749,9 @@ block_t block_t::function_block(wcstring name, wcstring_list_t args, bool shadow
     return b;
 }
 
-block_t block_t::source_block(const wchar_t *src) {
+block_t block_t::source_block(filename_ref_t src) {
     block_t b{block_type_t::source};
-    b.sourced_file = src;
+    b.sourced_file = std::move(src);
     return b;
 }
 
