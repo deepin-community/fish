@@ -12,3 +12,14 @@
 # if status is-interactive
 #   ...
 # end
+
+# [Debian] Synchronize default PATH with /etc/profile
+if not set -q FISH_UNIT_TESTS_RUNNING
+    if test (/usr/bin/id -u) = 0
+        set --export PATH /usr/local/sbin /usr/local/bin \
+                          /usr/sbin /usr/bin /sbin /bin
+    else
+        set --export PATH /usr/local/bin /usr/bin /bin \
+                          /usr/local/games /usr/games
+    end
+end
