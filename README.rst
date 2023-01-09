@@ -1,4 +1,8 @@
-`fish <https://fishshell.com/>`__ - the friendly interactive shell |Build Status|
+.. |Cirrus CI| image:: https://api.cirrus-ci.com/github/fish-shell/fish-shell.svg?branch=master
+      :target: https://cirrus-ci.com/github/fish-shell/fish-shell
+      :alt: Cirrus CI Build Status
+
+`fish <https://fishshell.com/>`__ - the friendly interactive shell |Build Status| |Cirrus CI|
 =================================================================================
 
 fish is a smart and user-friendly command line shell for macOS, Linux,
@@ -34,6 +38,8 @@ fish can be installed:
 -  using the `installer from fishshell.com <https://fishshell.com/>`__
 -  as a `standalone app from fishshell.com <https://fishshell.com/>`__
 
+Note: The minimum supported macOS version is 10.10 "Yosemite".
+
 Packages for Linux
 ~~~~~~~~~~~~~~~~~~
 
@@ -48,8 +54,8 @@ and can be installed using the following commands:
 ::
 
    sudo apt-add-repository ppa:fish-shell/release-3
-   sudo apt-get update
-   sudo apt-get install fish
+   sudo apt update
+   sudo apt install fish
 
 Instructions for other distributions may be found at
 `fishshell.com <https://fishshell.com>`__.
@@ -95,7 +101,7 @@ Running fish requires:
 The following optional features also have specific requirements:
 
 -  builtin commands that have the ``--help`` option or print usage
-   messages require ``ul`` and either ``nroff`` or ``mandoc`` for
+   messages require ``nroff`` or ``mandoc`` for
    display
 -  automated completion generation from manual pages requires Python 3.5+
 -  the ``fish_config`` web configuration tool requires Python 3.5+ and a web browser
@@ -104,7 +110,8 @@ The following optional features also have specific requirements:
    ``wl-copy``/``wl-paste`` or ``pbcopy``/``pbpaste`` utilities
 -  full completions for ``yarn`` and ``npm`` require the
    ``all-the-package-names`` NPM module
--  ``colorls`` is used, if its installed, to add color when running ``ls``
+-  ``colorls`` is used, if installed, to add color when running ``ls`` on platforms
+   that do not have color support (such as OpenBSD)
 
 Switching to fish
 ~~~~~~~~~~~~~~~~~
@@ -143,9 +150,9 @@ Dependencies
 Compiling fish requires:
 
 -  a C++11 compiler (g++ 4.8 or later, or clang 3.3 or later)
--  CMake (version 3.2 or later)
+-  CMake (version 3.5 or later)
 -  a curses implementation such as ncurses (headers and libraries)
--  PCRE2 (headers and libraries) - a copy is included with fish
+-  PCRE2 (headers and libraries) - optional, this will be downloaded if missing
 -  gettext (headers and libraries) - optional, for translation support
 
 Sphinx is also optionally required to build the documentation from a
@@ -170,6 +177,8 @@ The install directory can be changed using the
 
 Building from source (macOS) - Xcode
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Note: The minimum supported macOS version is 10.10 "Yosemite".
 
 .. code:: bash
 
@@ -211,7 +220,7 @@ On Debian or Ubuntu you want:
 
 ::
 
-   sudo apt-get install build-essential cmake ncurses-dev libncurses5-dev libpcre2-dev gettext
+   sudo apt install build-essential cmake ncurses-dev libncurses5-dev libpcre2-dev gettext
 
 On RedHat, CentOS, or Amazon EC2:
 
@@ -230,15 +239,12 @@ Contact Us
 Questions, comments, rants and raves can be posted to the official fish
 mailing list at https://lists.sourceforge.net/lists/listinfo/fish-users
 or join us on our `gitter.im
-channel <https://gitter.im/fish-shell/fish-shell>`__. Or use the `fish
-tag on
-Stackoverflow <https://stackoverflow.com/questions/tagged/fish>`__ for
-questions related to fish script and the `fish tag on
-Superuser <https://superuser.com/questions/tagged/fish>`__ for all other
-questions (e.g., customizing colors, changing key bindings).
+channel <https://gitter.im/fish-shell/fish-shell>`__. Or use the `fish tag
+on Unix & Linux Stackexchange <https://unix.stackexchange.com/questions/tagged/fish>`__.
+There is also a fish tag on Stackoverflow, but it is typically a poor fit.
 
 Found a bug? Have an awesome idea? Please `open an
 issue <https://github.com/fish-shell/fish-shell/issues/new>`__.
 
-.. |Build Status| image:: https://github.com/fish-shell/fish-shell/workflows/C/C++%20CI/badge.svg
+.. |Build Status| image:: https://github.com/fish-shell/fish-shell/workflows/make%20test/badge.svg
    :target: https://github.com/fish-shell/fish-shell/actions

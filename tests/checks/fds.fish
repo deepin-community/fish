@@ -2,6 +2,14 @@
 
 # Check that we don't leave stray FDs.
 
+set -l fds ($helper print_fds)
+test "$fds" = "0 1 2"
+or begin
+    echo This test needs to have all fds other than 0 1 and 2 closed before running >&2
+    echo Please close the other fds and try again >&2
+    exit 1
+end
+
 $helper print_fds
 # CHECK: 0 1 2
 
@@ -22,6 +30,9 @@ $helper print_fds </dev/null
 
 $helper print_fds 3</dev/null
 # CHECK: 0 1 2 3
+
+$helper print_fds 5>&2
+# CHECK: 0 1 2 5
 
 # This attempts to trip a case where the file opened in fish
 # has the same fd as the redirection. In this case, the dup2

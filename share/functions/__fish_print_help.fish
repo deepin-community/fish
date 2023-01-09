@@ -22,7 +22,13 @@ function __fish_print_help --description "Print help message for the specified f
     end
 
     # Pick which command we are using to render output or fail if none
-    if command -qs nroff
+    # We prefer mandoc because that doesn't break with unicode input.
+    if command -qs mandoc
+        set format mandoc -c
+        if test -n "$cols"
+            set -a format -O width=$cols
+        end
+    else if command -qs nroff
         set format nroff -c -man -t
         if test -e $__fish_data_dir/groff/fish.tmac
             set -a format -M$__fish_data_dir/groff -mfish
@@ -30,20 +36,26 @@ function __fish_print_help --description "Print help message for the specified f
         if test -n "$cols"
             set -a format -rLL={$cols}n
         end
-    else if command -qs mandoc
-        set format mandoc -c
-        if test -n "$cols"
-            set -a format -O width=$cols
-        end
     else
-        echo fish: (_ "Cannot format help; no parser found")
+        echo fish: (_ "Cannot format help; no parser found") >&2
         return 1
     end
 
     if test -e "$__fish_data_dir/man/man1/$item.1"
-        set help ($format "$__fish_data_dir/man/man1/$item.1" 2>/dev/null)
+        # Some nroff versions screw up non-ascii characters.
+        # (even with the locale set correctly!)
+        # Work around that by running preconv first.
+        if command -sq preconv; and test "$format[1]" = nroff
+            set help (preconv -e UTF-8 "$__fish_data_dir/man/man1/$item.1" | $format 2>/dev/null)
+        else
+            set help ($format "$__fish_data_dir/man/man1/$item.1" 2>/dev/null)
+        end
     else if test -e "$__fish_data_dir/man/man1/$item.1.gz"
-        set help (gunzip -c "$__fish_data_dir/man/man1/$item.1.gz" 2>/dev/null | $format 2>/dev/null)
+        if command -sq preconv; and test "$format[1]" = nroff
+            set help (gunzip -c "$__fish_data_dir/man/man1/$item.1.gz" 2>/dev/null | preconv -e UTF-8 | $format 2>/dev/null)
+        else
+            set help (gunzip -c "$__fish_data_dir/man/man1/$item.1.gz" 2>/dev/null | $format 2>/dev/null)
+        end
     end
 
     # The original implementation trimmed off the top 5 lines and bottom 3 lines
@@ -119,13 +131,21 @@ function __fish_print_help --description "Print help message for the specified f
             not isatty stdout
             and set pager cat # cannot use a builtin here
             # similar to man, but add -F to quit paging when the help output is brief (#6227)
+            # Also set -X for less < v530, see #8157.
+            set -l lessopts isRF
+            if type -q less; and test (less --version | string match -r 'less (\d+)')[2] -lt 530 2>/dev/null
+                set lessopts "$lessopts"X
+            end
+
             not set -qx LESS
-            and set -xl LESS isRF
+            and set -xl LESS $lessopts
+
             # less options:
             # -i (--ignore-case) search case-insensitively, like man
             # -s (--squeeze-blank-lines) not strictly necessary since we already do that above
             # -R (--RAW-CONTROL-CHARS) to display colors and such
             # -F (--quit-if-one-screen) to maintain the non-paging behavior for small outputs
+            # -X (--no-init) do not clear the screen, necessary for less < v530 or else short output is dropped
             $pager
         end
 end

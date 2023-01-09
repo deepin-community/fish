@@ -87,6 +87,48 @@ string pad -c_ --width 5 longer-than-width-param x
 string pad -c ab -w4 .
 # CHECKERR: string pad: Padding should be a character 'ab'
 
+# Visible length. Let's start off simple, colors are ignored:
+string length --visible (set_color red)abc
+# CHECK: 3
+begin
+    set -l fish_emoji_width 2
+    # This should print the emoji width
+    string length --visible . \U2693
+    # CHECK: 1
+    # CHECK: 2
+    set -l fish_emoji_width 1
+    string length --visible . \U2693
+    # CHECK: 1
+    # CHECK: 1
+end
+
+# Only the longest run between carriage returns is kept because the rest is overwritten.
+string length --visible (set_color normal)abcdef\rfooba(set_color red)raaa
+# (foobaraaa)
+# CHECK: 9
+
+# Visible length is *always* split by line
+string length --visible a(set_color blue)b\ncde
+# CHECK: 2
+# CHECK: 3
+
+# Backslashes and visible length:
+# It can't move us before the start of the line.
+string length --visible \b
+# CHECK: 0
+
+# It can't move us before the start of the line.
+string length --visible \bf
+# CHECK: 1
+
+# But it does erase chars before.
+string length --visible \bf\b
+# CHECK: 0
+
+# Never move past 0.
+string length --visible \bf\b\b\b\b\b
+# CHECK: 0
+
 string sub --length 2 abcde
 # CHECK: ab
 
@@ -439,16 +481,16 @@ string repeat -m-1 foo; and echo "exit 0"
 # CHECKERR: string repeat: Invalid max value '-1'
 
 string repeat -n notanumber foo; and echo "exit 0"
-# CHECKERR: string repeat: Argument 'notanumber' is not a valid integer
+# CHECKERR: string repeat: notanumber: invalid integer
 
 string repeat -m notanumber foo; and echo "exit 0"
-# CHECKERR: string repeat: Argument 'notanumber' is not a valid integer
+# CHECKERR: string repeat: notanumber: invalid integer
 
 echo stdin | string repeat -n1 "and arg"; and echo "exit 0"
-# CHECKERR: string repeat: Too many arguments
+# CHECKERR: string repeat: too many arguments
 
 string repeat -n; and echo "exit 0"
-# CHECKERR: string repeat: Expected argument for option n
+# CHECKERR: string repeat: -n: option requires an argument
 
 # FIXME: Also triggers usage
 # string repeat -l fakearg
@@ -461,6 +503,32 @@ or echo string repeat empty string failed
 string repeat -n3 ""
 or echo string repeat empty string failed
 # CHECK: string repeat empty string failed
+
+# See that we hit the expected length
+# First with "max", i.e. maximum number of characters
+string repeat -m 5000 aab | string length
+# CHECK: 5000
+string repeat -m 5000 ab | string length
+# CHECK: 5000
+string repeat -m 5000 a | string length
+# CHECK: 5000
+string repeat -m 17 aab | string length
+# CHECK: 17
+string repeat -m 17 ab | string length
+# CHECK: 17
+string repeat -m 17 a | string length
+# CHECK: 17
+# Then with "count", i.e. number of repetitions.
+# (these are count * length long)
+string repeat -n 17 aab | string length
+# CHECK: 51
+string repeat -n 17 ab | string length
+# CHECK: 34
+string repeat -n 17 a | string length
+# CHECK: 17
+# And a more tricksy case with a long string that we truncate.
+string repeat -m 5 (string repeat -n 500000 aaaaaaaaaaaaaaaaaa) | string length
+# CHECK: 5
 
 # Test equivalent matches with/without the --entire, --regex, and --invert flags.
 string match -e x abc dxf xyz jkx x z
@@ -559,12 +627,12 @@ and echo uppercasing a uppercase string did not fail as expected
 
 # 'Check NUL'
 # Note: We do `string escape` at the end to make a `\0` literal visible.
-printf 'a\0b' | string escape
-printf 'a\0c' | string match -e a | string escape
-printf 'a\0d' | string split '' | string escape
-printf 'a\0b' | string match -r '.*b$' | string escape
-printf 'a\0b' | string replace b g | string escape
-printf 'a\0b' | string replace -r b g | string escape
+printf 'a\0b\n' | string escape
+printf 'a\0c\n' | string match -e a | string escape
+printf 'a\0d\n' | string split '' | string escape
+printf 'a\0b\n' | string match -r '.*b$' | string escape
+printf 'a\0b\n' | string replace b g | string escape
+printf 'a\0b\n' | string replace -r b g | string escape
 # TODO: These do not yet work!
 # printf 'a\0b' | string match '*b' | string escape
 # CHECK: a\x00b
@@ -667,6 +735,18 @@ string collect -N '' >/dev/null; and echo unexpected success; or echo expected f
 string collect \n\n >/dev/null; and echo unexpected success; or echo expected failure
 # CHECK: expected failure
 
+echo "foo"(true | string collect --allow-empty)"bar"
+# CHECK: foobar
+test -z (string collect)
+and echo Nothing
+# CHECK: Nothing
+test -n (string collect)
+and echo Something
+# CHECK: Something
+test -n (string collect -a)
+or echo No, actually nothing
+# CHECK: No, actually nothing
+
 # string collect in functions
 # This function outputs some newline-separated content, and some
 # explicitly un-separated content.
@@ -707,7 +787,7 @@ echo $status
 function string
     builtin string $argv
 end
-# CHECKERR: checks/string.fish (line {{\d+}}): function: The name 'string' is reserved, and cannot be used as a function name
+# CHECKERR: checks/string.fish (line {{\d+}}): function: string: cannot use reserved keyword as function name
 # CHECKERR: function string
 # CHECKERR: ^
 
@@ -718,3 +798,160 @@ string escape \x7F
 string pad -w 8 he \eh
 # CHECK: he
 # CHECK: {{\x1bh}}
+
+string match -rg '(.*)fish' catfish
+# CHECK: cat
+string match -rg '(.*)fish' shellfish
+# CHECK: shell
+# An empty match
+string match -rg '(.*)fish' fish
+# No match at all
+string match -rg '(.*)fish' banana
+# Make sure it doesn't start matching something
+string match -r --groups-only '(.+)fish' fish
+echo $status
+# CHECK: 1
+# Multiple groups
+string match -r --groups-only '(.+)fish(.*)' catfishcolor
+# CHECK: cat
+# CHECK: color
+
+# Examples specifically called out in #6056.
+echo "foo bar baz" | string match -rg 'foo (bar) baz'
+# CHECK: bar
+echo "foo1x foo2x foo3x" | string match -arg 'foo(\d)x'
+# CHECK: 1
+# CHECK: 2
+# CHECK: 3
+
+# Most subcommands preserve missing newline (#3847).
+echo -n abc | string upper
+echo '<eol>'
+# CHECK: ABC<eol>
+printf \<
+printf my-password | string replace -ra . \*
+printf \>\n
+# CHECK: <***********>
+
+string shorten -m 3 foo
+# CHECK: foo
+string shorten -m 2 foo
+# CHECK: f…
+
+string shorten -m 5 foobar
+# CHECK: foob…
+
+# Char is longer than width, we truncate instead.
+string shorten -m 5 --char ........ foobar
+# CHECK: fooba
+
+string shorten --max 4 -c /// foobar
+# CHECK: f///
+
+string shorten --max 4 -c /// foobarnana
+# CHECK: f///
+
+string shorten --max 2 --chars "" foo
+# CHECK: fo
+
+string shorten foo foobar
+# CHECK: foo
+# CHECK: fo…
+
+# A weird case - our minimum width here is 1,
+# so everything that goes over the width becomes "x"
+for i in (seq 1 10)
+    math 2 ^ $i
+end | string shorten -c x
+# CHECK: 2
+# CHECK: 4
+# CHECK: 8
+# CHECK: x
+# CHECK: x
+# CHECK: x
+# CHECK: x
+# CHECK: x
+# CHECK: x
+# CHECK: x
+
+string shorten -N -cx bar\nfooo
+# CHECK: barx
+
+# Shorten and emoji width.
+begin
+    # \U1F4A9 was widened in unicode 9, so it's affected
+    # by $fish_emoji_width
+    # "…" isn't and always has width 1.
+    #
+    # "abcde" has width 5, we have a total width of 6,
+    # so we need to overwrite the "e" with our ellipsis.
+    fish_emoji_width=1 string shorten --max=5 -- abcde💩
+    # CHECK: abcd…
+    # This fits assuming the poo fits in one column
+    fish_emoji_width=1 string shorten --max=6 -- abcde💩
+    # CHECK: abcde💩
+
+    # This has a total width of 7 (assuming double-wide poo),
+    # so we need to add the ellipsis on the "e"
+    fish_emoji_width=2 string shorten --max=5 -- abcde💩
+    # CHECK: abcd…
+    # This still doesn't fit!
+    fish_emoji_width=2 string shorten --max=6 -- abcde💩
+    # CHECK: abcde…
+    fish_emoji_width=2 string shorten --max=7 -- abcde💩
+    # CHECK: abcde💩
+end
+
+# See that colors aren't counted
+string shorten -m6 (set_color blue)s(set_color red)t(set_color --bold brwhite)rin(set_color red)g(set_color yellow)-shorten | string escape
+# Renders like "strin…" in colors
+# Note that red sequence that we still pass on because it's width 0.
+# CHECK: \e\[34ms\e\[31mt\e\[1m\e\[37mrin\e\[31m…
+
+set -l str (set_color blue)s(set_color red)t(set_color --bold brwhite)rin(set_color red)g(set_color yellow)-shorten
+for i in (seq 1 (string length -V -- $str))
+    set -l len (string shorten -m$i -- $str | string length -V)
+    test $len = $i
+    or echo Oopsie ellipsizing to $i failed
+end
+
+string shorten -m4 foobar\nbananarama
+# CHECK: foo…
+# CHECK: ban…
+
+# First line is empty and printed as-is
+# The other lines are truncated to the width of the first real line.
+printf '
+1. line
+2. another line
+3. third line' | string shorten
+# CHECK:
+# CHECK: 1. line
+# CHECK: 2. ano…
+# CHECK: 3. thi…
+
+printf '
+1. line
+2. another line
+3. third line' | string shorten --left
+# CHECK:
+# CHECK: 1. line
+# CHECK: …r line
+# CHECK: …d line
+
+string shorten -m12 -l (set_color blue)s(set_color red)t(set_color --bold brwhite)rin(set_color red)(set_color green)g(set_color yellow)-shorten | string escape
+# Renders like "…ing-shorten" with g in green and "-shorten" in yellow
+# Yes, that's a "red" escape before.
+# CHECK: …in\e\[31m\e\[32mg\e\[33m-shorten
+
+set -l str (set_color blue)s(set_color red)t(set_color --bold brwhite)rin(set_color red)g(set_color yellow)-shorten
+for i in (seq 1 (string length -V -- $str))
+    set -l len (string shorten -m$i --left -- $str | string length -V)
+    test $len = $i
+    or echo Oopsie ellipsizing to $i failed
+end
+
+string shorten -m0 foo bar asodjsaoidj
+# CHECK: foo
+# CHECK: bar
+# CHECK: asodjsaoidj

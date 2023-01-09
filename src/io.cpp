@@ -5,18 +5,18 @@
 
 #include <errno.h>
 #include <fcntl.h>
-#include <stddef.h>
 #include <stdio.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
-#include <cstring>
 #include <cwchar>
+#include <functional>
 
 #include "common.h"
-#include "exec.h"
 #include "fallback.h"  // IWYU pragma: keep
 #include "fd_monitor.h"
-#include "iothread.h"
+#include "flog.h"
+#include "maybe.h"
 #include "path.h"
 #include "redirection.h"
 #include "wutil.h"  // IWYU pragma: keep
@@ -67,7 +67,7 @@ ssize_t io_buffer_t::read_once(int fd, acquired_lock<separated_buffer_t> &buffer
     do {
         amt = read(fd, bytes, sizeof bytes);
     } while (amt < 0 && errno == EINTR);
-    if (amt < 0 && errno != EAGAIN) {
+    if (amt < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
         wperror(L"read");
     } else if (amt > 0) {
         buffer->append(bytes, static_cast<size_t>(amt));
@@ -76,7 +76,6 @@ ssize_t io_buffer_t::read_once(int fd, acquired_lock<separated_buffer_t> &buffer
 }
 
 void io_buffer_t::begin_filling(autoclose_fd_t fd) {
-    ASSERT_IS_MAIN_THREAD();
     assert(!fillthread_running() && "Already have a fillthread");
 
     // We want to fill buffer_ by reading from fd. fd is the read end of a pipe; the write end is
@@ -116,7 +115,7 @@ void io_buffer_t::begin_filling(autoclose_fd_t fd) {
             // select() reported us as readable; read a bit.
             auto buffer = buffer_.acquire();
             ssize_t ret = read_once(fd.fd(), buffer);
-            done = (ret == 0 || (ret < 0 && errno != EAGAIN));
+            done = (ret == 0 || (ret < 0 && errno != EAGAIN && errno != EWOULDBLOCK));
         } else if (shutdown_fillthread_) {
             // Here our caller asked us to shut down; read while we keep getting data.
             // This will stop when the fd is closed or if we get EAGAIN.
@@ -137,7 +136,6 @@ void io_buffer_t::begin_filling(autoclose_fd_t fd) {
 
 separated_buffer_t io_buffer_t::complete_background_fillthread_and_take_buffer() {
     // Mark that our fillthread is done, then wake it up.
-    ASSERT_IS_MAIN_THREAD();
     assert(fillthread_running() && "Should have a fillthread");
     assert(this->item_id_ > 0 && "Should have a valid item ID");
     shutdown_fillthread_ = true;
@@ -208,9 +206,10 @@ void io_chain_t::push_back(io_data_ref_t element) {
     std::vector<io_data_ref_t>::push_back(std::move(element));
 }
 
-void io_chain_t::append(const io_chain_t &chain) {
+bool io_chain_t::append(const io_chain_t &chain) {
     assert(&chain != this && "Cannot append self to self");
     this->insert(this->end(), chain.begin(), chain.end());
+    return true;
 }
 
 bool io_chain_t::append_from_specs(const redirection_spec_list_t &specs, const wcstring &pwd) {
@@ -238,8 +237,34 @@ bool io_chain_t::append_from_specs(const redirection_spec_list_t &specs, const w
                     if ((oflags & O_EXCL) && (errno == EEXIST)) {
                         FLOGF(warning, NOCLOB_ERROR, spec.target.c_str());
                     } else {
-                        FLOGF(warning, FILE_ERROR, spec.target.c_str());
-                        if (should_flog(warning)) wperror(L"open");
+                        if (should_flog(warning)) {
+                            FLOGF(warning, FILE_ERROR, spec.target.c_str());
+                            auto err = errno;
+                            // If the error is that the file doesn't exist
+                            // or there's a non-directory component,
+                            // find the first problematic component for a better message.
+                            if (err == ENOENT || err == ENOTDIR) {
+                                auto dname = spec.target;
+                                struct stat buf;
+
+                                while (!dname.empty()) {
+                                    auto next = wdirname(dname);
+                                    if (!wstat(next, &buf)) {
+                                        if (!S_ISDIR(buf.st_mode)) {
+                                            FLOGF(warning, _(L"Path '%ls' is not a directory"),
+                                                  next.c_str());
+                                        } else {
+                                            FLOGF(warning, _(L"Path '%ls' does not exist"),
+                                                  dname.c_str());
+                                        }
+                                        break;
+                                    }
+                                    dname = next;
+                                }
+                            } else {
+                                wperror(L"open");
+                            }
+                        }
                     }
                     // If opening a file fails, insert a closed FD instead of the file redirection
                     // and return false. This lets execution potentially recover and at least gives
@@ -284,16 +309,24 @@ shared_ptr<const io_data_t> io_chain_t::io_for_fd(int fd) const {
     return nullptr;
 }
 
-void output_stream_t::append_narrow_buffer(const separated_buffer_t &buffer) {
+bool output_stream_t::append_narrow_buffer(const separated_buffer_t &buffer) {
     for (const auto &rhs_elem : buffer.elements()) {
-        append_with_separation(str2wcstring(rhs_elem.contents), rhs_elem.separation);
+        if (!append_with_separation(str2wcstring(rhs_elem.contents), rhs_elem.separation, false)) {
+            return false;
+        }
     }
+    return true;
 }
 
-void output_stream_t::append_with_separation(const wchar_t *s, size_t len, separation_type_t type) {
-    append(s, len);
-    if (type == separation_type_t::explicitly) {
-        append(L'\n');
+bool output_stream_t::append_with_separation(const wchar_t *s, size_t len, separation_type_t type,
+                                             bool want_newline) {
+    if (type == separation_type_t::explicitly && want_newline) {
+        // Try calling "append" less - it might write() to an fd
+        wcstring buf{s, len};
+        buf.push_back(L'\n');
+        return append(buf);
+    } else {
+        return append(s, len);
     }
 }
 
@@ -301,16 +334,26 @@ const wcstring &output_stream_t::contents() const { return g_empty_string; }
 
 int output_stream_t::flush_and_check_error() { return STATUS_CMD_OK; }
 
-void fd_output_stream_t::append(const wchar_t *s, size_t amt) {
-    if (errored_) return;
+bool fd_output_stream_t::append(const wchar_t *s, size_t amt) {
+    if (errored_) return false;
     int res = wwrite_to_fd(s, amt, this->fd_);
     if (res < 0) {
-        // TODO: this error is too aggressive, e.g. if we got SIGINT we should not complain.
-        if (errno != EPIPE) {
+        // Some of our builtins emit multiple screens worth of data sent to a pager (the primary
+        // example being the `history` builtin) and receiving SIGINT should be considered normal and
+        // non-exceptional (user request to abort via Ctrl-C), meaning we shouldn't print an error.
+        if (errno == EINTR && sigcheck_.check()) {
+            // We have two options here: we can either return false without setting errored_ to
+            // true (*this* write will be silently aborted but the onus is on the caller to check
+            // the return value and skip future calls to `append()`) or we can flag the entire
+            // output stream as errored, causing us to both return false and skip any future writes.
+            // We're currently going with the latter, especially seeing as no callers currently
+            // check the result of `append()` (since it was always a void function before).
+        } else if (errno != EPIPE) {
             wperror(L"write");
         }
         errored_ = true;
     }
+    return !errored_;
 }
 
 int fd_output_stream_t::flush_and_check_error() {
@@ -318,19 +361,23 @@ int fd_output_stream_t::flush_and_check_error() {
     return errored_ ? STATUS_CMD_ERROR : STATUS_CMD_OK;
 }
 
-void null_output_stream_t::append(const wchar_t *, size_t) {}
+bool null_output_stream_t::append(const wchar_t *, size_t) { return true; }
 
-void string_output_stream_t::append(const wchar_t *s, size_t amt) { contents_.append(s, amt); }
+bool string_output_stream_t::append(const wchar_t *s, size_t amt) {
+    contents_.append(s, amt);
+    return true;
+}
 
 const wcstring &string_output_stream_t::contents() const { return contents_; }
 
-void buffered_output_stream_t::append(const wchar_t *s, size_t amt) {
-    buffer_->append(wcs2string(s, amt));
+bool buffered_output_stream_t::append(const wchar_t *s, size_t amt) {
+    return buffer_->append(wcs2string(s, amt));
 }
 
-void buffered_output_stream_t::append_with_separation(const wchar_t *s, size_t len,
-                                                      separation_type_t type) {
-    buffer_->append(wcs2string(s, len), type);
+bool buffered_output_stream_t::append_with_separation(const wchar_t *s, size_t len,
+                                                      separation_type_t type, bool want_newline) {
+    UNUSED(want_newline);
+    return buffer_->append(wcs2string(s, len), type);
 }
 
 int buffered_output_stream_t::flush_and_check_error() {

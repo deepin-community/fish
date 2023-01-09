@@ -5,17 +5,17 @@
 
 #include "config.h"  // IWYU pragma: keep
 
-#include <sys/select.h>
+#include <poll.h>        // IWYU pragma: keep
+#include <sys/select.h>  // IWYU pragma: keep
 #include <sys/types.h>
 
-#include <algorithm>
+#include <cstdint>
 #include <limits>
 #include <string>
-#include <vector>
+#include <utility>
 
+#include "common.h"
 #include "maybe.h"
-
-using wcstring = std::wstring;
 
 /// Pipe redirection error message.
 #define PIPE_ERROR _(L"An error occurred while setting up pipe")
@@ -25,7 +25,7 @@ using wcstring = std::wstring;
 extern const int k_first_high_fd;
 
 /// A helper class for managing and automatically closing a file descriptor.
-class autoclose_fd_t {
+class autoclose_fd_t : noncopyable_t {
     int fd_;
 
    public:
@@ -52,8 +52,6 @@ class autoclose_fd_t {
     // \return if this has a valid fd.
     bool valid() const { return fd_ >= 0; }
 
-    autoclose_fd_t(const autoclose_fd_t &) = delete;
-    void operator=(const autoclose_fd_t &) = delete;
     autoclose_fd_t(autoclose_fd_t &&rhs) : fd_(rhs.fd_) { rhs.fd_ = -1; }
 
     void operator=(autoclose_fd_t &&rhs) {
@@ -65,12 +63,23 @@ class autoclose_fd_t {
     ~autoclose_fd_t() { close(); }
 };
 
-/// A modest wrapper around fd_set and select().
-/// This allows accumulating a set of fds and then select()ing on them.
+// Resolve whether to use poll() or select().
+#ifndef FISH_READABLE_SET_USE_POLL
+#ifdef __APPLE__
+//  Apple's `man poll`: "The poll() system call currently does not support devices."
+#define FISH_READABLE_SET_USE_POLL 0
+#else
+// Use poll other places so we can support unlimited fds.
+#define FISH_READABLE_SET_USE_POLL 1
+#endif
+#endif
+
+/// A modest wrapper around select() or poll(), according to FISH_READABLE_SET_USE_POLL.
+/// This allows accumulating a set of fds and then seeing if they are readable.
 /// This only handles readability.
-struct select_wrapper_t {
+struct fd_readable_set_t {
     /// Construct an empty set.
-    select_wrapper_t();
+    fd_readable_set_t();
 
     /// Reset back to an empty set.
     void clear();
@@ -81,15 +90,15 @@ struct select_wrapper_t {
     /// \return true if the given fd is marked as set, in our set. \returns false if negative.
     bool test(int fd) const;
 
-    /// Call select(), with this set as 'readfds' and null for the other sets, with a timeout given
-    /// by timeout_usec. Note this destructively modifies the set. \return the result of select().
-    int select(uint64_t timeout_usec = select_wrapper_t::kNoTimeout);
+    /// Call select() or poll(), according to FISH_READABLE_SET_USE_POLL. Note this destructively
+    /// modifies the set. \return the result of select() or poll().
+    int check_readable(uint64_t timeout_usec = fd_readable_set_t::kNoTimeout);
 
-    /// Poll a single fd: select() on it with a given timeout.
+    /// Check if a single fd is readable, with a given timeout.
     /// \return true if readable, false if not.
     static bool is_fd_readable(int fd, uint64_t timeout_usec);
 
-    /// Poll a single fd: select() on it with zero timeout.
+    /// Check if a single fd is readable, without blocking.
     /// \return true if readable, false if not.
     static bool poll_fd_readable(int fd);
 
@@ -97,9 +106,17 @@ struct select_wrapper_t {
     static constexpr uint64_t kNoTimeout = std::numeric_limits<uint64_t>::max();
 
    private:
-    /// The underlying fdset and nfds value to pass to select().
+#if FISH_READABLE_SET_USE_POLL
+    // Our list of FDs, sorted by fd.
+    std::vector<struct pollfd> pollfds_{};
+
+    // Helper function.
+    static int do_poll(struct pollfd *fds, size_t count, uint64_t timeout_usec);
+#else
+    // The underlying fdset and nfds value to pass to select().
     fd_set fdset_;
     int nfds_{0};
+#endif
 };
 
 /// Helper type returned from making autoclose pipes.
@@ -133,7 +150,7 @@ class fd_event_signaller_t {
     /// If an event is signalled, consume it; otherwise return.
     /// This does not block.
     /// This retries on EINTR.
-    bool try_consume();
+    bool try_consume() const;
 
     /// Mark that an event has been received. This may be coalesced.
     /// This retries on EINTR.

@@ -1,4 +1,5 @@
 FROM ubuntu:20.04
+LABEL org.opencontainers.image.source=https://github.com/fish-shell/fish-shell
 
 ENV LANG C.UTF-8
 ENV LC_ALL C.UTF-8
@@ -19,7 +20,8 @@ RUN apt-get update \
     python3 \
     python3-pexpect \
     sudo \
-  && locale-gen en_US.UTF-8
+  && locale-gen en_US.UTF-8 \
+  && apt-get clean
 
 RUN groupadd -g 1000 fishuser \
   && useradd -p $(openssl passwd -1 fish) -d /home/fishuser -m -u 1000 -g 1000 fishuser \

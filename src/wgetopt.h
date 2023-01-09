@@ -41,8 +41,6 @@ Cambridge, MA 02139, USA.  */
 #ifndef FISH_WGETOPT_H
 #define FISH_WGETOPT_H
 
-#include <stddef.h>
-
 /// Instanced getopt() wrapper.
 class wgetopter_t {
    public:
@@ -77,9 +75,6 @@ class wgetopter_t {
 
     // XXX 1003.2 says this must be 1 before any call.
     int woptind = 0;
-
-    // Callers store zero here to inhibit the error message for unrecognized options.
-    int wopterr = 0;
 
     // Set to an option character which was unrecognized. This must be initialized on some systems
     // to avoid linking in the system's own getopt implementation.
@@ -129,14 +124,16 @@ class wgetopter_t {
     int _handle_short_opt(int argc, string_array_t argv);
     bool _handle_long_opt(int argc, string_array_t argv, const struct woption *longopts,
                           int *longind, int long_only, int *retval);
-    const struct woption *_find_matching_long_opt(const struct woption *longopts,
-                                                  const wchar_t *nameend, int *exact, int *ambig,
-                                                  int *indfound) const;
+    const struct woption *_find_matching_long_opt(const struct woption *longopts, size_t nameend,
+                                                  int *exact, int *ambig, int *indfound) const;
     void _update_long_opt(int argc, string_array_t argv, const struct woption *pfound,
-                          const wchar_t *nameend, int *longind, int option_index, int *retval);
+                          size_t nameend, int *longind, int option_index, int *retval);
     bool initialized = false;
     bool missing_arg_return_colon = false;
 };
+
+// Names for the values of the `has_arg' field of `woption'.
+enum woption_argument_t : int { no_argument = 0, required_argument = 1, optional_argument = 2 };
 
 /// Describe the long-named options requested by the application. The LONG_OPTIONS argument to
 /// getopt_long or getopt_long_only is a vector of `struct option' terminated by an element
@@ -156,26 +153,17 @@ class wgetopter_t {
 /// options that have a zero `flag' field, `getopt' returns the contents of the `val' field.
 struct woption {
     /// Long name for switch.
-    const wchar_t *name;
-    /// Must be one of no_argument, required_argument and optional_argument.
-    ///
-    /// has_arg can't be an enum because some compilers complain about type mismatches in all the
-    /// code that assumes it is an int.
-    int has_arg;
-    /// If non-null, the flag whose value should be set if this switch is encountered.
-    int *flag;
+    const wchar_t *name{nullptr};
+    /// Must be one of no_argument, required_argument or optional_argument.
+    woption_argument_t has_arg{};
     /// If \c flag is non-null, this is the value that flag will be set to. Otherwise, this is the
     /// return-value of the function call.
-    wchar_t val;
+    wchar_t val{L'\0'};
+
+    constexpr woption(const wchar_t *name, woption_argument_t has_arg, wchar_t val)
+        : name(name), has_arg(has_arg), val(val) {}
+
+    constexpr woption() = default;
 };
-
-// Names for the values of the `has_arg' field of `struct option'.
-
-/// Specifies that a switch does not accept an argument.
-#define no_argument 0
-/// Specifies that a switch requires an argument.
-#define required_argument 1
-/// Specifies that a switch accepts an optional argument.
-#define optional_argument 2
 
 #endif /* FISH_WGETOPT_H */

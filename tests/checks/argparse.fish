@@ -1,15 +1,16 @@
 #RUN: %fish %s
 ##########
 
-set -g LANG C
+# NOTE: This uses argparse, which touches the local variables.
+# Any call that isn't an error should be enclosed in a begin/end block!
 
 # Start by verifying a bunch of error conditions.
 # These are *argparse* errors, and therefore bugs in the script,
 # so they print a stack trace.
 
-# No args is an error
+# No args (not even --) is an error
 argparse
-#CHECKERR: argparse: No option specs were provided
+#CHECKERR: argparse: Missing -- separator
 #CHECKERR: checks/argparse.fish (line {{\d+}}):
 #CHECKERR: argparse
 #CHECKERR: ^
@@ -23,13 +24,14 @@ argparse h/help
 #CHECKERR: ^
 #CHECKERR: (Type 'help argparse' for related documentation)
 
-# Flags but no option specs is an error
-argparse -s -- hello
-#CHECKERR: argparse: No option specs were provided
-#CHECKERR: checks/argparse.fish (line {{\d+}}):
-#CHECKERR: argparse -s -- hello
-#CHECKERR: ^
-#CHECKERR: (Type 'help argparse' for related documentation)
+# Flags but no option specs is not an error
+begin
+    argparse -s -- hello
+    echo $status
+    # CHECK: 0
+    set -l
+    # CHECK: argv hello
+end
 
 # Invalid option specs
 argparse h-
@@ -66,16 +68,21 @@ argparse h-help=x
 # --max-args and --min-args work
 begin
     argparse --name min-max --min-args 1 h/help --
-    #CHECKERR: min-max: Expected at least 1 args, got 0
+    #CHECKERR: min-max: expected >= 1 arguments; got 0
+    argparse --name min-max --min-args 1 --
+    #CHECKERR: min-max: expected >= 1 arguments; got 0
     argparse --name min-max --min-args 1 --max-args 3 h/help -- arg1
+    argparse --name min-max --min-args 1 --max-args 3 -- arg1
     argparse --name min-max --min-args 1 --max-args 3 h/help -- arg1 arg2
     argparse --name min-max --min-args 1 --max-args 3 h/help -- --help arg1 arg2 arg3
     argparse --name min-max --min-args 1 --max-args 3 h/help -- arg1 arg2 -h arg3 arg4
-    #CHECKERR: min-max: Expected at most 3 args, got 4
+    #CHECKERR: min-max: expected <= 3 arguments; got 4
     argparse --name min-max --max-args 1 h/help --
     argparse --name min-max --max-args 1 h/help -- arg1
     argparse --name min-max --max-args 1 h/help -- arg1 arg2
-    #CHECKERR: min-max: Expected at most 1 args, got 2
+    #CHECKERR: min-max: expected <= 1 arguments; got 2
+    argparse --name min-max --max-args 1 -- arg1 arg2
+    #CHECKERR: min-max: expected <= 1 arguments; got 2
 end
 
 # Invalid \"#-val\" spec
@@ -91,7 +98,7 @@ end
 # Invalid arg in the face of a \"#-val\" spec
 begin
     argparse '#-val' -- abc -x def
-    # CHECKERR: argparse: Unknown option '-x'
+    # CHECKERR: argparse: -x: unknown option
 end
 
 # Defining a short flag more than once
@@ -278,7 +285,7 @@ and echo unxpected argparse return status >&2
 # CHECKERR: argparse: Value 'a1' for flag 'm' is not an integer
 
 # Check the exit status from argparse validation
-argparse 'm#max!set | grep "^_flag_"; function x; return 57; end; x' -- argle --max=83 bargle 2>&1
+argparse 'm#max!set -l | grep "^_flag_"; function x; return 57; end; x' -- argle --max=83 bargle 2>&1
 set -l saved_status $status
 test $saved_status -eq 57
 and echo expected argparse return status $saved_status
@@ -305,7 +312,7 @@ function notargparse
     argparse a/alpha -- --banana
 end
 notargparse
-# CHECKERR: notargparse: Unknown option '--banana'
+# CHECKERR: notargparse: --banana: unknown option
 
 true
 
@@ -400,10 +407,10 @@ end
 
 # #6483 - error messages for missing arguments
 argparse -n foo q r/required= -- foo -qr
-# CHECKERR: foo: Expected argument for option r
+# CHECKERR: foo: -r: option requires an argument
 
 argparse r/required= -- foo --required
-# CHECKERR: argparse: Expected argument for option --required
+# CHECKERR: argparse: --required: option requires an argument
 
 ### The fish_opt wrapper:
 # No args is an error
@@ -422,17 +429,18 @@ and echo unexpected status $status
 # A required and optional arg makes no sense
 fish_opt -s h -l help -r --optional-val
 and echo unexpected status $status
-#CHECKERR: fish_opt: Mutually exclusive flags 'o/optional-val' and `r/required-val` seen
+#CHECKERR: fish_opt: o/optional-val r/required-val: options cannot be used together
+# XXX FIXME the error should output -r and --optional-val: what the user used
 
 # A repeated and optional arg makes no sense
 fish_opt -s h -l help --multiple-vals --optional-val
 and echo unexpected status $status
-#CHECKERR: fish_opt: Mutually exclusive flags 'multiple-vals' and `o/optional-val` seen
+#CHECKERR: fish_opt: multiple-vals o/optional-val: options cannot be used together
 
 # An unexpected arg not associated with a flag is an error
 fish_opt -s h -l help hello
 and echo unexpected status $status
-#CHECKERR: fish_opt: Expected at most 0 args, got 1
+#CHECKERR: fish_opt: expected <= 0 arguments; got 1
 
 # Now verify that valid combinations of options produces the correct output.
 
@@ -496,4 +504,15 @@ begin
     #CHECKERR: argparse ''
     #CHECKERR: ^
     #CHECKERR: (Type 'help argparse' for related documentation)
+end
+
+begin
+    argparse --ignore-unknown h i -- -hoa -oia
+    echo -- $argv
+    #CHECK: -hoa -oia
+    echo $_flag_h
+    #CHECK: -h
+    set -q _flag_i
+    or echo No flag I
+    #CHECK: No flag I
 end

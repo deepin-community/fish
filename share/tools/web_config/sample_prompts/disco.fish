@@ -14,12 +14,22 @@ function fish_prompt
     fish_is_root_user; and set delim "#"
 
     set -l cwd (set_color $fish_color_cwd)
-    if command -sq sha256sum
+    if command -sq cksum
         # randomized cwd color
-        set -l shas (pwd -P | sha256sum | string sub -l 6 | string match -ra ..)
-        # Increase color a bit so we don't get super dark colors.
-        # Really we want some contrast to the background (assuming black).
-        set -l col (for f in $shas; math --base=hex "min(255, 0x$f + 0x30)"; end | string replace 0x '' | string pad -c 0 -w 2 | string join "")
+        # We hash the physical PWD and turn that into a color. That means directories (usually) get different colors,
+        # but every directory always gets the same color. It's deterministic.
+        # We use cksum because 1. it's fast, 2. it's in POSIX, so it should be available everywhere.
+        set -l shas (pwd -P | cksum | string split -f1 ' ' | math --base=hex | string sub -s 3 | string pad -c 0 -w 6 | string match -ra ..)
+        set -l col 0x$shas[1..3]
+
+        # If the (simplified idea of) luminance is below 120 (out of 255), add some more.
+        # (this runs at most twice because we add 60)
+        while test (math 0.2126 x $col[1] + 0.7152 x $col[2] + 0.0722 x $col[3]) -lt 120
+            set col[1] (math --base=hex "min(255, $col[1] + 60)")
+            set col[2] (math --base=hex "min(255, $col[2] + 60)")
+            set col[3] (math --base=hex "min(255, $col[3] + 60)")
+        end
+        set -l col (string replace 0x '' $col | string pad -c 0 -w 2 | string join "")
 
         set cwd (set_color $col)
     end
@@ -37,8 +47,7 @@ function fish_prompt
                 command -sq systemd-detect-virt
                 and systemd-detect-virt -q
             end
-            set -l host (hostname)
-            set prompt_host $usercolor$USER$normal@(set_color $fish_color_host)$host$normal":"
+            set prompt_host $usercolor$USER$normal@(set_color $fish_color_host)$hostname$normal":"
         end
     end
 
@@ -59,7 +68,9 @@ function fish_right_prompt
     and set -g __fish_git_prompt_char_dirtystate \U1F4a9
     set -g __fish_git_prompt_char_untrackedfiles "?"
 
-    set -l vcs (fish_vcs_prompt 2>/dev/null)
+    # The git prompt's default format is ' (%s)'.
+    # We don't want the leading space.
+    set -l vcs (fish_vcs_prompt '(%s)' 2>/dev/null)
 
     set -l d (set_color brgrey)(date "+%R")(set_color normal)
 
@@ -75,6 +86,6 @@ function fish_right_prompt
     set -q VIRTUAL_ENV
     and set -l venv (string replace -r '.*/' '' -- "$VIRTUAL_ENV")
 
-    set_color reset
+    set_color normal
     string join " " -- $venv $duration $vcs $d
 end

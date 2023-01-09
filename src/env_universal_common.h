@@ -2,16 +2,17 @@
 #define FISH_ENV_UNIVERSAL_COMMON_H
 #include "config.h"  // IWYU pragma: keep
 
-#include <pthread.h>
-#include <stdio.h>
-
+#include <cstdint>
 #include <memory>
+#include <string>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
 #include "common.h"
 #include "env.h"
 #include "fds.h"
+#include "maybe.h"
 #include "wutil.h"
 
 /// Callback data, reflecting a change in universal variables.
@@ -20,10 +21,10 @@ struct callback_data_t {
     wcstring key;
 
     // The value of the variable, or none if it is erased.
-    maybe_t<wcstring> val;
+    maybe_t<env_var_t> val;
 
     /// Construct from a key and maybe a value.
-    callback_data_t(wcstring k, maybe_t<wcstring> v) : key(std::move(k)), val(std::move(v)) {}
+    callback_data_t(wcstring k, maybe_t<env_var_t> v) : key(std::move(k)), val(std::move(v)) {}
 
     /// \return whether this callback represents an erased variable.
     bool is_erase() const { return !val.has_value(); }
@@ -61,14 +62,13 @@ class env_universal_t {
     /// Get a view on the universal variable table.
     const var_table_t &get_table() const { return vars; }
 
-    /// Initialize this uvars for the default path, migrating legacy variables.
+    /// Initialize this uvars for the default path.
     /// This should be called at most once on any given instance.
     void initialize(callback_data_list_t &callbacks);
 
     /// Initialize a this uvars for a given path.
     /// This is exposed for testing only.
-    void initialize_at_path(callback_data_list_t &callbacks, wcstring path,
-                            bool migrate_legacy = false);
+    void initialize_at_path(callback_data_list_t &callbacks, wcstring path);
 
     /// Reads and writes variables at the correct path. Returns true if modified variables were
     /// written.
@@ -94,6 +94,7 @@ class env_universal_t {
    private:
     // Path that we save to. This is set in initialize(). If empty, initialize has not been called.
     wcstring vars_path_;
+    std::string narrow_vars_path_;
 
     // The table of variables.
     var_table_t vars;
@@ -120,6 +121,8 @@ class env_universal_t {
     bool initialized() const { return !vars_path_.empty(); }
 
     bool load_from_path(const wcstring &path, callback_data_list_t &callbacks);
+    bool load_from_path(const std::string &path, callback_data_list_t &callbacks);
+
     void load_from_fd(int fd, callback_data_list_t &callbacks);
 
     // Functions concerned with saving.
@@ -179,13 +182,11 @@ class universal_notifier_t {
         strategy_named_pipe,
     };
 
+    universal_notifier_t(const universal_notifier_t &) = delete;
+    universal_notifier_t &operator=(const universal_notifier_t &) = delete;
+
    protected:
     universal_notifier_t();
-
-   private:
-    // No copying.
-    universal_notifier_t &operator=(const universal_notifier_t &);
-    universal_notifier_t(const universal_notifier_t &x);
 
    public:
     static notifier_strategy_t resolve_default_strategy();
@@ -216,9 +217,5 @@ class universal_notifier_t {
 };
 
 wcstring get_runtime_path();
-
-// Environment variable for requesting a particular universal notifier. See
-// fetch_default_strategy_from_environment for names.
-#define UNIVERSAL_NOTIFIER_ENV_NAME "fish_universal_notifier"
 
 #endif

@@ -1,5 +1,9 @@
 # RUN: %fish %s
 
+printf "%d %d\n" 1 2 3
+# CHECK: 1 2
+# CHECK: 3 0
+
 printf "Hello %d %i %f %F %g %G\n" 1 2 3 4 5 6
 # CHECK: Hello 1 2 3.000000 4.000000 5 6
 
@@ -66,34 +70,7 @@ printf '%e\n' "1.23" # should succeed, output should be 1.230000e+00
 
 printf '%e\n' "2,34" # should fail
 # CHECK: 2.000000e+00
-# CHECKERR: 2,34: value not completely converted
-
-# Try to use one of several locales that use a comma as the decimal mark
-# rather than the period used in english speaking locales. If we don't find
-# one installed we simply don't run this test.
-#
-# musl currently does not have a `locale` command, so we also skip it then.
-set -l locales (command -sq locale; and locale -a)
-set -l acceptable_locales bg_BG de_DE es_ES fr_FR ru_RU
-set -l numeric_locale
-for locale in {$acceptable_locales}.{UTF-8,UTF8}
-    if string match -i -q $locale $locales
-        set numeric_locale $locale
-        break
-    end
-end
-
-# OpenBSD's wcstod does not honor LC_NUMERIC, meaning this feature is broken there.
-if set -q numeric_locale[1]; and test (uname) != OpenBSD
-    set -x LC_NUMERIC $numeric_locale
-    printf '%e\n' "3,45" # should succeed, output should be 3,450000e+00
-    printf '%e\n' "4.56" # should succeed, output should be 4,560000e+00
-else
-    echo '3,450000e+00'
-    echo '4,560000e+00'
-end
-# CHECK: 3,450000e+00
-# CHECK: 4,560000e+00
+# CHECKERR: 2,34: value not completely converted (can't convert ',34')
 
 # Verify long long ints are handled correctly. See issue #3352.
 printf 'long hex1 %x\n' 498216206234
@@ -119,6 +96,45 @@ echo $status
 # Verify numeric conversion still happens even if it couldn't be fully converted
 printf '%d\n' 15.1
 # CHECK: 15
-# CHECKERR: 15.1: value not completely converted
+# CHECKERR: 15.1: value not completely converted (can't convert '.1')
 echo $status
 # CHECK: 1
+
+printf '%d\n' 07
+# CHECK: 7
+echo $status
+# CHECK: 0
+printf '%d\n' 08
+# CHECK: 0
+# CHECKERR: 08: value not completely converted (can't convert '8')
+# CHECKERR: Hint: a leading '0' without an 'x' indicates an octal number
+echo $status
+# CHECK: 1
+
+printf '%d\n' 0f
+# CHECK: 0
+# CHECKERR: 0f: value not completely converted (can't convert 'f')
+# CHECKERR: Hint: a leading '0' without an 'x' indicates an octal number
+echo $status
+# CHECK: 1
+
+printf '%d\n' 0g
+# CHECK: 0
+# CHECKERR: 0g: value not completely converted (can't convert 'g')
+echo $status
+# CHECK: 1
+
+# Test that we ignore options
+printf -a
+printf --foo
+# CHECK: -a--foo
+echo
+
+set -l helpvar --help
+printf $helpvar
+echo
+# CHECK: --help
+
+printf --help
+echo
+# CHECK: --help

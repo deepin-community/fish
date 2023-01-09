@@ -2,9 +2,12 @@
 #ifndef INPUT_COMMON_H
 #define INPUT_COMMON_H
 
-#include <stddef.h>
+#include <unistd.h>
 
-#include <queue>
+#include <cstdint>
+#include <deque>
+#include <string>
+#include <utility>
 
 #include "common.h"
 #include "maybe.h"
@@ -19,10 +22,13 @@ enum class readline_cmd_t {
     backward_word,
     forward_bigword,
     backward_bigword,
+    nextd_or_forward_word,
+    prevd_or_backward_word,
     history_search_backward,
     history_search_forward,
     history_prefix_search_backward,
     history_prefix_search_forward,
+    history_pager,
     delete_char,
     backward_delete_char,
     kill_line,
@@ -35,6 +41,7 @@ enum class readline_cmd_t {
     end_of_history,
     backward_kill_line,
     kill_whole_line,
+    kill_inner_line,
     kill_word,
     kill_bigword,
     backward_kill_word,
@@ -205,6 +212,9 @@ class input_event_queue_t {
     /// will be the next character returned by readch.
     void push_front(const char_event_t &ch);
 
+    /// Find the first sequence of non-char events, and promote them to the front.
+    void promote_interruptions_to_front();
+
     /// Add multiple characters or readline events to the front of the queue of unread characters.
     /// The order of the provided events is not changed, i.e. they are not inserted in reverse
     /// order.
@@ -219,6 +229,10 @@ class input_event_queue_t {
 
     /// Override point for when when select() is interrupted by a signal. The default does nothing.
     virtual void select_interrupted();
+
+    /// Override point for when when select() is interrupted by the universal variable notifier.
+    /// The default does nothing.
+    virtual void uvar_change_notified();
 
     virtual ~input_event_queue_t();
 

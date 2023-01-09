@@ -2,11 +2,9 @@
 #include "config.h"
 
 #include <errno.h>
-#include <wctype.h>
 
-#include <cwchar>
 #if HAVE_TERM_H
-#include <curses.h>
+#include <curses.h>  // IWYU pragma: keep
 #include <term.h>
 #elif HAVE_NCURSES_TERM_H
 #include <ncurses/term.h>
@@ -14,7 +12,6 @@
 #include <termios.h>
 
 #include <algorithm>
-#include <atomic>
 #include <memory>
 #include <string>
 #include <utility>
@@ -24,10 +21,10 @@
 #include "env.h"
 #include "event.h"
 #include "fallback.h"  // IWYU pragma: keep
+#include "flog.h"
 #include "global_safety.h"
 #include "input.h"
 #include "input_common.h"
-#include "io.h"
 #include "parser.h"
 #include "proc.h"
 #include "reader.h"
@@ -130,6 +127,7 @@ static constexpr const input_function_metadata_t input_function_metadata[] = {
     {L"forward-jump-till", readline_cmd_t::forward_jump_till},
     {L"forward-single-char", readline_cmd_t::forward_single_char},
     {L"forward-word", readline_cmd_t::forward_word},
+    {L"history-pager", readline_cmd_t::history_pager},
     {L"history-prefix-search-backward", readline_cmd_t::history_prefix_search_backward},
     {L"history-prefix-search-forward", readline_cmd_t::history_prefix_search_forward},
     {L"history-search-backward", readline_cmd_t::history_search_backward},
@@ -139,12 +137,15 @@ static constexpr const input_function_metadata_t input_function_metadata[] = {
     {L"insert-line-over", readline_cmd_t::insert_line_over},
     {L"insert-line-under", readline_cmd_t::insert_line_under},
     {L"kill-bigword", readline_cmd_t::kill_bigword},
+    {L"kill-inner-line", readline_cmd_t::kill_inner_line},
     {L"kill-line", readline_cmd_t::kill_line},
     {L"kill-selection", readline_cmd_t::kill_selection},
     {L"kill-whole-line", readline_cmd_t::kill_whole_line},
     {L"kill-word", readline_cmd_t::kill_word},
+    {L"nextd-or-forward-word", readline_cmd_t::nextd_or_forward_word},
     {L"or", readline_cmd_t::func_or},
     {L"pager-toggle-search", readline_cmd_t::pager_toggle_search},
+    {L"prevd-or-backward-word", readline_cmd_t::prevd_or_backward_word},
     {L"redo", readline_cmd_t::redo},
     {L"repaint", readline_cmd_t::repaint},
     {L"repaint-mode", readline_cmd_t::repaint_mode},
@@ -165,7 +166,7 @@ static constexpr const input_function_metadata_t input_function_metadata[] = {
     {L"yank-pop", readline_cmd_t::yank_pop},
 };
 
-ASSERT_SORT_ORDER(input_function_metadata, .name);
+ASSERT_SORTED_BY_NAME(input_function_metadata);
 static_assert(sizeof(input_function_metadata) / sizeof(input_function_metadata[0]) ==
                   input_function_count,
               "input_function_metadata size mismatch with input_common. Did you forget to update "
@@ -272,15 +273,12 @@ void input_mapping_set_t::add(wcstring sequence, const wchar_t *command, const w
     input_mapping_set_t::add(std::move(sequence), &command, 1, mode, sets_mode, user);
 }
 
-static relaxed_atomic_bool_t s_input_initialized{false};
-
 /// Set up arrays used by readch to detect escape sequences for special keys and perform related
 /// initializations for our input subsystem.
 void init_input() {
     ASSERT_IS_MAIN_THREAD();
-    if (s_input_initialized) return;
-    s_input_initialized = true;
 
+    if (s_terminfo_mappings.is_set()) return;
     s_terminfo_mappings = create_input_terminfo();
 
     auto input_mapping = input_mappings();
@@ -329,6 +327,10 @@ void inputter_t::prepare_to_select() /* override */ {
 }
 
 void inputter_t::select_interrupted() /* override */ {
+    // Readline commands may be bound to \cc which also sets the cancel flag.
+    // See #6937, #8125.
+    signal_clear_cancel();
+
     // Fire any pending events and reap stray processes, including printing exit status messages.
     auto &parser = *this->parser_;
     event_fire_delayed(parser);
@@ -345,6 +347,10 @@ void inputter_t::select_interrupted() /* override */ {
     this->push_front(char_event_t{char_event_type_t::check_exit});
 }
 
+void inputter_t::uvar_change_notified() /* override */ {
+    this->parser_->sync_uvars_and_fire(true /* always */);
+}
+
 void inputter_t::function_push_arg(wchar_t arg) { input_function_args_.push_back(arg); }
 
 wchar_t inputter_t::function_pop_arg() {
@@ -356,9 +362,8 @@ wchar_t inputter_t::function_pop_arg() {
 
 void inputter_t::function_push_args(readline_cmd_t code) {
     int arity = input_function_arity(code);
-    // Use a thread-local to prevent constant heap thrashing in the main input loop
-    static FISH_THREAD_LOCAL std::vector<char_event_t> skipped;
-    skipped.clear();
+    assert(event_storage_.empty() && "event_storage_ should be empty");
+    auto &skipped = event_storage_;
 
     for (int i = 0; i < arity; i++) {
         // Skip and queue up any function codes. See issue #2357.
@@ -376,6 +381,7 @@ void inputter_t::function_push_args(readline_cmd_t code) {
 
     // Push the function codes back into the input stream.
     this->insert_front(skipped.begin(), skipped.end());
+    event_storage_.clear();
 }
 
 /// Perform the action of the specified binding. allow_commands controls whether fish commands
@@ -498,6 +504,14 @@ class event_queue_peeker_t {
         idx_ = 0;
     }
 
+    /// Test if any of our peeked events are readline or check_exit.
+    bool char_sequence_interrupted() const {
+        for (const auto &evt : peeked_) {
+            if (evt.is_readline() || evt.is_check_exit()) return true;
+        }
+        return false;
+    }
+
     /// Reset our index back to 0.
     void restart() { idx_ = 0; }
 
@@ -588,11 +602,14 @@ static bool try_peek_sequence(event_queue_peeker_t *peeker, const wcstring &str)
 }
 
 /// \return the first mapping that matches, walking first over the user's mapping list, then the
-/// preset list. \return null if nothing matches.
+/// preset list.
+/// \return none if nothing matches, or if we may have matched a longer sequence but it was
+/// interrupted by a readline event.
 maybe_t<input_mapping_t> inputter_t::find_mapping(event_queue_peeker_t *peeker) {
     const input_mapping_t *generic = nullptr;
     const auto &vars = parser_->vars();
     const wcstring bind_mode = input_get_bind_mode(vars);
+    const input_mapping_t *escape = nullptr;
 
     auto ml = input_mappings()->all_mappings();
     for (const auto &m : *ml) {
@@ -607,10 +624,31 @@ maybe_t<input_mapping_t> inputter_t::find_mapping(event_queue_peeker_t *peeker) 
         }
 
         if (try_peek_sequence(peeker, m.seq)) {
-            return m;
+            // A binding for just escape should also be deferred
+            // so escape sequences take precedence.
+            if (m.seq == L"\x1B") {
+                if (!escape) {
+                    escape = &m;
+                }
+            } else {
+                return m;
+            }
         }
         peeker->restart();
     }
+
+    if (peeker->char_sequence_interrupted()) {
+        // We might have matched a longer sequence, but we were interrupted, e.g. by a signal.
+        FLOG(reader, "torn sequence, rearranging events");
+        return none();
+    }
+
+    if (escape) {
+        // We need to reconsume the escape.
+        peeker->next();
+        return *escape;
+    }
+
     return generic ? maybe_t<input_mapping_t>(*generic) : none();
 }
 
@@ -649,21 +687,25 @@ void inputter_t::mapping_execute_matching_or_generic(const command_handler_t &co
     }
     peeker.restart();
 
+    if (peeker.char_sequence_interrupted()) {
+        // This may happen if we received a signal in the middle of an escape sequence or other
+        // multi-char binding. Move these non-char events to the front of the queue, handle them
+        // first, and then later we'll return and try the sequence again. See #8628.
+        peeker.consume();
+        this->promote_interruptions_to_front();
+        return;
+    }
+
     FLOGF(reader, L"no generic found, ignoring char...");
     auto evt = peeker.next();
-    if (evt.is_eof()) {
-        this->push_front(evt);
-    }
     peeker.consume();
 }
 
 /// Helper function. Picks through the queue of incoming characters until we get to one that's not a
 /// readline function.
 char_event_t inputter_t::read_characters_no_readline() {
-    // Use a thread-local vector to prevent repeated heap allocation, as this is called in the main
-    // input loop.
-    static FISH_THREAD_LOCAL std::vector<char_event_t> saved_events;
-    saved_events.clear();
+    assert(event_storage_.empty() && "saved_events_storage should be empty");
+    auto &saved_events = event_storage_;
 
     char_event_t evt_to_return{0};
     for (;;) {
@@ -678,6 +720,7 @@ char_event_t inputter_t::read_characters_no_readline() {
 
     // Restore any readline functions
     this->insert_front(saved_events.cbegin(), saved_events.cend());
+    event_storage_.clear();
     return evt_to_return;
 }
 
@@ -707,12 +750,13 @@ char_event_t inputter_t::read_char(const command_handler_t &command_handler) {
                 }
                 case readline_cmd_t::func_and:
                 case readline_cmd_t::func_or: {
-                    // If previous function has right status, we keep reading tokens
+                    // If previous function has correct status, we keep reading tokens
                     if (evt.get_readline() == readline_cmd_t::func_and) {
-                        if (function_status_) return readch();
+                        // Don't return immediately, we might need to handle it here - like
+                        // self-insert.
+                        if (function_status_) continue;
                     } else {
-                        assert(evt.get_readline() == readline_cmd_t::func_or);
-                        if (!function_status_) return readch();
+                        if (!function_status_) continue;
                     }
                     // Else we flush remaining tokens
                     do {
@@ -729,7 +773,11 @@ char_event_t inputter_t::read_char(const command_handler_t &command_handler) {
             // If we have EOF, we need to immediately quit.
             // There's no need to go through the input functions.
             return evt;
+        } else if (evt.is_check_exit()) {
+            // Allow the reader to check for exit conditions.
+            return evt;
         } else {
+            assert(evt.is_char() && "Should be char event");
             this->push_front(evt);
             mapping_execute_matching_or_generic(command_handler);
             // Regarding allow_commands, we're in a loop, but if a fish command is executed,
@@ -853,8 +901,7 @@ static std::vector<terminfo_mapping_t> create_input_terminfo() {
 }
 
 bool input_terminfo_get_sequence(const wcstring &name, wcstring *out_seq) {
-    ASSERT_IS_MAIN_THREAD();
-    assert(s_input_initialized);
+    assert(s_terminfo_mappings.is_set());
     for (const terminfo_mapping_t &m : *s_terminfo_mappings) {
         if (name == m.name) {
             // Found the mapping.
@@ -872,8 +919,7 @@ bool input_terminfo_get_sequence(const wcstring &name, wcstring *out_seq) {
 }
 
 bool input_terminfo_get_name(const wcstring &seq, wcstring *out_name) {
-    assert(s_input_initialized);
-
+    assert(s_terminfo_mappings.is_set());
     for (const terminfo_mapping_t &m : *s_terminfo_mappings) {
         if (m.seq && seq == str2wcstring(*m.seq)) {
             out_name->assign(m.name);
@@ -885,8 +931,7 @@ bool input_terminfo_get_name(const wcstring &seq, wcstring *out_name) {
 }
 
 wcstring_list_t input_terminfo_get_names(bool skip_null) {
-    assert(s_input_initialized);
-
+    assert(s_terminfo_mappings.is_set());
     wcstring_list_t result;
     const auto &mappings = *s_terminfo_mappings;
     result.reserve(mappings.size());
@@ -894,7 +939,7 @@ wcstring_list_t input_terminfo_get_names(bool skip_null) {
         if (skip_null && !m.seq) {
             continue;
         }
-        result.push_back(wcstring(m.name));
+        result.emplace_back(m.name);
     }
     return result;
 }
@@ -918,16 +963,8 @@ const wcstring_list_t &input_function_get_names() {
 maybe_t<readline_cmd_t> input_function_get_code(const wcstring &name) {
     // `input_function_metadata` is required to be kept in asciibetical order, making it OK to do
     // a binary search for the matching name.
-    constexpr auto end = &input_function_metadata[0] + input_function_count;
-    auto result = std::lower_bound(
-        &input_function_metadata[0], end,
-        input_function_metadata_t{name.data(), static_cast<readline_cmd_t>(-1)},
-        [&](const input_function_metadata_t &lhs, const input_function_metadata_t &rhs) {
-            return wcscmp(lhs.name, rhs.name) < 0;
-        });
-
-    if (result != end && result->name[0] && name == result->name) {
-        return result->code;
+    if (const input_function_metadata_t *md = get_by_sorted_name(name, input_function_metadata)) {
+        return md->code;
     }
     return none();
 }

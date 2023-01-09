@@ -20,7 +20,7 @@ License: ISC and LGPL-2.1+
 Files: debian/*
 Copyright: 2005-2009 James Vega <jamessan@jamessan.com>
            2015 Tristan Seligmann <mithrandi@debian.org>
-           2019-2020 Mo Zhou <lumin@debian.org>
+           2019-2022 Mo Zhou <lumin@debian.org>
 License: GPL-2
 
 License: GPL-2

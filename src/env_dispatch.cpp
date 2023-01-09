@@ -4,28 +4,25 @@
 #include <errno.h>
 #include <limits.h>
 #include <locale.h>
-#include <stddef.h>
-#include <stdlib.h>
 #include <time.h>
 #include <unistd.h>
 
+#include <cstdlib>
 #include <cstring>
 #include <cwchar>
 
 #if HAVE_CURSES_H
-#include <curses.h>
+#include <curses.h>  // IWYU pragma: keep
 #elif HAVE_NCURSES_H
-#include <ncurses.h>
+#include <ncurses.h>  // IWYU pragma: keep
 #elif HAVE_NCURSES_CURSES_H
-#include <ncurses/curses.h>
+#include <ncurses/curses.h>  // IWYU pragma: keep
 #endif
 #if HAVE_TERM_H
 #include <term.h>
 #elif HAVE_NCURSES_TERM_H
 #include <ncurses/term.h>
 #endif
-
-#include <assert.h>
 
 #include <algorithm>
 #include <functional>
@@ -38,8 +35,6 @@
 #include "complete.h"
 #include "env.h"
 #include "env_dispatch.h"
-#include "env_universal_common.h"
-#include "event.h"
 #include "fallback.h"  // IWYU pragma: keep
 #include "flog.h"
 #include "function.h"
@@ -48,23 +43,26 @@
 #include "input_common.h"
 #include "maybe.h"
 #include "output.h"
-#include "parser.h"
 #include "proc.h"
 #include "reader.h"
 #include "screen.h"
 #include "termsize.h"
-#include "wutil.h"  // IWYU pragma: keep
+#include "trace.h"
+#include "wcstringutil.h"
+#include "wutil.h"
 
-#define DEFAULT_TERM1 "ansi"
-#define DEFAULT_TERM2 "dumb"
+// Limit `read` to 100 MiB (bytes not wide chars) by default. This can be overridden by the
+// fish_read_limit variable.
+constexpr size_t DEFAULT_READ_BYTE_LIMIT = 100 * 1024 * 1024;
+size_t read_byte_limit = DEFAULT_READ_BYTE_LIMIT;
 
 /// List of all locale environment variable names that might trigger (re)initializing the locale
-/// subsystem.
+/// subsystem. These are only the variables we're possibly interested in.
 static const wcstring locale_variables[] = {
-    L"LANG",     L"LANGUAGE",          L"LC_ALL",         L"LC_ADDRESS",   L"LC_COLLATE",
-    L"LC_CTYPE", L"LC_IDENTIFICATION", L"LC_MEASUREMENT", L"LC_MESSAGES",  L"LC_MONETARY",
-    L"LC_NAME",  L"LC_NUMERIC",        L"LC_PAPER",       L"LC_TELEPHONE", L"LC_TIME",
-    L"fish_allow_singlebyte_locale", L"LOCPATH"};
+    L"LANG",       L"LANGUAGE", L"LC_ALL",
+    L"LC_COLLATE", L"LC_CTYPE", L"LC_MESSAGES",
+    L"LC_NUMERIC", L"LC_TIME",  L"fish_allow_singlebyte_locale",
+    L"LOCPATH"};
 
 /// List of all curses environment variable names that might trigger (re)initializing the curses
 /// subsystem.
@@ -149,11 +147,11 @@ static void handle_timezone(const wchar_t *env_var_name, const environment_t &va
     tzset();
 }
 
-/// Update the value of g_guessed_fish_emoji_width
+/// Update the value of g_fish_emoji_width
 static void guess_emoji_width(const environment_t &vars) {
     if (auto width_str = vars.get(L"fish_emoji_width")) {
         int new_width = fish_wcstol(width_str->as_string().c_str());
-        g_fish_emoji_width = std::max(0, new_width);
+        g_fish_emoji_width = std::min(2, std::max(1, new_width));
         FLOGF(term_support, "'fish_emoji_width' preference: %d, overwriting default",
               g_fish_emoji_width);
         return;
@@ -172,46 +170,27 @@ static void guess_emoji_width(const environment_t &vars) {
 
     if (term == L"Apple_Terminal" && version >= 400) {
         // Apple Terminal on High Sierra
-        g_guessed_fish_emoji_width = 2;
+        g_fish_emoji_width = 2;
         FLOGF(term_support, "default emoji width: 2 for %ls", term.c_str());
     } else if (term == L"iTerm.app") {
-        // iTerm2 defaults to Unicode 8 sizes.
-        // See https://gitlab.com/gnachman/iterm2/wikis/unicodeversionswitching
-        g_guessed_fish_emoji_width = 1;
-        FLOGF(term_support, "default emoji width: 1");
+        // iTerm2 now defaults to Unicode 9 sizes for anything after macOS 10.12.
+        g_fish_emoji_width = 2;
+        FLOGF(term_support, "default emoji width for iTerm: 2");
     } else {
         // Default to whatever system wcwidth says to U+1F603,
-        // but only if it's at least 1.
+        // but only if it's at least 1 and at most 2.
         int w = wcwidth(L'😃');
-        g_guessed_fish_emoji_width = w > 0 ? w : 1;
-        FLOGF(term_support, "default emoji width: %d", g_guessed_fish_emoji_width);
+        g_fish_emoji_width = std::min(2, std::max(1, w));
+        FLOGF(term_support, "default emoji width: %d", g_fish_emoji_width);
     }
 }
 
 /// React to modifying the given variable.
 void env_dispatch_var_change(const wcstring &key, env_stack_t &vars) {
-    ASSERT_IS_MAIN_THREAD();
     // Do nothing if not yet fully initialized.
     if (!s_var_dispatch_table) return;
 
     s_var_dispatch_table->dispatch(key, vars);
-}
-
-/// Universal variable callback function. This function makes sure the proper events are triggered
-/// when an event occurs.
-static void universal_callback(env_stack_t *stack, const callback_data_t &cb) {
-    const wchar_t *op = cb.is_erase() ? L"ERASE" : L"SET";
-
-    env_dispatch_var_change(cb.key, *stack);
-
-    // TODO: eliminate this principal_parser. Need to rationalize how multiple threads work here.
-    event_fire(parser_t::principal_parser(), event_t::variable(cb.key, {L"VARIABLE", op, cb.key}));
-}
-
-void env_universal_callbacks(env_stack_t *stack, const callback_data_list_t &callbacks) {
-    for (const callback_data_t &cb : callbacks) {
-        universal_callback(stack, cb);
-    }
 }
 
 static void handle_fish_term_change(const env_stack_t &vars) {
@@ -233,6 +212,17 @@ static void handle_term_size_change(const env_stack_t &vars) {
 
 static void handle_fish_history_change(const env_stack_t &vars) {
     reader_change_history(history_session_id(vars));
+}
+
+static void handle_fish_cursor_selection_mode_change(const env_stack_t &vars) {
+    auto mode = vars.get(L"fish_cursor_selection_mode");
+    reader_change_cursor_selection_mode(mode && mode->as_string() == L"inclusive"
+                                            ? cursor_selection_mode_t::inclusive
+                                            : cursor_selection_mode_t::exclusive);
+}
+
+void handle_autosuggestion_change(const env_stack_t &vars) {
+    reader_set_autosuggestion_enabled(vars);
 }
 
 static void handle_function_path_change(const env_stack_t &vars) {
@@ -265,24 +255,23 @@ static relaxed_atomic_bool_t g_use_posix_spawn{false};
 
 bool get_use_posix_spawn() { return g_use_posix_spawn; }
 
-extern "C" {
-const char *gnu_get_libc_version();
-}
-
-// Disallow posix_spawn entirely on glibc <= 2.24.
-// See #8021.
 static bool allow_use_posix_spawn() {
-    bool result = true;
-    // uClibc defines __GLIBC__.
-#if defined(__GLIBC__) && !defined(__UCLIBC__)
-    const char *version = gnu_get_libc_version();
-    result = version && strtod(version, nullptr) >= 2.24;
+    // OpenBSD's posix_spawn returns status 127, instead of erroring with ENOEXEC, when faced with a
+    // shebangless script. Disable posix_spawn on OpenBSD.
+#if defined(__OpenBSD__)
+    return false;
+#elif defined(__GLIBC__) && !defined(__UCLIBC__)  // uClibc defines __GLIBC__
+    // Disallow posix_spawn entirely on glibc < 2.24.
+    // See #8021.
+    return __GLIBC_PREREQ(2, 24) ? true : false;
+#else                                             // !defined(__OpenBSD__)
+    return true;
 #endif
-    return result;
+    return true;
 }
 
 static void handle_fish_use_posix_spawn_change(const environment_t &vars) {
-    // Note if the variable is missing or empty, we default to true.
+    // Note if the variable is missing or empty, we default to true if allowed.
     if (!allow_use_posix_spawn()) {
         g_use_posix_spawn = false;
     } else if (auto var = vars.get(L"fish_use_posix_spawn")) {
@@ -303,7 +292,13 @@ static void handle_read_limit_change(const environment_t &vars) {
         } else {
             read_byte_limit = limit;
         }
+    } else {
+        read_byte_limit = DEFAULT_READ_BYTE_LIMIT;
     }
+}
+
+static void handle_fish_trace(const environment_t &vars) {
+    trace_set_enabled(!vars.get(L"fish_trace").missing_or_empty());
 }
 
 /// Populate the dispatch table used by `env_dispatch_var_change()` to efficiently call the
@@ -330,8 +325,12 @@ static std::unique_ptr<const var_dispatch_table_t> create_dispatch_table() {
     var_dispatch_table->add(L"fish_function_path", handle_function_path_change);
     var_dispatch_table->add(L"fish_read_limit", handle_read_limit_change);
     var_dispatch_table->add(L"fish_history", handle_fish_history_change);
+    var_dispatch_table->add(L"fish_autosuggestion_enabled", handle_autosuggestion_change);
     var_dispatch_table->add(L"TZ", handle_tz_change);
     var_dispatch_table->add(L"fish_use_posix_spawn", handle_fish_use_posix_spawn_change);
+    var_dispatch_table->add(L"fish_trace", handle_fish_trace);
+    var_dispatch_table->add(L"fish_cursor_selection_mode",
+                            handle_fish_cursor_selection_mode_change);
 
     // This std::move is required to avoid a build error on old versions of libc++ (#5801),
     // but it causes a different warning under newer versions of GCC (observed under GCC 9.3.0,
@@ -354,6 +353,7 @@ static void run_inits(const environment_t &vars) {
     update_wait_on_escape_ms(vars);
     handle_read_limit_change(vars);
     handle_fish_use_posix_spawn_change(vars);
+    handle_fish_trace(vars);
 }
 
 /// Updates our idea of whether we support term256 and term24bit (see issue #10222).
@@ -375,21 +375,9 @@ static void update_fish_color_support(const environment_t &vars) {
         support_term256 = true;
         FLOGF(term_support, L"256 color support enabled for TERM=%ls", term.c_str());
     } else if (term.find(L"xterm") != wcstring::npos) {
-        // Assume that all 'xterm's can handle 256, except for Terminal.app from Snow Leopard
-        wcstring term_program;
-        if (auto tp = vars.get(L"TERM_PROGRAM")) term_program = tp->as_string();
-        if (term_program == L"Apple_Terminal") {
-            auto tpv = vars.get(L"TERM_PROGRAM_VERSION");
-            if (tpv && fish_wcstod(tpv->as_string().c_str(), nullptr) > 299) {
-                // OS X Lion is version 299+, it has 256 color support (see github Wiki)
-                support_term256 = true;
-                FLOGF(term_support, L"256 color support enabled for TERM=%ls on Terminal.app",
-                      term.c_str());
-            }
-        } else {
-            support_term256 = true;
-            FLOGF(term_support, L"256 color support enabled for TERM=%ls", term.c_str());
-        }
+        // Assume that all 'xterm's can handle 25
+        support_term256 = true;
+        FLOGF(term_support, L"256 color support enabled for TERM=%ls", term.c_str());
     } else if (cur_term != nullptr) {
         // See if terminfo happens to identify 256 colors
         support_term256 = (max_colors >= 256);
@@ -439,7 +427,7 @@ static void update_fish_color_support(const environment_t &vars) {
                 FLOGF(term_support, L"Truecolor support: Enabling for st");
                 support_term24bit = true;
             } else if (auto vte = vars.get(L"VTE_VERSION")) {
-                if (fish_wcstod(vte->as_string().c_str(), nullptr) > 3600) {
+                if (fish_wcstod(vte->as_string(), nullptr) > 3600) {
                     FLOGF(term_support, L"Truecolor support: Enabling for VTE version %ls",
                           vte->as_string().c_str());
                     support_term24bit = true;
@@ -453,28 +441,80 @@ static void update_fish_color_support(const environment_t &vars) {
 }
 
 // Try to initialize the terminfo/curses subsystem using our fallback terminal name. Do not set
-// `TERM` to our fallback. We're only doing this in the hope of getting a minimally functional
+// `TERM` to our fallback. We're only doing this in the hope of getting a functional
 // shell. If we launch an external command that uses TERM it should get the same value we were
 // given, if any.
-static bool initialize_curses_using_fallback(const char *term) {
-    // If $TERM is already set to the fallback name we're about to use there isn't any point in
-    // seeing if the fallback name can be used.
-    auto &vars = env_stack_t::globals();
+static void initialize_curses_using_fallbacks(const environment_t &vars) {
+    // xterm-256color is the most used terminal type by a massive margin,
+    // especially counting terminals that are mostly compatible.
+    const wchar_t *const fallbacks[] = {L"xterm-256color", L"xterm", L"ansi", L"dumb"};
+
+    wcstring termstr = L"";
     auto term_var = vars.get(L"TERM");
-    if (term_var.missing_or_empty()) return false;
-
-    auto term_env = wcs2string(term_var->as_string());
-    if (term_env == DEFAULT_TERM1 || term_env == DEFAULT_TERM2) return false;
-
-    if (is_interactive_session()) FLOGF(warning, _(L"Using fallback terminal type '%s'."), term);
-
-    int err_ret;
-    if (setupterm(const_cast<char *>(term), STDOUT_FILENO, &err_ret) == OK) return true;
-    if (is_interactive_session()) {
-        FLOGF(warning, _(L"Could not set up terminal using the fallback terminal type '%s'."),
-              term);
+    if (!term_var.missing_or_empty()) {
+        termstr = term_var->as_string();
     }
-    return false;
+
+    for (const wchar_t *fallback : fallbacks) {
+        // If $TERM is already set to the fallback name we're about to use there isn't any point in
+        // seeing if the fallback name can be used.
+        if (termstr == fallback) {
+            continue;
+        }
+
+        int err_ret = 0;
+        std::string term = wcs2string(fallback);
+        bool success = (setupterm(&term[0], STDOUT_FILENO, &err_ret) == OK);
+
+        if (is_interactive_session()) {
+            if (success) {
+                FLOGF(warning, _(L"Using fallback terminal type '%s'."), term.c_str());
+            } else {
+                FLOGF(warning,
+                      _(L"Could not set up terminal using the fallback terminal type '%s'."),
+                      term.c_str());
+            }
+        }
+        if (success) {
+            break;
+        }
+    }
+}
+
+// Apply any platform-specific hacks to cur_term/
+static void apply_term_hacks(const environment_t &vars) {
+    UNUSED(vars);
+    // Be careful, variables like "enter_italics_mode" are #defined to dereference through cur_term.
+    // See #8876.
+    if (!cur_term) {
+        return;
+    }
+#ifdef __APPLE__
+    // Hack in missing italics and dim capabilities omitted from MacOS xterm-256color terminfo
+    // Helps Terminal.app/iTerm
+    wcstring term_prog;
+    if (auto var = vars.get(L"TERM_PROGRAM")) {
+        term_prog = var->as_string();
+    }
+    if (term_prog == L"Apple_Terminal" || term_prog == L"iTerm.app") {
+        const auto term = vars.get(L"TERM");
+        if (term && term->as_string() == L"xterm-256color") {
+            static char sitm_esc[] = "\x1B[3m";
+            static char ritm_esc[] = "\x1B[23m";
+            static char dim_esc[] = "\x1B[2m";
+
+            if (!enter_italics_mode) {
+                enter_italics_mode = sitm_esc;
+            }
+            if (!exit_italics_mode) {
+                exit_italics_mode = ritm_esc;
+            }
+            if (!enter_dim_mode) {
+                enter_dim_mode = dim_esc;
+            }
+        }
+    }
+#endif
 }
 
 /// This is a pretty lame heuristic for detecting terminals that do not support setting the
@@ -486,8 +526,8 @@ static bool initialize_curses_using_fallback(const char *term) {
 /// One situation in which this breaks down is with screen, since screen supports setting the
 /// terminal title if the underlying terminal does so, but will print garbage on terminals that
 /// don't. Since we can't see the underlying terminal below screen there is no way to fix this.
-static const wchar_t *const title_terms[] = {L"xterm",  L"screen", L"tmux",
-                                             L"nxterm", L"rxvt",   L"alacritty"};
+static const wchar_t *const title_terms[] = {L"xterm", L"screen",    L"tmux",   L"nxterm",
+                                             L"rxvt",  L"alacritty", L"wezterm"};
 static bool does_term_support_setting_title(const environment_t &vars) {
     const auto term_var = vars.get(L"TERM");
     if (term_var.missing_or_empty()) return false;
@@ -528,10 +568,10 @@ static void init_curses(const environment_t &vars) {
         }
     }
 
-    int err_ret;
+    int err_ret{0};
     if (setupterm(nullptr, STDOUT_FILENO, &err_ret) == ERR) {
-        auto term = vars.get(L"TERM");
         if (is_interactive_session()) {
+            auto term = vars.get(L"TERM");
             FLOGF(warning, _(L"Could not set up terminal."));
             if (term.missing_or_empty()) {
                 FLOGF(warning, _(L"TERM environment variable not set."));
@@ -542,10 +582,10 @@ static void init_curses(const environment_t &vars) {
             }
         }
 
-        if (!initialize_curses_using_fallback(DEFAULT_TERM1)) {
-            initialize_curses_using_fallback(DEFAULT_TERM2);
-        }
+        initialize_curses_using_fallbacks(vars);
     }
+
+    apply_term_hacks(vars);
 
     can_set_term_title = does_term_support_setting_title(vars);
     term_has_xn =
@@ -556,13 +596,8 @@ static void init_curses(const environment_t &vars) {
     curses_initialized = true;
 }
 
-static const char *utf8_locales[] = {
-    "C.UTF-8",
-    "en_US.UTF-8",
-    "en_GB.UTF-8",
-    "de_DE.UTF-8",
-    "C.utf8",
-    "UTF-8",
+static constexpr const char *utf8_locales[] = {
+    "C.UTF-8", "en_US.UTF-8", "en_GB.UTF-8", "de_DE.UTF-8", "C.utf8", "UTF-8",
 };
 
 /// Initialize the locale subsystem.
@@ -606,6 +641,12 @@ static void init_locale(const environment_t &vars) {
             FLOGF(env_locale, L"Failed to fix locale");
         }
     }
+    // We *always* use a C-locale for numbers,
+    // because we always want "." except for in printf.
+    setlocale(LC_NUMERIC, "C");
+
+    // See that we regenerate our special locale for numbers.
+    fish_invalidate_numeric_locale();
 
     fish_setlocale();
     FLOGF(env_locale, L"init_locale() setlocale(): '%s'", locale);
@@ -625,7 +666,3 @@ static void init_locale(const environment_t &vars) {
 
 /// Returns true if we think the terminal supports setting its title.
 bool term_supports_setting_title() { return can_set_term_title; }
-
-// Limit `read` to 100 MiB (bytes not wide chars) by default. This can be overridden by the
-// fish_read_limit variable.
-size_t read_byte_limit = 100 * 1024 * 1024;

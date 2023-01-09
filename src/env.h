@@ -5,14 +5,17 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include <map>
 #include <memory>
 #include <string>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include "common.h"
 #include "maybe.h"
-#include "null_terminated_array.h"
+
+class owning_null_terminated_array_t;
 
 extern size_t read_byte_limit;
 extern bool curses_initialized;
@@ -20,31 +23,32 @@ extern bool curses_initialized;
 struct event_t;
 
 // Flags that may be passed as the 'mode' in env_stack_t::set() / environment_t::get().
-enum {
+enum : uint16_t {
     /// Default mode. Used with `env_stack_t::get()` to indicate the caller doesn't care what scope
     /// the var is in or whether it is exported or unexported.
     ENV_DEFAULT = 0,
     /// Flag for local (to the current block) variable.
     ENV_LOCAL = 1 << 0,
+    ENV_FUNCTION = 1 << 1,
     /// Flag for global variable.
-    ENV_GLOBAL = 1 << 1,
+    ENV_GLOBAL = 1 << 2,
     /// Flag for universal variable.
-    ENV_UNIVERSAL = 1 << 2,
+    ENV_UNIVERSAL = 1 << 3,
     /// Flag for exported (to commands) variable.
-    ENV_EXPORT = 1 << 3,
+    ENV_EXPORT = 1 << 4,
     /// Flag for unexported variable.
-    ENV_UNEXPORT = 1 << 4,
+    ENV_UNEXPORT = 1 << 5,
     /// Flag to mark a variable as a path variable.
-    ENV_PATHVAR = 1 << 5,
+    ENV_PATHVAR = 1 << 6,
     /// Flag to unmark a variable as a path variable.
-    ENV_UNPATHVAR = 1 << 6,
+    ENV_UNPATHVAR = 1 << 7,
     /// Flag for variable update request from the user. All variable changes that are made directly
     /// by the user, such as those from the `read` and `set` builtin must have this flag set. It
     /// serves one purpose: to indicate that an error should be returned if the user is attempting
     /// to modify a var that should not be modified by direct user action; e.g., a read-only var.
-    ENV_USER = 1 << 7,
+    ENV_USER = 1 << 8,
 };
-typedef uint32_t env_mode_flags_t;
+using env_mode_flags_t = uint16_t;
 
 /// Return values for `env_stack_t::set()`.
 enum { ENV_OK, ENV_PERM, ENV_SCOPE, ENV_INVALID, ENV_NOT_FOUND };
@@ -80,7 +84,8 @@ struct statuses_t {
 };
 
 /// Initialize environment variable data.
-void env_init(const struct config_paths_t *paths = nullptr, bool do_uvars = true, bool default_paths = false);
+void env_init(const struct config_paths_t *paths = nullptr, bool do_uvars = true,
+              bool default_paths = false);
 
 /// Various things we need to initialize at run-time that don't really fit any of the other init
 /// routines.
@@ -128,7 +133,6 @@ class env_var_t {
     env_var_t(const wchar_t *name, wcstring val) : env_var_t(std::move(val), flags_for(name)) {}
 
     bool empty() const { return vals_->empty() || (vals_->size() == 1 && vals_->front().empty()); }
-    bool read_only() const { return flags_ & flag_read_only; }
     bool exports() const { return flags_ & flag_export; }
     bool is_pathvar() const { return flags_ & flag_pathvar; }
     env_var_flags_t get_flags() const { return flags_; }
@@ -165,16 +169,6 @@ class env_var_t {
         return env_var_t{vals_, flags};
     }
 
-    env_var_t setting_read_only(bool read_only) const {
-        env_var_flags_t flags = flags_;
-        if (read_only) {
-            flags |= flag_read_only;
-        } else {
-            flags &= ~flag_read_only;
-        }
-        return env_var_t{vals_, flags};
-    }
-
     static env_var_flags_t flags_for(const wchar_t *name);
     static std::shared_ptr<const wcstring_list_t> empty_list();
 
@@ -196,7 +190,7 @@ class environment_t {
    public:
     virtual maybe_t<env_var_t> get(const wcstring &key,
                                    env_mode_flags_t mode = ENV_DEFAULT) const = 0;
-    virtual wcstring_list_t get_names(int flags) const = 0;
+    virtual wcstring_list_t get_names(env_mode_flags_t flags) const = 0;
     virtual ~environment_t();
 
     /// Returns the PWD with a terminating slash.
@@ -210,7 +204,7 @@ class null_environment_t : public environment_t {
     ~null_environment_t() override;
 
     maybe_t<env_var_t> get(const wcstring &key, env_mode_flags_t mode = ENV_DEFAULT) const override;
-    wcstring_list_t get_names(int flags) const override;
+    wcstring_list_t get_names(env_mode_flags_t flags) const override;
 };
 
 /// A mutable environment which allows scopes to be pushed and popped.
@@ -238,21 +232,16 @@ class env_stack_t final : public environment_t {
     maybe_t<env_var_t> get(const wcstring &key, env_mode_flags_t mode = ENV_DEFAULT) const override;
 
     /// Implementation of environment_t.
-    wcstring_list_t get_names(int flags) const override;
+    wcstring_list_t get_names(env_mode_flags_t flags) const override;
 
     /// Sets the variable with the specified name to the given values.
-    /// If \p out_events is supplied, populate it with any events generated through setting the
-    /// variable.
-    int set(const wcstring &key, env_mode_flags_t mode, wcstring_list_t vals,
-            std::vector<event_t> *out_events = nullptr);
+    int set(const wcstring &key, env_mode_flags_t mode, wcstring_list_t vals);
 
     /// Sets the variable with the specified name to a single value.
-    int set_one(const wcstring &key, env_mode_flags_t mode, wcstring val,
-                std::vector<event_t> *out_events = nullptr);
+    int set_one(const wcstring &key, env_mode_flags_t mode, wcstring val);
 
     /// Sets the variable with the specified name to no values.
-    int set_empty(const wcstring &key, env_mode_flags_t mode,
-                  std::vector<event_t> *out_events = nullptr);
+    int set_empty(const wcstring &key, env_mode_flags_t mode);
 
     /// Update the PWD variable based on the result of getcwd.
     void set_pwd_from_getcwd();
@@ -263,21 +252,15 @@ class env_stack_t final : public environment_t {
     /// \param mode should be ENV_USER if this is a remove request from the user, 0 otherwise. If
     /// this is a user request, read-only variables can not be removed. The mode may also specify
     /// the scope of the variable that should be erased.
-    /// \param out_events if non-null, populate it with any events generated from removing this
-    /// variable.
     ///
     /// \return zero if the variable existed, and non-zero if the variable did not exist
-    int remove(const wcstring &key, int mode, std::vector<event_t> *out_events = nullptr);
+    int remove(const wcstring &key, int mode);
 
     /// Push the variable stack. Used for implementing local variables for functions and for-loops.
     void push(bool new_scope);
 
     /// Pop the variable stack. Used for implementing local variables for functions and for-loops.
     void pop();
-
-    /// Synchronizes all universal variable changes: writes everything out, reads stuff in.
-    /// \return true if something changed, false otherwise.
-    bool universal_barrier();
 
     /// Returns an array containing all exported variables in a format suitable for execv.
     std::shared_ptr<owning_null_terminated_array_t> export_arr();
@@ -300,6 +283,12 @@ class env_stack_t final : public environment_t {
     /// Slightly optimized implementation.
     wcstring get_pwd_slash() const override;
 
+    /// Synchronizes universal variable changes.
+    /// If \p always is set, perform synchronization even if there's no pending changes from this
+    /// instance (that is, look for changes from other fish instances).
+    /// \return a list of events for changed variables.
+    std::vector<event_t> universal_sync(bool always);
+
     // Compatibility hack; access the "environment stack" from back when there was just one.
     static const std::shared_ptr<env_stack_t> &principal_ref();
     static env_stack_t &principal() { return *principal_ref(); }
@@ -313,10 +302,6 @@ bool get_use_posix_spawn();
 
 extern bool term_has_xn;  // does the terminal have the "eat_newline_glitch"
 
-/// Synchronizes all universal variable changes: writes everything out, reads stuff in.
-/// \return true if any value changed.
-bool env_universal_barrier();
-
 /// Returns true if we think the terminal supports setting its title.
 bool term_supports_setting_title();
 
@@ -329,4 +314,7 @@ wcstring env_get_runtime_path();
 void setenv_lock(const char *name, const char *value, int overwrite);
 void unsetenv_lock(const char *name);
 
+/// Returns the originally inherited variables and their values.
+/// This is a simple key->value map and not e.g. cut into paths.
+const std::map<wcstring, wcstring> &env_get_inherited();
 #endif

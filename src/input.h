@@ -4,11 +4,15 @@
 #define FISH_INPUT_H
 
 #include <stddef.h>
+#include <unistd.h>
 
+#include <functional>
+#include <memory>
 #include <vector>
 
 #include "common.h"
 #include "input_common.h"
+#include "maybe.h"
 
 #define FISH_BIND_MODE_VAR L"fish_bind_mode"
 #define DEFAULT_BIND_MODE L"default"
@@ -32,7 +36,7 @@ class inputter_t final : private input_event_queue_t {
     /// but do not permanently block the escape character.
     ///
     /// This is performed in the same way vim does it, i.e. if an escape character is read, wait for
-    /// more input for a short time (a few milliseconds). If more input is avaialable, it is assumed
+    /// more input for a short time (a few milliseconds). If more input is available, it is assumed
     /// to be an escape sequence for a special character (such as an arrow key), and readch attempts
     /// to parse it. If no more input follows after the escape key, it is assumed to be an actual
     /// escape key press, and is returned as such.
@@ -60,11 +64,8 @@ class inputter_t final : private input_event_queue_t {
     // Called when select() is interrupted by a signal.
     void select_interrupted() override;
 
-    // We need a parser to evaluate bindings.
-    const std::shared_ptr<parser_t> parser_;
-
-    std::vector<wchar_t> input_function_args_{};
-    bool function_status_{false};
+    // Called when we are notified of a uvar change.
+    void uvar_change_notified() override;
 
     void function_push_arg(wchar_t arg);
     void function_push_args(readline_cmd_t code);
@@ -72,6 +73,15 @@ class inputter_t final : private input_event_queue_t {
     void mapping_execute_matching_or_generic(const command_handler_t &command_handler);
     maybe_t<input_mapping_t> find_mapping(event_queue_peeker_t *peeker);
     char_event_t read_characters_no_readline();
+
+    // We need a parser to evaluate bindings.
+    const std::shared_ptr<parser_t> parser_;
+
+    std::vector<wchar_t> input_function_args_{};
+    bool function_status_{false};
+
+    // Transient storage to avoid repeated allocations.
+    std::vector<char_event_t> event_storage_{};
 };
 
 struct input_mapping_name_t {

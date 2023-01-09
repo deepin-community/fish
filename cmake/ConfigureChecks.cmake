@@ -5,6 +5,7 @@
 # This is the case for at least Cygwin and Newlib.
 list(APPEND CMAKE_REQUIRED_DEFINITIONS -D_GNU_SOURCE=1)
 include(CheckCXXCompilerFlag)
+include(CMakePushCheckState)
 
 if(APPLE)
     check_cxx_compiler_flag("-Werror=unguarded-availability" REQUIRES_UNGUARDED_AVAILABILITY)
@@ -31,6 +32,32 @@ if (HAS_REDUNDANT_MOVE)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wredundant-move")
 endif()
 
+# Defeat bogus warnings about missing field initializers for `var{}` initialization.
+if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    cmake_push_check_state()
+    list(APPEND CMAKE_REQUIRED_FLAGS "-W")
+    check_cxx_source_compiles("
+    struct sr_t { int x; };
+    int main(void) {
+        sr_t sr{};
+        return sr.x;
+    }"
+    EMPTY_VALUE_INIT_ACCEPTED
+    FAIL_REGEX "-Wmissing-field-initializers"
+    )
+    if (NOT EMPTY_VALUE_INIT_ACCEPTED)
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-missing-field-initializers")
+    endif()
+    cmake_pop_check_state()
+  endif()
+
+# Disable static destructors if we can.
+check_cxx_compiler_flag("-fno-c++-static-destructors" DISABLE_STATIC_DESTRUCTORS)
+if (DISABLE_STATIC_DESTRUCTORS)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-c++-static-destructors")
+endif()
+
+
 # Try using CMake's own logic to locate curses/ncurses
 find_package(Curses)
 if(NOT ${CURSES_FOUND})
@@ -56,10 +83,6 @@ endif()
 
 # Get threads.
 set(THREADS_PREFER_PTHREAD_FLAG ON)
-# FindThreads < 3.4.0 doesn't work for C++-only projects
-if(CMAKE_VERSION VERSION_LESS 3.4.0)
-    enable_language(C)
-endif()
 find_package(Threads REQUIRED)
 
 # Detect WSL. Does not match against native Windows/WIN32.
@@ -76,19 +99,22 @@ include(CheckIncludeFiles)
 include(CheckStructHasMember)
 include(CheckCXXSourceCompiles)
 include(CheckTypeSize)
-include(CMakePushCheckState)
 check_cxx_symbol_exists(backtrace_symbols execinfo.h HAVE_BACKTRACE_SYMBOLS)
-check_cxx_symbol_exists(clock_gettime time.h HAVE_CLOCK_GETTIME)
+
+# workaround for lousy mtime precision on a Linux kernel
+if (CMAKE_SYSTEM_NAME MATCHES "Linux|Android")
+    check_cxx_symbol_exists(clock_gettime time.h HAVE_CLOCK_GETTIME)
+    check_cxx_symbol_exists(futimens sys/stat.h HAVE_FUTIMENS)
+    if ((HAVE_CLOCK_GETTIME) AND (HAVE_FUTIMENS))
+        set(UVAR_FILE_SET_MTIME_HACK 1)
+    endif()
+endif()
+
 check_cxx_symbol_exists(ctermid_r stdio.h HAVE_CTERMID_R)
 check_struct_has_member("struct dirent" d_type dirent.h HAVE_STRUCT_DIRENT_D_TYPE LANGUAGE CXX)
 check_cxx_symbol_exists(dirfd "sys/types.h;dirent.h" HAVE_DIRFD)
 check_include_file_cxx(execinfo.h HAVE_EXECINFO_H)
 check_cxx_symbol_exists(flock sys/file.h HAVE_FLOCK)
-# futimens is new in OS X 10.13 but is a weak symbol.
-# Don't assume it exists just because we can link - it may be null.
-check_cxx_symbol_exists(futimens sys/stat.h HAVE_FUTIMENS)
-check_cxx_symbol_exists(futimes sys/time.h HAVE_FUTIMES)
-check_cxx_symbol_exists(getifaddrs ifaddrs.h HAVE_GETIFADDRS)
 check_cxx_symbol_exists(getpwent pwd.h HAVE_GETPWENT)
 check_cxx_symbol_exists(getrusage sys/resource.h HAVE_GETRUSAGE)
 check_cxx_symbol_exists(gettext libintl.h HAVE_GETTEXT)
@@ -112,29 +138,26 @@ check_struct_has_member("struct stat" st_mtimespec.tv_nsec "sys/stat.h"
     HAVE_STRUCT_STAT_ST_MTIMESPEC_TV_NSEC LANGUAGE CXX)
 check_struct_has_member("struct stat" st_mtim.tv_nsec "sys/stat.h" HAVE_STRUCT_STAT_ST_MTIM_TV_NSEC
     LANGUAGE CXX)
-check_cxx_symbol_exists(sys_errlist stdio.h HAVE_SYS_ERRLIST)
 check_include_file_cxx(sys/ioctl.h HAVE_SYS_IOCTL_H)
 check_include_file_cxx(sys/select.h HAVE_SYS_SELECT_H)
+
+# glibc 2.30 deprecated <sys/sysctl.h> because that's what glibc does.
+# Checking for that here rather than hardcoding a check on the glibc
+# version in the C++ sources at point of use makes more sense.
+SET(OLD_CMAKE_C_FLAGS "${CMAKE_C_FLAGS}")
+SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Werror")
 check_include_files("sys/types.h;sys/sysctl.h" HAVE_SYS_SYSCTL_H)
-check_include_file_cxx(termios.h HAVE_TERMIOS_H) # Needed for TIOCGWINSZ
+SET(CMAKE_C_FLAGS "${OLD_CMAKE_C_FLAGS}")
 
 check_cxx_symbol_exists(eventfd sys/eventfd.h HAVE_EVENTFD)
 check_cxx_symbol_exists(pipe2 unistd.h HAVE_PIPE2)
 check_cxx_symbol_exists(wcscasecmp wchar.h HAVE_WCSCASECMP)
-check_cxx_symbol_exists(wcsdup wchar.h HAVE_WCSDUP)
-check_cxx_symbol_exists(wcslcpy wchar.h HAVE_WCSLCPY)
 check_cxx_symbol_exists(wcsncasecmp wchar.h HAVE_WCSNCASECMP)
-check_cxx_symbol_exists(wcsndup wchar.h HAVE_WCSNDUP)
 
 # These are for compatibility with Solaris 10, which places the following
 # in the std namespace.
 if(NOT HAVE_WCSNCASECMP)
     check_cxx_symbol_exists(std::wcscasecmp wchar.h HAVE_STD__WCSCASECMP)
-endif()
-if(NOT HAVE_WCSDUP)
-    check_cxx_symbol_exists(std::wcsdup wchar.h HAVE_STD__WCSDUP)
-endif()
-if(NOT HAVE_WCSNCASECMP)
     check_cxx_symbol_exists(std::wcsncasecmp wchar.h HAVE_STD__WCSNCASECMP)
 endif()
 
@@ -147,13 +170,12 @@ endif()
 list(APPEND WCSTOD_L_INCLUDES "wchar.h")
 check_cxx_symbol_exists(wcstod_l "${WCSTOD_L_INCLUDES}" HAVE_WCSTOD_L)
 
-check_cxx_symbol_exists(_sys_errs stdlib.h HAVE__SYS__ERRS)
+check_cxx_symbol_exists(uselocale "locale.h;xlocale.h" HAVE_USELOCALE)
 
 cmake_push_check_state()
-set(CMAKE_EXTRA_INCLUDE_FILES termios.h sys/ioctl.h)
-check_type_size("struct winsize" STRUCT_WINSIZE LANGUAGE CXX)
+check_struct_has_member("struct winsize" ws_row "termios.h;sys/ioctl.h" _HAVE_WINSIZE)
 check_cxx_symbol_exists("TIOCGWINSZ" "termios.h;sys/ioctl.h" HAVE_TIOCGWINSZ)
-if(STRUCT_WINSIZE GREATER -1 AND HAVE_TIOCGWINSZ EQUAL 1)
+if(_HAVE_WINSIZE EQUAL 1 AND HAVE_TIOCGWINSZ EQUAL 1)
   set(HAVE_WINSIZE 1)
 endif()
 cmake_pop_check_state()
@@ -175,9 +197,9 @@ elseif(HAVE_NCURSES_TERM_H)
   set(TPARM_INCLUDES "${TPARM_INCLUDES}#include <ncurses/term.h>\n")
 endif()
 
-# Solaris and X/Open-conforming systems have a fixed-args tparm
 cmake_push_check_state()
 list(APPEND CMAKE_REQUIRED_LIBRARIES ${CURSES_LIBRARY})
+# Solaris and X/Open-conforming systems have a fixed-args tparm
 check_cxx_source_compiles("
 #define TPARM_VARARGS
 ${TPARM_INCLUDES}
@@ -187,6 +209,23 @@ int main () {
 }
 "
   TPARM_TAKES_VARARGS
+)
+
+
+# Check if tputs needs a function reading an int or char.
+# The only curses I can find that needs a char is OpenIndiana.
+check_cxx_source_compiles("
+#include <curses.h>
+#include <term.h>
+
+static int writer(int b) {
+    return b;
+}
+
+int main() {
+    return tputs(\"foo\", 5, writer);
+}"
+TPUTS_USES_INT_ARG
 )
 
 if(TPARM_TAKES_VARARGS)
@@ -228,15 +267,28 @@ int main () {
 check_cxx_source_compiles("
 #include <atomic>
 #include <cstdint>
-std::atomic<uint64_t> x (0);
+std::atomic<uint8_t> n8 (0);
+std::atomic<uint64_t> n64 (0);
 int main() {
-uint64_t i = x.load(std::memory_order_relaxed);
-return std::atomic_is_lock_free(&x);
+uint8_t i = n8.load(std::memory_order_relaxed);
+uint64_t j = n64.load(std::memory_order_relaxed);
+return std::atomic_is_lock_free(&n8)
+     & std::atomic_is_lock_free(&n64);
 }"
 LIBATOMIC_NOT_NEEDED)
 IF (NOT LIBATOMIC_NOT_NEEDED)
     set(ATOMIC_LIBRARY "atomic")
 endif()
+
+check_cxx_source_compiles("
+#include <sys/wait.h>
+
+int main() {
+    static_assert(WEXITSTATUS(0x007f) == 0x7f, \"This is our message we need to add because C++ is terrible\");
+    return 0;
+}
+"
+HAVE_WAITSTATUS_SIGNAL_RET)
 
 IF (APPLE)
     # Check if mbrtowc implementation attempts to encode invalid UTF-8 sequences

@@ -1,7 +1,7 @@
 function fish_vi_key_bindings --description 'vi-like key bindings for fish'
     if contains -- -h $argv
         or contains -- --help $argv
-        echo "Sorry but this function doesn't support -h or --help"
+        echo "Sorry but this function doesn't support -h or --help" >&2
         return 1
     end
 
@@ -50,24 +50,6 @@ function fish_vi_key_bindings --description 'vi-like key bindings for fish'
         __fish_shared_key_bindings -s -M $mode
     end
 
-    bind -s --preset -M insert \r execute
-    bind -s --preset -M insert \n execute
-
-    bind -s --preset -M insert "" self-insert
-
-    # Space and other command terminators expand abbrs _and_ inserts itself.
-    bind -s --preset -M insert " " self-insert expand-abbr
-    bind -s --preset -M insert ";" self-insert expand-abbr
-    bind -s --preset -M insert "|" self-insert expand-abbr
-    bind -s --preset -M insert "&" self-insert expand-abbr
-    bind -s --preset -M insert "^" self-insert expand-abbr
-    bind -s --preset -M insert ">" self-insert expand-abbr
-    bind -s --preset -M insert "<" self-insert expand-abbr
-    # Closing a command substitution expands abbreviations
-    bind -s --preset -M insert ")" self-insert expand-abbr
-    # Ctrl-space inserts space without expanding abbrs
-    bind -s --preset -M insert -k nul 'commandline -i " "'
-
     # Add a way to switch from insert to normal (command) mode.
     # Note if we are paging, we want to stay in insert mode
     # See #2871
@@ -106,6 +88,7 @@ function fish_vi_key_bindings --description 'vi-like key bindings for fish'
 
     bind -s --preset [ history-token-search-backward
     bind -s --preset ] history-token-search-forward
+    bind -s --preset / history-pager
 
     bind -s --preset k up-or-search
     bind -s --preset j down-or-search
@@ -118,12 +101,11 @@ function fish_vi_key_bindings --description 'vi-like key bindings for fish'
     bind -s --preset e forward-single-char forward-word backward-char
     bind -s --preset E forward-bigword backward-char
 
-    # OS X SnowLeopard doesn't have these keys. Don't show an annoying error message.
     # Vi/Vim doesn't support these keys in insert mode but that seems silly so we do so anyway.
-    bind -s --preset -M insert -k home beginning-of-line 2>/dev/null
-    bind -s --preset -M default -k home beginning-of-line 2>/dev/null
-    bind -s --preset -M insert -k end end-of-line 2>/dev/null
-    bind -s --preset -M default -k end end-of-line 2>/dev/null
+    bind -s --preset -M insert -k home beginning-of-line
+    bind -s --preset -M default -k home beginning-of-line
+    bind -s --preset -M insert -k end end-of-line
+    bind -s --preset -M default -k end end-of-line
 
     # Vi moves the cursor back if, after deleting, it is at EOL.
     # To emulate that, move forward, then backward, which will be a NOP
@@ -140,8 +122,8 @@ function fish_vi_key_bindings --description 'vi-like key bindings for fish'
     bind -s --preset -M default \ch backward-char
     bind -s --preset -M insert \x7f backward-delete-char
     bind -s --preset -M default \x7f backward-char
-    bind -s --preset -M insert \e\[3\;2~ backward-delete-char # Mavericks Terminal.app shift-ctrl-delete
-    bind -s --preset -M default \e\[3\;2~ backward-delete-char # Mavericks Terminal.app shift-ctrl-delete
+    bind -s --preset -M insert -k sdc backward-delete-char # shifted delete
+    bind -s --preset -M default -k sdc backward-delete-char # shifted delete
 
     bind -s --preset dd kill-whole-line
     bind -s --preset D kill-line
@@ -172,8 +154,8 @@ function fish_vi_key_bindings --description 'vi-like key bindings for fish'
     bind -s --preset 'd,' begin-selection repeat-jump-reverse kill-selection end-selection
 
     bind -s --preset -m insert s delete-char repaint-mode
-    bind -s --preset -m insert S kill-whole-line repaint-mode
-    bind -s --preset -m insert cc kill-whole-line repaint-mode
+    bind -s --preset -m insert S kill-inner-line repaint-mode
+    bind -s --preset -m insert cc kill-inner-line repaint-mode
     bind -s --preset -m insert C kill-line repaint-mode
     bind -s --preset -m insert c\$ kill-line repaint-mode
     bind -s --preset -m insert c\^ backward-kill-line repaint-mode
@@ -323,6 +305,7 @@ function fish_vi_key_bindings --description 'vi-like key bindings for fish'
     # After executing once, this will have defined functions listening for the variable.
     # Therefore it needs to be before setting fish_bind_mode.
     fish_vi_cursor
+    set -g fish_cursor_selection_mode inclusive
 
     set fish_bind_mode $init_mode
 

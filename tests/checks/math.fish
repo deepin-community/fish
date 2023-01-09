@@ -109,11 +109,16 @@ not math 'ncr(1)'
 # CHECKERR: 'ncr(1)'
 # CHECKERR:       ^
 
+math "min()"
+# CHECKERR: math: Error: Too few arguments
+# CHECKERR: 'min()'
+# CHECKERR:      ^
+
 # There is no "blah" function.
 not math 'blah()'
 # CHECKERR: math: Error: Unknown function
 # CHECKERR: 'blah()'
-# CHECKERR:    ^
+# CHECKERR:  ^~~^
 
 math n + 4
 # CHECKERR: math: Error: Unknown function
@@ -126,19 +131,48 @@ not math 'sin()'
 # CHECKERR: 'sin()'
 # CHECKERR:      ^
 not math '2 + 2 4'
-# CHECKERR: math: Error: Too many arguments
+# CHECKERR: math: Error: Missing operator
 # CHECKERR: '2 + 2 4'
-# CHECKERR:        ^
+# This regex to check whitespace - the error appears between the second 2 and the 4!
+# (right after the 2)
+# CHECKERR: {{^}}      ^
+printf '<%s>\n' (math '2 + 2      4' 2>&1)
+# CHECK: <math: Error: Missing operator>
+# CHECK: <'2 + 2      4'>
+# CHECK: <      ^~~~~^>
+
+not math '(1 2)'
+# CHECKERR: math: Error: Missing operator
+# CHECKERR: '(1 2)'
+# CHECKERR:    ^
+not math '(1 pi)'
+# CHECKERR: math: Error: Missing operator
+# CHECKERR: '(1 pi)'
+# CHECKERR:    ^
+not math '(1 pow 1,2)'
+# CHECKERR: math: Error: Missing operator
+# CHECKERR: '(1 pow 1,2)'
+# CHECKERR:    ^
 not math
-# CHECKERR: math: Expected at least 1 args, got 0
+# CHECKERR: math: expected >= 1 arguments; got 0
 not math -s 12
-# CHECKERR: math: Expected at least 1 args, got 0
+# CHECKERR: math: expected >= 1 arguments; got 0
+# XXX FIXME these two should be just "missing argument" errors, the count is not helpful
 not math 2^999999
 # CHECKERR: math: Error: Result is infinite
 # CHECKERR: '2^999999'
-not math 1 / 0
-# CHECKERR: math: Error: Result is infinite
-# CHECKERR: '1 / 0'
+printf '<%s>\n' (not math 1 / 0 2>&1)
+# CHECK: <math: Error: Division by zero>
+# CHECK: <'1 / 0'>
+# CHECK: <   ^>
+printf '<%s>\n' (math 1 % 0 - 5 2>&1)
+# CHECK: <math: Error: Division by zero>
+# CHECK: <'1 % 0 - 5'>
+# CHECK: <   ^>
+printf '<%s>\n' (math min 1 / 0, 5 2>&1)
+# CHECK: <math: Error: Division by zero>
+# CHECK: <'min 1 / 0, 5'>
+# CHECK: <       ^>
 
 # Validate "x" as multiplier
 math 0x2 # Hex
@@ -147,7 +181,7 @@ math 2x 4
 math 2 x4 # ERROR
 # CHECKERR: math: Error: Unknown function
 # CHECKERR: '2 x4'
-# CHECKERR:     ^
+# CHECKERR:    ^^
 math 0x 3
 # CHECK: 2
 # CHECK: 20
@@ -181,16 +215,37 @@ math 'log(16'
 # CHECKERR: 'log(16'
 # CHECKERR:       ^
 
+math '(2'
+# CHECKERR: math: Error: Missing closing parenthesis
+# CHECKERR: '(2'
+# CHECKERR:   ^
+
 math --base=16 255 / 15
 # CHECK: 0x11
 math -bhex 16 x 2
 # CHECK: 0x20
 math --base hex 12 + 0x50
 # CHECK: 0x5c
+math --base hex 0
+# CHECK: 0x0
+math --base hex -1
+# CHECK: -0x1
+math --base hex -15
+# CHECK: -0xf
+math --base hex 'pow(2,40)'
+# CHECK: 0x10000000000
+math --base octal 0
+# CHECK: 0
+math --base octal -1
+# CHECK: -01
+math --base octal -15
+# CHECK: -017
+math --base octal 'pow(2,40)'
+# CHECK: 020000000000000
 math --base octal --scale=0 55
 # CHECK: 067
 math --base notabase
-# CHECKERR: math: 'notabase' is not a valid base value
+# CHECKERR: math: notabase: invalid base value
 echo $status
 # CHECK: 2
 
@@ -208,6 +263,11 @@ math pow sin 3, 5
 # CHECKERR: 'pow sin 3, 5'
 # CHECKERR: ^
 
+math pow sin 3, 5 + 2
+# CHECKERR: math: Error: Too many arguments
+# CHECKERR: 'pow sin 3, 5 + 2'
+# CHECKERR:             ^~~~^
+
 math sin pow 3, 5
 # CHECK: -0.890009
 
@@ -219,3 +279,59 @@ math pow 2, cos -pi
 # i.e. 4
 math pow 2 x cos'(-pi)', 2
 # CHECK: 4
+
+# This used to take ages, see #8170.
+# If this test hangs, that's reintroduced!
+math 'ncr(0/0, 1)'
+# CHECKERR: math: Error: Division by zero
+# CHECKERR: 'ncr(0/0, 1)'
+# CHECKERR:       ^
+
+# Variadic functions require at least one argument
+math min
+# CHECKERR: math: Error: Too few arguments
+# CHECKERR: 'min'
+# CHECKERR:    ^
+math min 2
+# CHECK: 2
+math min 2, 3, 4, 5, -10, 1
+# CHECK: -10
+
+# Parentheses are required to disambiguate function call nested in argument list,
+# except when the call is the last argument.
+math 'min 5, 4, 3, ncr 2, 1, 5'
+# CHECKERR: math: Error: Too many arguments
+# CHECKERR:      'min 5, 4, 3, ncr 2, 1, 5'
+# CHECKERR: {{^}}                        ^
+math 'min 5, 4, 3, ncr(2, 1), 5'
+# CHECK: 2
+math 'min 5, 4, 3, 5, ncr 2, 1'
+# CHECK: 2
+# Variadic function consumes all available arguments,
+# so it is always the last argument unless parenthesised.
+# max(1, 2, min(3, 4, 5))
+math 'max 1, 2, min 3, 4, 5'
+# CHECK: 3
+# max(1, 2, min(3, 4), 5)
+math 'max 1, 2, min(3, 4), 5'
+# CHECK: 5
+math 0_1
+# CHECK: 1
+math 0x0_A
+# CHECK: 10
+math 1_000 + 2_000
+# CHECK: 3000
+math 1_0_0_0
+# CHECK: 1000
+math 0_0.5_0 + 0_1.0_0
+# CHECK: 1.5
+math 2e0_0_2
+# CHECK: 200
+math -0_0.5_0_0E0_0_3
+# CHECK: -500
+math 20e-0_1
+# CHECK: 2
+math 0x0_2.0_0_0P0_2
+# CHECK: 8
+math -0x8p-0_3
+# CHECK: -1

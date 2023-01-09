@@ -5,13 +5,16 @@
 #ifndef FISH_COMPLETE_H
 #define FISH_COMPLETE_H
 
-#include <stdint.h>
+#include "config.h"  // IWYU pragma: keep
 
+#include <cstddef>
+#include <cstdint>
 #include <functional>
+#include <utility>
 #include <vector>
 
+//#include "expand.h"
 #include "common.h"
-#include "enum_set.h"
 #include "wcstringutil.h"
 
 struct completion_mode_t {
@@ -26,27 +29,29 @@ struct completion_mode_t {
 /// Character that separates the completion and description on programmable completions.
 #define PROG_COMPLETE_SEP L'\t'
 
-class environment_t;
+class parser_t;
 
 enum {
     /// Do not insert space afterwards if this is the only completion. (The default is to try insert
     /// a space).
     COMPLETE_NO_SPACE = 1 << 0,
     /// This is not the suffix of a token, but replaces it entirely.
-    COMPLETE_REPLACES_TOKEN = 1 << 2,
+    COMPLETE_REPLACES_TOKEN = 1 << 1,
     /// This completion may or may not want a space at the end - guess by checking the last
     /// character of the completion.
-    COMPLETE_AUTO_SPACE = 1 << 3,
+    COMPLETE_AUTO_SPACE = 1 << 2,
     /// This completion should be inserted as-is, without escaping.
-    COMPLETE_DONT_ESCAPE = 1 << 4,
+    COMPLETE_DONT_ESCAPE = 1 << 3,
     /// If you do escape, don't escape tildes.
-    COMPLETE_DONT_ESCAPE_TILDES = 1 << 5,
+    COMPLETE_DONT_ESCAPE_TILDES = 1 << 4,
     /// Do not sort supplied completions
-    COMPLETE_DONT_SORT = 1 << 6,
+    COMPLETE_DONT_SORT = 1 << 5,
     /// This completion looks to have the same string as an existing argument.
-    COMPLETE_DUPLICATES_ARGUMENT = 1 << 7
+    COMPLETE_DUPLICATES_ARGUMENT = 1 << 6,
+    /// This completes not just a token but replaces the entire commandline.
+    COMPLETE_REPLACES_COMMANDLINE = 1 << 7,
 };
-typedef int complete_flags_t;
+using complete_flags_t = uint8_t;
 
 /// std::function which accepts a completion string and returns its description.
 using description_func_t = std::function<wcstring(const wcstring &)>;
@@ -54,6 +59,7 @@ using description_func_t = std::function<wcstring(const wcstring &)>;
 /// Helper to return a description_func_t for a constant string.
 description_func_t const_desc(const wcstring &s);
 
+/// This is an individual completion entry, i.e. the result of an expansion of a completion rule.
 class completion_t {
    private:
     // No public default constructor.
@@ -70,10 +76,6 @@ class completion_t {
     /// The type of fuzzy match.
     string_fuzzy_match_t match;
     /// Flags determining the completion behavior.
-    ///
-    /// Determines whether a space should be inserted after this completion if it is the only
-    /// possible completion using the COMPLETE_NO_SPACE flag. The COMPLETE_NO_CASE can be used to
-    /// signal that this completion is case insensitive.
     complete_flags_t flags;
 
     // Construction.
@@ -87,12 +89,11 @@ class completion_t {
     completion_t(completion_t &&) noexcept;
     completion_t &operator=(completion_t &&) noexcept;
 
-    // Compare two completions. No operating overlaoding to make this always explicit (there's
-    // potentially multiple ways to compare completions).
-    //
-    // "Naturally less than" means in a natural ordering, where digits are treated as numbers. For
-    // example, foo10 is naturally greater than foo2 (but alphabetically less than it).
-    static bool is_naturally_less_than(const completion_t &a, const completion_t &b);
+    /// \return whether this replaces its token.
+    bool replaces_token() const { return flags & COMPLETE_REPLACES_TOKEN; }
+
+    /// \return whether this replaces the entire commandline.
+    bool replaces_commandline() const { return flags & COMPLETE_REPLACES_COMMANDLINE; }
 
     /// \return the completion's match rank. Lower ranks are better completions.
     uint32_t rank() const { return match.rank(); }
@@ -103,21 +104,30 @@ class completion_t {
 
 using completion_list_t = std::vector<completion_t>;
 
-enum class completion_request_t {
-    autosuggestion,  // indicates the completion is for an autosuggestion
-    descriptions,    // indicates that we want descriptions
-    fuzzy_match,     // indicates that we don't require a prefix match
-    COUNT
+struct completion_request_options_t {
+    bool autosuggestion{};  // requesting autosuggestion
+    bool descriptions{};    // make descriptions
+    bool fuzzy_match{};     // if set, we do not require a prefix match
+
+    // Options for an autosuggestion.
+    static completion_request_options_t autosuggest() {
+        completion_request_options_t res{};
+        res.autosuggestion = true;
+        res.descriptions = false;
+        res.fuzzy_match = false;
+        return res;
+    }
+
+    // Options for a "normal" completion.
+    static completion_request_options_t normal() {
+        completion_request_options_t res{};
+        res.autosuggestion = false;
+        res.descriptions = true;
+        res.fuzzy_match = true;
+        return res;
+    }
 };
 
-template <>
-struct enum_info_t<completion_request_t> {
-    static constexpr auto count = completion_request_t::COUNT;
-};
-
-using completion_request_flags_t = enum_set_t<completion_request_t>;
-
-class completion_t;
 using completion_list_t = std::vector<completion_t>;
 
 /// A completion receiver accepts completions. It is essentially a wrapper around std::vector with
@@ -189,7 +199,7 @@ class completion_receiver_t {
     const size_t limit_;
 };
 
-enum complete_option_type_t {
+enum complete_option_type_t : uint8_t {
     option_type_args_only,    // no option
     option_type_short,        // -x
     option_type_single_long,  // -foo
@@ -199,16 +209,14 @@ enum complete_option_type_t {
 /// Sorts and remove any duplicate completions in the completion list, then puts them in priority
 /// order.
 void completions_sort_and_prioritize(completion_list_t *comps,
-                                     completion_request_flags_t flags = {});
+                                     completion_request_options_t flags = {});
 
-/// Add a completion.
-///
-/// All supplied values are copied, they should be freed by or otherwise disposed by the caller.
+/// Add an unexpanded completion "rule" to generate completions from for a command.
 ///
 /// Examples:
 ///
-/// The command 'gcc -o' requires that a file follows it, so the NO_COMMON option is suitable. This
-/// can be done using the following line:
+/// The command 'gcc -o' requires that a file follows it, so the requires_param mode is suitable.
+/// This can be done using the following line:
 ///
 /// complete -c gcc -s o -r
 ///
@@ -232,9 +240,10 @@ void completions_sort_and_prioritize(completion_list_t *comps,
 /// \param condition a command to be run to check it this completion should be used. If \c condition
 /// is empty, the completion is always used.
 /// \param flags A set of completion flags
-void complete_add(const wchar_t *cmd, bool cmd_is_path, const wcstring &option,
+void complete_add(const wcstring &cmd, bool cmd_is_path, const wcstring &option,
                   complete_option_type_t option_type, completion_mode_t result_mode,
-                  const wchar_t *condition, const wchar_t *comp, const wchar_t *desc, int flags);
+                  wcstring_list_t condition, const wchar_t *comp, const wchar_t *desc,
+                  complete_flags_t flags);
 
 /// Remove a previously defined completion.
 void complete_remove(const wcstring &cmd, bool cmd_is_path, const wcstring &option,
@@ -243,20 +252,21 @@ void complete_remove(const wcstring &cmd, bool cmd_is_path, const wcstring &opti
 /// Removes all completions for a given command.
 void complete_remove_all(const wcstring &cmd, bool cmd_is_path);
 
+/// Load command-specific completions for the specified command.
+/// \return true if something new was loaded, false if not.
+bool complete_load(const wcstring &cmd, parser_t &parser);
+
 /// \return all completions of the command cmd.
+/// If \p ctx contains a parser, this will autoload functions and completions as needed.
+/// If it does not contain a parser, then any completions which need autoloading will be returned in
+/// \p needs_load, if not null.
 class operation_context_t;
-completion_list_t complete(const wcstring &cmd, completion_request_flags_t flags,
-                           const operation_context_t &ctx);
+completion_list_t complete(const wcstring &cmd, completion_request_options_t flags,
+                           const operation_context_t &ctx,
+                           wcstring_list_t *out_needs_load = nullptr);
 
 /// Return a list of all current completions.
 wcstring complete_print(const wcstring &cmd = L"");
-
-/// Tests if the specified option is defined for the specified command.
-int complete_is_valid_option(const wcstring &str, const wcstring &opt,
-                             wcstring_list_t *inErrorsOrNull, bool allow_autoload);
-
-/// Tests if the specified argument is valid for the specified option and command.
-bool complete_is_valid_argument(const wcstring &str, const wcstring &opt, const wcstring &arg);
 
 /// Create a new completion entry.
 ///
@@ -265,7 +275,7 @@ bool complete_is_valid_argument(const wcstring &str, const wcstring &opt, const 
 /// \param desc The description of the completion
 /// \param flags completion flags
 void append_completion(completion_list_t *completions, wcstring comp, wcstring desc = wcstring(),
-                       int flags = 0,
+                       complete_flags_t flags = 0,
                        string_fuzzy_match_t match = string_fuzzy_match_t::exact_match());
 
 /// Support for "wrap targets." A wrap target is a command that completes like another command.

@@ -1,24 +1,23 @@
 #ifndef FISH_IO_H
 #define FISH_IO_H
 
-#include <pthread.h>
 #include <stdarg.h>
-#include <stddef.h>
-#include <stdlib.h>
+#include <unistd.h>
 
-#include <atomic>
+#include <cstdint>
+#include <cwchar>
 #include <future>
 #include <memory>
-#include <mutex>
+#include <string>
+#include <utility>
 #include <vector>
 
 #include "common.h"
-#include "env.h"
 #include "fds.h"
-#include "flog.h"
 #include "global_safety.h"
-#include "maybe.h"
 #include "redirection.h"
+#include "signal.h"
+#include "topic_monitor.h"
 
 using std::shared_ptr;
 
@@ -38,7 +37,7 @@ enum class separation_type_t {
 
 /// A separated_buffer_t contains a list of elements, some of which may be separated explicitly and
 /// others which must be separated further by the user (e.g. via IFS).
-class separated_buffer_t {
+class separated_buffer_t : noncopyable_t {
    public:
     struct element_t {
         std::string contents;
@@ -50,11 +49,7 @@ class separated_buffer_t {
         bool is_explicitly_separated() const { return separation == separation_type_t::explicitly; }
     };
 
-    /// separated_buffer_t may not be copied.
-    separated_buffer_t(const separated_buffer_t &) = delete;
-    void operator=(const separated_buffer_t &) = delete;
-
-    /// We may be moved.
+    /// We not be copied but may be moved.
     /// Note this leaves the moved-from value in a bogus state until clear() is called on it.
     separated_buffer_t(separated_buffer_t &&) = default;
     separated_buffer_t &operator=(separated_buffer_t &&) = default;
@@ -89,25 +84,27 @@ class separated_buffer_t {
     const std::vector<element_t> &elements() const { return elements_; }
 
     /// Append a string \p str of a given length \p len, with separation type \p sep.
-    void append(const char *str, size_t len, separation_type_t sep = separation_type_t::inferred) {
-        if (!try_add_size(len)) return;
+    bool append(const char *str, size_t len, separation_type_t sep = separation_type_t::inferred) {
+        if (!try_add_size(len)) return false;
         // Try merging with the last element.
         if (sep == separation_type_t::inferred && last_inferred()) {
             elements_.back().contents.append(str, len);
         } else {
             elements_.emplace_back(std::string(str, len), sep);
         }
+        return true;
     }
 
     /// Append a string \p str with separation type \p sep.
-    void append(std::string &&str, separation_type_t sep = separation_type_t::inferred) {
-        if (!try_add_size(str.size())) return;
+    bool append(std::string &&str, separation_type_t sep = separation_type_t::inferred) {
+        if (!try_add_size(str.size())) return false;
         // Try merging with the last element.
         if (sep == separation_type_t::inferred && last_inferred()) {
             elements_.back().contents.append(str);
         } else {
             elements_.emplace_back(std::move(str), sep);
         }
+        return true;
     }
 
     /// Remove all elements and unset the discard flag.
@@ -163,11 +160,7 @@ class separated_buffer_t {
 enum class io_mode_t { file, pipe, fd, close, bufferfill };
 
 /// Represents an FD redirection.
-class io_data_t {
-    // No assignment or copying allowed.
-    io_data_t(const io_data_t &rhs) = delete;
-    void operator=(const io_data_t &rhs) = delete;
-
+class io_data_t : noncopyable_t, nonmovable_t {
    protected:
     io_data_t(io_mode_t m, int fd, int source_fd) : io_mode(m), fd(fd), source_fd(source_fd) {}
 
@@ -246,7 +239,6 @@ class io_pipe_t final : public io_data_t {
 };
 
 class io_buffer_t;
-class io_chain_t;
 
 /// Represents filling an io_buffer_t. Very similar to io_pipe_t.
 class io_bufferfill_t final : public io_data_t {
@@ -283,8 +275,6 @@ class io_bufferfill_t final : public io_data_t {
     static separated_buffer_t finish(std::shared_ptr<io_bufferfill_t> &&filler);
 };
 
-class output_stream_t;
-
 /// An io_buffer_t is a buffer which can populate itself by reading from an fd.
 /// It is not an io_data_t.
 class io_buffer_t {
@@ -294,8 +284,8 @@ class io_buffer_t {
     ~io_buffer_t();
 
     /// Append a string to the buffer.
-    void append(std::string &&str, separation_type_t type = separation_type_t::inferred) {
-        buffer_.acquire()->append(std::move(str), type);
+    bool append(std::string &&str, separation_type_t type = separation_type_t::inferred) {
+        return buffer_.acquire()->append(std::move(str), type);
     }
 
     /// \return true if output was discarded due to exceeding the read limit.
@@ -342,7 +332,7 @@ class io_chain_t : public std::vector<io_data_ref_t> {
 
     void remove(const io_data_ref_t &element);
     void push_back(io_data_ref_t element);
-    void append(const io_chain_t &chain);
+    bool append(const io_chain_t &chain);
 
     /// \return the last io redirection in the chain for the specified file descriptor, or nullptr
     /// if none.
@@ -358,10 +348,10 @@ class io_chain_t : public std::vector<io_data_ref_t> {
 
 /// Base class representing the output that a builtin can generate.
 /// This has various subclasses depending on the ultimate output destination.
-class output_stream_t {
+class output_stream_t : noncopyable_t, nonmovable_t {
    public:
     /// Required override point. The output stream receives a string \p s with \p amt chars.
-    virtual void append(const wchar_t *s, size_t amt) = 0;
+    virtual bool append(const wchar_t *s, size_t amt) = 0;
 
     /// \return any internally buffered contents.
     /// This is only implemented for a string_output_stream; others flush data to their underlying
@@ -373,37 +363,41 @@ class output_stream_t {
     virtual int flush_and_check_error();
 
     /// An optional override point. This is for explicit separation.
-    virtual void append_with_separation(const wchar_t *s, size_t len, separation_type_t type);
+    /// \param want_newline this is true if the output item should be ended with a newline. This
+    /// is only relevant if we are printing the output to a stream,
+    virtual bool append_with_separation(const wchar_t *s, size_t len, separation_type_t type,
+                                        bool want_newline = true);
 
     /// The following are all convenience overrides.
-    void append_with_separation(const wcstring &s, separation_type_t type) {
-        append_with_separation(s.data(), s.size(), type);
+    bool append_with_separation(const wcstring &s, separation_type_t type,
+                                bool want_newline = true) {
+        return append_with_separation(s.data(), s.size(), type, want_newline);
     }
 
     /// Append a string.
-    void append(const wcstring &s) { append(s.data(), s.size()); }
-    void append(const wchar_t *s) { append(s, std::wcslen(s)); }
+    bool append(const wcstring &s) { return append(s.data(), s.size()); }
+    bool append(const wchar_t *s) { return append(s, std::wcslen(s)); }
 
     /// Append a char.
-    void append(wchar_t s) { append(&s, 1); }
-    void push_back(wchar_t c) { append(c); }
+    bool append(wchar_t s) { return append(&s, 1); }
+    bool push_back(wchar_t c) { return append(c); }
 
     // Append data from a narrow buffer, widening it.
-    void append_narrow_buffer(const separated_buffer_t &buffer);
+    bool append_narrow_buffer(const separated_buffer_t &buffer);
 
     /// Append a format string.
-    void append_format(const wchar_t *format, ...) {
+    bool append_format(const wchar_t *format, ...) {
         va_list va;
         va_start(va, format);
-        append_formatv(format, va);
+        bool r = append_formatv(format, va);
         va_end(va);
+
+        return r;
     }
 
-    void append_formatv(const wchar_t *format, va_list va) { append(vformat_string(format, va)); }
-
-    // No copying.
-    output_stream_t(const output_stream_t &s) = delete;
-    void operator=(const output_stream_t &s) = delete;
+    bool append_formatv(const wchar_t *format, va_list va) {
+        return append(vformat_string(format, va));
+    }
 
     output_stream_t() = default;
     virtual ~output_stream_t() = default;
@@ -411,7 +405,7 @@ class output_stream_t {
 
 /// A null output stream which ignores all writes.
 class null_output_stream_t final : public output_stream_t {
-    virtual void append(const wchar_t *s, size_t amt) override;
+    virtual bool append(const wchar_t *s, size_t amt) override;
 };
 
 /// An output stream for builtins which outputs to an fd.
@@ -419,15 +413,20 @@ class null_output_stream_t final : public output_stream_t {
 class fd_output_stream_t final : public output_stream_t {
    public:
     /// Construct from a file descriptor, which must be nonegative.
-    explicit fd_output_stream_t(int fd) : fd_(fd) { assert(fd_ >= 0 && "Invalid fd"); }
+    explicit fd_output_stream_t(int fd) : fd_(fd), sigcheck_(topic_t::sighupint) {
+        assert(fd_ >= 0 && "Invalid fd");
+    }
 
     int flush_and_check_error() override;
 
-    void append(const wchar_t *s, size_t amt) override;
+    bool append(const wchar_t *s, size_t amt) override;
 
    private:
     /// The file descriptor to write to.
     const int fd_;
+
+    /// Used to check if a SIGINT has been received when EINTR is encountered
+    sigchecker_t sigcheck_;
 
     /// Whether we have received an error.
     bool errored_{false};
@@ -437,7 +436,7 @@ class fd_output_stream_t final : public output_stream_t {
 class string_output_stream_t final : public output_stream_t {
    public:
     string_output_stream_t() = default;
-    void append(const wchar_t *s, size_t amt) override;
+    bool append(const wchar_t *s, size_t amt) override;
 
     /// \return the wcstring containing the output.
     const wcstring &contents() const override;
@@ -454,8 +453,9 @@ class buffered_output_stream_t final : public output_stream_t {
         assert(buffer_ && "Buffer must not be null");
     }
 
-    void append(const wchar_t *s, size_t amt) override;
-    void append_with_separation(const wchar_t *s, size_t len, separation_type_t type) override;
+    bool append(const wchar_t *s, size_t amt) override;
+    bool append_with_separation(const wchar_t *s, size_t len, separation_type_t type,
+                                bool want_newline) override;
     int flush_and_check_error() override;
 
    private:
@@ -463,7 +463,7 @@ class buffered_output_stream_t final : public output_stream_t {
     std::shared_ptr<io_buffer_t> buffer_;
 };
 
-struct io_streams_t {
+struct io_streams_t : noncopyable_t {
     // Streams for out and err.
     output_stream_t &out;
     output_stream_t &err;
@@ -494,10 +494,6 @@ struct io_streams_t {
     // share pgid.
     // FIXME: this is awkwardly placed.
     std::shared_ptr<job_group_t> job_group{};
-
-    // io_streams_t cannot be copied.
-    io_streams_t(const io_streams_t &) = delete;
-    void operator=(const io_streams_t &) = delete;
 
     io_streams_t(output_stream_t &out, output_stream_t &err) : out(out), err(err) {}
 };

@@ -20,19 +20,16 @@ function fish_job_summary -a job_id is_foreground cmd_line signal_or_end_name si
     # signals. If echoctl is on, then the terminal will have written ^C to the console.
     # If off, it won't have. We don't echo ^C either way, so as to respect the user's
     # preference.
-    if test $signal_or_end_name = SIGINT; and test $is_foreground -eq 1
+    if test "$signal_or_end_name" = SIGINT; and test $is_foreground -eq 1
         return
     end
 
-    set -l ellipsis '...'
-    if string match -iqr 'utf.?8' -- $LANG
-        set ellipsis \u2026
-    end
-
     set -l max_cmd_len 32
-    if test (string length $cmd_line) -gt $max_cmd_len
-        set -l truncated_len (math $max_cmd_len - (string length $ellipsis))
-        set cmd_line (string trim (string sub -l $truncated_len $cmd_line))$ellipsis
+    set cmd_line (string shorten -m$max_cmd_len -- $cmd_line)
+
+    if test $is_foreground -eq 0; and test $signal_or_end_name != STOPPED
+        # Add a newline *before* our message so we get the message after the commandline.
+        echo >&2
     end
 
     switch $signal_or_end_name
@@ -51,6 +48,9 @@ function fish_job_summary -a job_id is_foreground cmd_line signal_or_end_name si
     end >&2
 
     if test $is_foreground -eq 0; and test $signal_or_end_name != STOPPED
+        # We want one newline per line in the prompt after the first.
+        # To ensure that, don't let `string repeat` add a newline. See #9044.
+        string repeat -N \n --count=(math (count (fish_prompt)) - 1) >&2
         commandline -f repaint
     end
 end

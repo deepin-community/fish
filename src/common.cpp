@@ -10,21 +10,12 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
-#include <paths.h>
 #include <pthread.h>
 #include <stdarg.h>
-#include <stddef.h>
-#include <stdint.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <sys/stat.h>
 #include <sys/time.h>
 #include <termios.h>
 #include <unistd.h>
-#include <wctype.h>
 
-#include <cstring>
-#include <cwchar>
 #ifdef HAVE_EXECINFO_H
 #include <execinfo.h>
 #endif
@@ -35,31 +26,32 @@
 #endif
 
 #include <algorithm>
-#include <atomic>
-#include <memory>  // IWYU pragma: keep
-#include <type_traits>
+#include <csignal>
+#include <cstdlib>
+#include <cstring>
+#include <cwchar>
+#include <memory>
 
 #include "common.h"
-#include "env.h"
 #include "expand.h"
 #include "fallback.h"  // IWYU pragma: keep
 #include "flog.h"
 #include "future_feature_flags.h"
 #include "global_safety.h"
 #include "iothread.h"
-#include "parser.h"
-#include "proc.h"
 #include "signal.h"
 #include "termsize.h"
+#include "topic_monitor.h"
 #include "wcstringutil.h"
 #include "wildcard.h"
 #include "wutil.h"  // IWYU pragma: keep
 
 // Keep after "common.h"
-#ifdef __BSD__
-#include <sys/sysctl.h>
-#elif defined(__APPLE__)
-#include <mach-o/dyld.h>
+#ifdef HAVE_SYS_SYSCTL_H
+#include <sys/sysctl.h>  // IWYU pragma: keep
+#endif
+#if defined(__APPLE__)
+#include <mach-o/dyld.h>  // IWYU pragma: keep
 #endif
 
 struct termios shell_modes;
@@ -87,14 +79,12 @@ static relaxed_atomic_t<wchar_t> obfuscation_read_char;
 wchar_t get_obfuscation_read_char() { return obfuscation_read_char; }
 
 bool g_profiling_active = false;
+
 const wchar_t *program_name;
-std::atomic<int> debug_level{1};  // default maximum debug output level (errors and warnings)
 
 /// Be able to restore the term's foreground process group.
 /// This is set during startup and not modified after.
 static relaxed_atomic_t<pid_t> initial_fg_process_group{-1};
-
-static void debug_shared(wchar_t msg_level, const wcstring &msg);
 
 #if defined(OS_IS_CYGWIN) || defined(WSL)
 // MS Windows tty devices do not currently have either a read or write timestamp. Those
@@ -223,17 +213,17 @@ bool is_windows_subsystem_for_linux() {
     return backtrace_text;
 }
 
-[[gnu::noinline]] void show_stackframe(const wchar_t msg_level, int frame_count, int skip_levels) {
+[[gnu::noinline]] void show_stackframe(int frame_count, int skip_levels) {
     if (frame_count < 1) return;
 
     wcstring_list_t bt = demangled_backtrace(frame_count, skip_levels + 2);
-    debug_shared(msg_level, L"Backtrace:\n" + join_strings(bt, L'\n') + L'\n');
+    FLOG(error, L"Backtrace:\n" + join_strings(bt, L'\n') + L'\n');
 }
 
 #else   // HAVE_BACKTRACE_SYMBOLS
 
-[[gnu::noinline]] void show_stackframe(const wchar_t msg_level, int, int) {
-    debug_shared(msg_level, L"Sorry, but your system does not support backtraces");
+[[gnu::noinline]] void show_stackframe(int, int) {
+    FLOGF(error, L"Sorry, but your system does not support backtraces");
 }
 #endif  // HAVE_BACKTRACE_SYMBOLS
 
@@ -242,14 +232,14 @@ bool is_windows_subsystem_for_linux() {
 /// alignment must be a power of 2 and in range [1, 64].
 /// This is intended to return the end point of the "unaligned prefix" of a vectorized loop.
 template <size_t Align>
-inline const char *align_start(const char *start, size_t len) {
+static inline const char *align_start(const char *start, size_t len) {
     static_assert(Align >= 1 && Align <= 64, "Alignment must be in range [1, 64]");
     static_assert((Align & (Align - 1)) == 0, "Alignment must be power of 2");
     uintptr_t startu = reinterpret_cast<uintptr_t>(start);
     // How much do we have to add to start to make it 0 mod Align?
     // To compute 17 up-aligned by 8, compute its skew 17 % 8, yielding 1,
     // and then we will add 8 - 1. Of course if we align 16 with the same idea, we will
-    // add 8 instead of 0, so then mod the summand by Align again.
+    // add 8 instead of 0, so then mod the sum by Align again.
     // Note all of these mods are optimized to masks.
     uintptr_t add_which_aligns = Align - (startu % Align);
     add_which_aligns %= Align;
@@ -262,7 +252,7 @@ inline const char *align_start(const char *start, size_t len) {
 /// If there is no such pointer, return \p start.
 /// This is intended to be the start point of the "unaligned suffix" of a vectorized loop.
 template <size_t Align>
-inline const char *align_end(const char *start, size_t len) {
+static inline const char *align_end(const char *start, size_t len) {
     static_assert(Align >= 1 && Align <= 64, "Alignment must be in range [1, 64]");
     static_assert((Align & (Align - 1)) == 0, "Alignment must be power of 2");
     // How much do we have to subtract to align it? Its value, mod Align.
@@ -501,9 +491,7 @@ void append_format(wcstring &str, const wchar_t *format, ...) {
     va_end(va);
 }
 
-wchar_t *quote_end(const wchar_t *pos) {
-    wchar_t c = *pos;
-
+const wchar_t *quote_end(const wchar_t *pos, wchar_t quote) {
     while (true) {
         pos++;
 
@@ -513,12 +501,22 @@ wchar_t *quote_end(const wchar_t *pos) {
             pos++;
             if (!*pos) return nullptr;
         } else {
-            if (*pos == c) {
-                return const_cast<wchar_t *>(pos);
+            if (*pos == quote ||
+                // Command substitutions also end a double quoted string.  This is how we
+                // support command substitutions inside double quotes.
+                (quote == L'"' && *pos == L'$' && *(pos + 1) == L'(')) {
+                return pos;
             }
         }
     }
     return nullptr;
+}
+
+const wchar_t *comment_end(const wchar_t *pos) {
+    do {
+        pos++;
+    } while (*pos && *pos != L'\n');
+    return pos;
 }
 
 void fish_setlocale() {
@@ -597,59 +595,6 @@ bool should_suppress_stderr_for_tests() {
     return program_name && !std::wcscmp(program_name, TESTS_PROGRAM_NAME);
 }
 
-static void debug_shared(const wchar_t level, const wcstring &msg) {
-    pid_t current_pid;
-    if (!is_forked_child()) {
-        std::fwprintf(stderr, L"<%lc> %ls: %ls\n", level, program_name, msg.c_str());
-    } else {
-        current_pid = getpid();
-        std::fwprintf(stderr, L"<%lc> %ls: %d: %ls\n", level, program_name, current_pid,
-                      msg.c_str());
-    }
-}
-
-void debug_safe(int level, const char *msg, const char *param1, const char *param2,
-                const char *param3, const char *param4, const char *param5, const char *param6,
-                const char *param7, const char *param8, const char *param9, const char *param10,
-                const char *param11, const char *param12) {
-    const char *const params[] = {param1, param2, param3, param4,  param5,  param6,
-                                  param7, param8, param9, param10, param11, param12};
-    if (!msg) return;
-
-    // Can't call fwprintf, that may allocate memory Just call write() over and over.
-    if (level > debug_level) return;
-    int errno_old = errno;
-
-    size_t param_idx = 0;
-    const char *cursor = msg;
-    while (*cursor != '\0') {
-        const char *end = std::strchr(cursor, '%');
-        if (end == nullptr) end = cursor + std::strlen(cursor);
-
-        ignore_result(write(STDERR_FILENO, cursor, end - cursor));
-
-        if (end[0] == '%' && end[1] == 's') {
-            // Handle a format string.
-            assert(param_idx < sizeof params / sizeof *params);
-            const char *format = params[param_idx++];
-            if (!format) format = "(null)";
-            ignore_result(write(STDERR_FILENO, format, std::strlen(format)));
-            cursor = end + 2;
-        } else if (end[0] == '\0') {
-            // Must be at the end of the string.
-            cursor = end;
-        } else {
-            // Some other format specifier, just skip it.
-            cursor = end + 1;
-        }
-    }
-
-    // We always append a newline.
-    ignore_result(write(STDERR_FILENO, "\n", 1));
-
-    errno = errno_old;
-}
-
 // Careful to not negate LLONG_MIN.
 static unsigned long long absolute_value(long long x) {
     if (x >= 0) return static_cast<unsigned long long>(x);
@@ -658,7 +603,7 @@ static unsigned long long absolute_value(long long x) {
 }
 
 template <typename CharT>
-void format_safe_impl(CharT *buff, size_t size, unsigned long long val) {
+static void format_safe_impl(CharT *buff, size_t size, unsigned long long val) {
     size_t idx = 0;
     if (val == 0) {
         buff[idx++] = '0';
@@ -694,6 +639,16 @@ void format_long_safe(wchar_t buff[64], long val) {
     }
 }
 
+void format_llong_safe(wchar_t buff[64], long long val) {
+    unsigned long long uval = absolute_value(val);
+    if (val >= 0) {
+        format_safe_impl(buff, 64, uval);
+    } else {
+        buff[0] = '-';
+        format_safe_impl(buff + 1, 63, uval);
+    }
+}
+
 void format_ullong_safe(wchar_t buff[64], unsigned long long val) {
     return format_safe_impl(buff, 64, val);
 }
@@ -714,12 +669,13 @@ void narrow_string_safe(char buff[64], const wchar_t *s) {
 
 wcstring reformat_for_screen(const wcstring &msg, const termsize_t &termsize) {
     wcstring buff;
-    int line_width = 0;
+
     int screen_width = termsize.width;
 
     if (screen_width) {
         const wchar_t *start = msg.c_str();
         const wchar_t *pos = start;
+        int line_width = 0;
         while (true) {
             int overflow = 0;
 
@@ -743,20 +699,18 @@ wcstring reformat_for_screen(const wcstring &msg, const termsize_t &termsize) {
                 pos = pos + 1;
             } else if (overflow) {
                 // In case of overflow, we print a newline, except if we already are at position 0.
-                wchar_t *token = wcsndup(start, pos - start);
+                wcstring token = msg.substr(start - msg.c_str(), pos - start);
                 if (line_width != 0) buff.push_back(L'\n');
-                buff.append(format_string(L"%ls-\n", token));
-                free(token);
+                buff.append(format_string(L"%ls-\n", token.c_str()));
                 line_width = 0;
             } else {
                 // Print the token.
-                wchar_t *token = wcsndup(start, pos - start);
+                wcstring token = msg.substr(start - msg.c_str(), pos - start);
                 if ((line_width + (line_width != 0 ? 1 : 0) + tok_width) > screen_width) {
                     buff.push_back(L'\n');
                     line_width = 0;
                 }
-                buff.append(format_string(L"%ls%ls", line_width ? L" " : L"", token));
-                free(token);
+                buff.append(format_string(L"%ls%ls", line_width ? L" " : L"", token.c_str()));
                 line_width += (line_width != 0 ? 1 : 0) + tok_width;
             }
 
@@ -896,15 +850,32 @@ static bool unescape_string_var(const wchar_t *in, wcstring *out) {
     return true;
 }
 
+wcstring escape_string_for_double_quotes(wcstring in) {
+    // We need to escape backslashes, double quotes, and dollars only.
+    wcstring result = std::move(in);
+    size_t idx = result.size();
+    while (idx--) {
+        switch (result[idx]) {
+            case L'\\':
+            case L'$':
+            case L'"':
+                result.insert(idx, 1, L'\\');
+                break;
+        }
+    }
+    return result;
+}
+
 /// Escape a string in a fashion suitable for using in fish script. Store the result in out_str.
 static void escape_string_script(const wchar_t *orig_in, size_t in_len, wcstring &out,
                                  escape_flags_t flags) {
     const wchar_t *in = orig_in;
-    const bool escape_all = static_cast<bool>(flags & ESCAPE_ALL);
+    const bool escape_printables = !(flags & ESCAPE_NO_PRINTABLES);
     const bool no_quoted = static_cast<bool>(flags & ESCAPE_NO_QUOTED);
     const bool no_tilde = static_cast<bool>(flags & ESCAPE_NO_TILDE);
-    const bool no_caret = feature_test(features_t::stderr_nocaret);
     const bool no_qmark = feature_test(features_t::qmark_noglob);
+    const bool symbolic = static_cast<bool>(flags & ESCAPE_SYMBOLIC) && (MB_CUR_MAX > 1);
+    assert((!symbolic || !escape_printables) && "symbolic implies escape-no-printables");
 
     bool need_escape = false;
     bool need_complex_escape = false;
@@ -933,47 +904,57 @@ static void escape_string_script(const wchar_t *orig_in, size_t in_len, wcstring
             wchar_t c = *in;
             switch (c) {
                 case L'\t': {
-                    out += L'\\';
-                    out += L't';
+                    if (symbolic)
+                        out += L'␉';
+                    else
+                        out += L"\\t";
                     need_escape = need_complex_escape = true;
                     break;
                 }
                 case L'\n': {
-                    out += L'\\';
-                    out += L'n';
+                    if (symbolic)
+                        out += L'␤';
+                    else
+                        out += L"\\n";
                     need_escape = need_complex_escape = true;
                     break;
                 }
                 case L'\b': {
-                    out += L'\\';
-                    out += L'b';
+                    if (symbolic)
+                        out += L'␈';
+                    else
+                        out += L"\\b";
                     need_escape = need_complex_escape = true;
                     break;
                 }
                 case L'\r': {
-                    out += L'\\';
-                    out += L'r';
+                    if (symbolic)
+                        out += L'␍';
+                    else
+                        out += L"\\r";
                     need_escape = need_complex_escape = true;
                     break;
                 }
                 case L'\x1B': {
-                    out += L'\\';
-                    out += L'e';
+                    if (symbolic)
+                        out += L'␛';
+                    else
+                        out += L"\\e";
                     need_escape = need_complex_escape = true;
                     break;
                 }
                 case L'\x7F': {
-                    out += L'\\';
-                    out += L'x';
-                    out += L'7';
-                    out += L'f';
+                    if (symbolic)
+                        out += L'␡';
+                    else
+                        out += L"\\x7f";
                     need_escape = need_complex_escape = true;
                     break;
                 }
                 case L'\\':
                 case L'\'': {
                     need_escape = need_complex_escape = true;
-                    out += L'\\';
+                    if (escape_printables || (c == L'\\' && !symbolic)) out += L'\\';
                     out += *in;
                     break;
                 }
@@ -995,7 +976,6 @@ static void escape_string_script(const wchar_t *orig_in, size_t in_len, wcstring
                 case L'$':
                 case L' ':
                 case L'#':
-                case L'^':
                 case L'<':
                 case L'>':
                 case L'(':
@@ -1011,24 +991,28 @@ static void escape_string_script(const wchar_t *orig_in, size_t in_len, wcstring
                 case L'"':
                 case L'%':
                 case L'~': {
-                    bool char_is_normal = (c == L'~' && no_tilde) || (c == L'^' && no_caret) ||
-                                          (c == L'?' && no_qmark);
+                    bool char_is_normal = (c == L'~' && no_tilde) || (c == L'?' && no_qmark);
                     if (!char_is_normal) {
                         need_escape = true;
-                        if (escape_all) out += L'\\';
+                        if (escape_printables) out += L'\\';
                     }
                     out += *in;
                     break;
                 }
 
                 default: {
-                    if (*in < 32) {
-                        if (*in < 27 && *in > 0) {
+                    if (*in >= 0 && *in < 32) {
+                        need_escape = need_complex_escape = true;
+
+                        if (symbolic) {
+                            out += L'\u2400' + *in;
+                            break;
+                        }
+
+                        if (*in < 27 && *in != 0) {
                             out += L'\\';
                             out += L'c';
                             out += L'a' + *in - 1;
-
-                            need_escape = need_complex_escape = true;
                             break;
                         }
 
@@ -1037,7 +1021,6 @@ static void escape_string_script(const wchar_t *orig_in, size_t in_len, wcstring
                         out += L'x';
                         out += ((*in > 15) ? L'1' : L'0');
                         out += tmp > 9 ? L'a' + (tmp - 10) : L'0' + tmp;
-                        need_escape = need_complex_escape = true;
                     } else {
                         out += *in;
                     }
@@ -1050,7 +1033,7 @@ static void escape_string_script(const wchar_t *orig_in, size_t in_len, wcstring
     }
 
     // Use quoted escaping if possible, since most people find it easier to read.
-    if (!no_quoted && need_escape && !need_complex_escape && escape_all) {
+    if (!no_quoted && need_escape && !need_complex_escape && escape_printables) {
         wchar_t single_quote = L'\'';
         out.clear();
         out.reserve(2 + in_len);
@@ -1061,8 +1044,7 @@ static void escape_string_script(const wchar_t *orig_in, size_t in_len, wcstring
 }
 
 /// Escapes a string for use in a regex string. Not safe for use with `eval` as only
-/// characters reserved by PCRE2 are escaped, i.e. it relies on fish's automatic escaping
-/// of subshell output in subsequent concatenation or for use as an argument.
+/// characters reserved by PCRE2 are escaped.
 /// \param in is the raw string to be searched for literally when substituted in a PCRE2 expression.
 static wcstring escape_string_pcre2(const wcstring &in) {
     wcstring out;
@@ -1089,7 +1071,7 @@ static wcstring escape_string_pcre2(const wcstring &in) {
             case L'-':
             case L']':
                 out.push_back('\\');
-                /* FALLTHROUGH */
+                __fallthrough__
             default:
                 out.push_back(c);
         }
@@ -1167,165 +1149,188 @@ maybe_t<size_t> read_unquoted_escape(const wchar_t *input, wcstring *result, boo
     bool errored = false;
     size_t in_pos = 1;  // in_pos always tracks the next character to read (and therefore the number
                         // of characters read so far)
-    const wchar_t c = input[in_pos++];
-    switch (c) {
-        // A null character after a backslash is an error.
-        case L'\0': {
-            // Adjust in_pos to only include the backslash.
-            assert(in_pos > 0);
-            in_pos--;
 
-            // It's an error, unless we're allowing incomplete escapes.
-            if (!allow_incomplete) errored = true;
-            break;
-        }
-        // Numeric escape sequences. No prefix means octal escape, otherwise hexadecimal.
-        case L'0':
-        case L'1':
-        case L'2':
-        case L'3':
-        case L'4':
-        case L'5':
-        case L'6':
-        case L'7':
-        case L'u':
-        case L'U':
-        case L'x':
-        case L'X': {
-            long long res = 0;
-            size_t chars = 2;
-            int base = 16;
-            bool byte_literal = false;
-            wchar_t max_val = ASCII_MAX;
+    // For multibyte \X sequences.
+    std::string byte_buff;
+    while (true) {
+        const wchar_t c = input[in_pos++];
+        switch (c) {
+                // A null character after a backslash is an error.
+            case L'\0': {
+                // Adjust in_pos to only include the backslash.
+                assert(in_pos > 0);
+                in_pos--;
 
-            switch (c) {
-                case L'u': {
-                    chars = 4;
-                    max_val = UCS2_MAX;
-                    break;
-                }
-                case L'U': {
-                    chars = 8;
-                    max_val = WCHAR_MAX;
-
-                    // Don't exceed the largest Unicode code point - see #1107.
-                    if (0x10FFFF < max_val) max_val = static_cast<wchar_t>(0x10FFFF);
-                    break;
-                }
-                case L'x': {
-                    chars = 2;
-                    max_val = ASCII_MAX;
-                    break;
-                }
-                case L'X': {
-                    byte_literal = true;
-                    max_val = BYTE_MAX;
-                    break;
-                }
-                default: {
-                    base = 8;
-                    chars = 3;
-                    // Note that in_pos currently is just after the first post-backslash character;
-                    // we want to start our escape from there.
-                    assert(in_pos > 0);
-                    in_pos--;
-                    break;
-                }
+                // It's an error, unless we're allowing incomplete escapes.
+                if (!allow_incomplete) errored = true;
+                break;
             }
+                // Numeric escape sequences. No prefix means octal escape, otherwise hexadecimal.
+            case L'0':
+            case L'1':
+            case L'2':
+            case L'3':
+            case L'4':
+            case L'5':
+            case L'6':
+            case L'7':
+            case L'u':
+            case L'U':
+            case L'x':
+            case L'X': {
+                long long res = 0;
+                size_t chars = 2;
+                int base = 16;
+                bool byte_literal = false;
+                wchar_t max_val = ASCII_MAX;
 
-            for (size_t i = 0; i < chars; i++) {
-                long d = convert_digit(input[in_pos], base);
-                if (d < 0) {
-                    break;
+                switch (c) {
+                    case L'u': {
+                        chars = 4;
+                        max_val = UCS2_MAX;
+                        break;
+                    }
+                    case L'U': {
+                        chars = 8;
+                        max_val = WCHAR_MAX;
+
+                        // Don't exceed the largest Unicode code point - see #1107.
+                        if (0x10FFFF < max_val) max_val = static_cast<wchar_t>(0x10FFFF);
+                        break;
+                    }
+                    case L'x':
+                    case L'X': {
+                        byte_literal = true;
+                        max_val = BYTE_MAX;
+                        break;
+                    }
+                    default: {
+                        base = 8;
+                        chars = 3;
+                        // Note that in_pos currently is just after the first post-backslash
+                        // character; we want to start our escape from there.
+                        assert(in_pos > 0);
+                        in_pos--;
+                        break;
+                    }
                 }
 
-                res = (res * base) + d;
-                in_pos++;
-            }
+                for (size_t i = 0; i < chars; i++) {
+                    long d = convert_digit(input[in_pos], base);
+                    if (d < 0) {
+                        // If we have no digit, this is a tokenizer error.
+                        if (i == 0) errored = true;
+                        break;
+                    }
 
-            if (res <= max_val) {
-                result_char_or_none =
-                    static_cast<wchar_t>((byte_literal ? ENCODE_DIRECT_BASE : 0) + res);
-            } else {
-                errored = true;
-            }
+                    res = (res * base) + d;
+                    in_pos++;
+                }
 
-            break;
-        }
-        // \a means bell (alert).
-        case L'a': {
-            result_char_or_none = L'\a';
-            break;
-        }
-        // \b means backspace.
-        case L'b': {
-            result_char_or_none = L'\b';
-            break;
-        }
-        // \cX means control sequence X.
-        case L'c': {
-            const wchar_t sequence_char = input[in_pos++];
-            if (sequence_char >= L'a' && sequence_char <= (L'a' + 32)) {
-                result_char_or_none = sequence_char - L'a' + 1;
-            } else if (sequence_char >= L'A' && sequence_char <= (L'A' + 32)) {
-                result_char_or_none = sequence_char - L'A' + 1;
-            } else {
-                errored = true;
+                if (!errored && res <= max_val) {
+                    if (byte_literal) {
+                        // Multibyte encodings necessitate that we keep adjacent byte escapes.
+                        // - `\Xc3\Xb6` is "ö", but only together.
+                        // (this assumes a valid codepoint can't consist of multiple bytes
+                        // that are valid on their own, which is true for UTF-8)
+                        byte_buff.push_back(static_cast<char>(res));
+                        result_char_or_none = none();
+                        if (input[in_pos] == L'\\'
+                            && (input[in_pos + 1] == L'X' || input[in_pos + 1] == L'x')) {
+                            in_pos++;
+                            continue;
+                        }
+                    } else {
+                        result_char_or_none = static_cast<wchar_t>(res);
+                    }
+                } else {
+                    errored = true;
+                }
+
+                break;
             }
-            break;
+                // \a means bell (alert).
+            case L'a': {
+                result_char_or_none = L'\a';
+                break;
+            }
+                // \b means backspace.
+            case L'b': {
+                result_char_or_none = L'\b';
+                break;
+            }
+                // \cX means control sequence X.
+            case L'c': {
+                const wchar_t sequence_char = input[in_pos++];
+                if (sequence_char >= L'a' && sequence_char <= (L'a' + 32)) {
+                    result_char_or_none = sequence_char - L'a' + 1;
+                } else if (sequence_char >= L'A' && sequence_char <= (L'A' + 32)) {
+                    result_char_or_none = sequence_char - L'A' + 1;
+                } else {
+                    errored = true;
+                }
+                break;
+            }
+                // \x1B means escape.
+            case L'e': {
+                result_char_or_none = L'\x1B';
+                break;
+            }
+                // \f means form feed.
+            case L'f': {
+                result_char_or_none = L'\f';
+                break;
+            }
+                // \n means newline.
+            case L'n': {
+                result_char_or_none = L'\n';
+                break;
+            }
+                // \r means carriage return.
+            case L'r': {
+                result_char_or_none = L'\r';
+                break;
+            }
+                // \t means tab.
+            case L't': {
+                result_char_or_none = L'\t';
+                break;
+            }
+                // \v means vertical tab.
+            case L'v': {
+                result_char_or_none = L'\v';
+                break;
+            }
+                // If a backslash is followed by an actual newline, swallow them both.
+            case L'\n': {
+                result_char_or_none = none();
+                break;
+            }
+            default: {
+                if (unescape_special) result->push_back(INTERNAL_SEPARATOR);
+                result_char_or_none = c;
+                break;
+            }
         }
-        // \x1B means escape.
-        case L'e': {
-            result_char_or_none = L'\x1B';
-            break;
+
+        if (errored) return none();
+
+        if (!byte_buff.empty()) {
+            result->append(str2wcstring(byte_buff));
         }
-        // \f means form feed.
-        case L'f': {
-            result_char_or_none = L'\f';
-            break;
-        }
-        // \n means newline.
-        case L'n': {
-            result_char_or_none = L'\n';
-            break;
-        }
-        // \r means carriage return.
-        case L'r': {
-            result_char_or_none = L'\r';
-            break;
-        }
-        // \t means tab.
-        case L't': {
-            result_char_or_none = L'\t';
-            break;
-        }
-        // \v means vertical tab.
-        case L'v': {
-            result_char_or_none = L'\v';
-            break;
-        }
-        // If a backslash is followed by an actual newline, swallow them both.
-        case L'\n': {
-            result_char_or_none = none();
-            break;
-        }
-        default: {
-            if (unescape_special) result->push_back(INTERNAL_SEPARATOR);
-            result_char_or_none = c;
-            break;
-        }
+
+        break;
     }
 
-    if (!errored && result_char_or_none.has_value()) {
+    if (result_char_or_none.has_value()) {
         result->push_back(*result_char_or_none);
     }
-    if (errored) return none();
 
     return in_pos;
 }
 
 /// Returns the unescaped version of input_str into output_str (by reference). Returns true if
-/// successful. If false, the contents of output_str are undefined (!).
+/// successful. If false, the contents of output_str are unchanged.
 static bool unescape_string_internal(const wchar_t *const input, const size_t input_len,
                                      wcstring *output_str, unescape_flags_t flags) {
     // Set up result string, which we'll swap with the output on success.
@@ -1362,7 +1367,7 @@ static bool unescape_string_internal(const wchar_t *const input, const size_t in
                         // appending INTERNAL_SEPARATORs, so we have to handle them specially.
                         auto escape_chars = read_unquoted_escape(
                             input + input_position, &result, allow_incomplete, unescape_special);
-                        if (!escape_chars) {
+                        if (!escape_chars.has_value()) {
                             // A none() return indicates an error.
                             errored = true;
                         } else {
@@ -1415,8 +1420,12 @@ static bool unescape_string_internal(const wchar_t *const input, const size_t in
                 }
                 case L'$': {
                     if (unescape_special) {
-                        to_append_or_none = VARIABLE_EXPAND;
-                        vars_or_seps.push_back(input_position);
+                        bool is_cmdsub =
+                            input_position + 1 < input_len && input[input_position + 1] == L'(';
+                        if (!is_cmdsub) {
+                            to_append_or_none = VARIABLE_EXPAND;
+                            vars_or_seps.push_back(input_position);
+                        }
                     }
                     break;
                 }
@@ -1440,8 +1449,9 @@ static bool unescape_string_internal(const wchar_t *const input, const size_t in
                         brace_count--;
                         to_append_or_none = BRACE_END;
                         if (!braces.empty()) {
-                            // If we didn't have a var or separator since the last '{',
-                            // put the literal back.
+                            // HACK: To reduce accidental use of brace expansion, treat a brace
+                            // with zero or one items as literal input. See #4632. (The hack is
+                            // doing it here and like this.)
                             if (vars_or_seps.empty() || vars_or_seps.back() < braces.back()) {
                                 result[braces.back()] = L'{';
                                 // We also need to turn all spaces back.
@@ -1599,12 +1609,12 @@ bool unescape_string_in_place(wcstring *str, unescape_flags_t escape_special) {
     return success;
 }
 
-bool unescape_string(const wchar_t *input, wcstring *output, unescape_flags_t escape_special,
-                     escape_string_style_t style) {
+bool unescape_string(const wchar_t *input, size_t len, wcstring *output,
+                     unescape_flags_t escape_special, escape_string_style_t style) {
     bool success = false;
     switch (style) {
         case STRING_STYLE_SCRIPT: {
-            success = unescape_string_internal(input, std::wcslen(input), output, escape_special);
+            success = unescape_string_internal(input, len, output, escape_special);
             break;
         }
         case STRING_STYLE_URL: {
@@ -1625,35 +1635,14 @@ bool unescape_string(const wchar_t *input, wcstring *output, unescape_flags_t es
     return success;
 }
 
-bool unescape_string(const wcstring &input, wcstring *output, unescape_flags_t escape_special,
+bool unescape_string(const wchar_t *input, wcstring *output, unescape_flags_t escape_special,
                      escape_string_style_t style) {
-    bool success = false;
-    switch (style) {
-        case STRING_STYLE_SCRIPT: {
-            success = unescape_string_internal(input.c_str(), input.size(), output, escape_special);
-            break;
-        }
-        case STRING_STYLE_URL: {
-            success = unescape_string_url(input.c_str(), output);
-            break;
-        }
-        case STRING_STYLE_VAR: {
-            success = unescape_string_var(input.c_str(), output);
-            break;
-        }
-        case STRING_STYLE_REGEX: {
-            // unescaping PCRE2 is not needed/supported, the PCRE2 engine is responsible for that
-            success = false;
-            break;
-        }
-    }
-    if (!success) output->clear();
-    return success;
+    return unescape_string(input, std::wcslen(input), output, escape_special, style);
 }
 
-[[gnu::noinline]] void bugreport() {
-    FLOG(error, _(L"This is a bug. Break on 'bugreport' to debug."));
-    FLOG(error, _(L"If you can reproduce it, please report: "), PACKAGE_BUGREPORT, L'.');
+bool unescape_string(const wcstring &input, wcstring *output, unescape_flags_t escape_special,
+                     escape_string_style_t style) {
+    return unescape_string(input.c_str(), input.size(), output, escape_special, style);
 }
 
 wcstring format_size(long long sz) {
@@ -1716,7 +1705,7 @@ void format_size_safe(char buff[128], unsigned long long sz) {
     size_t idx = 0;
     const char *const sz_name[] = {"kB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB", nullptr};
     if (sz < 1) {
-        strncpy(buff, "empty", buff_size);
+        strcpy(buff, "empty");
     } else if (sz < 1024) {
         append_ull(buff, sz, &idx, max_len);
         append_str(buff, "B", &idx, max_len);
@@ -1744,13 +1733,10 @@ void format_size_safe(char buff[128], unsigned long long sz) {
     }
 }
 
-/// Return the number of seconds from the UNIX epoch, with subsecond precision. This function uses
-/// the gettimeofday function and will have the same precision as that function.
 double timef() {
     struct timeval tv;
     assert_with_errno(gettimeofday(&tv, nullptr) != -1);
-    // return (double)tv.tv_sec + 0.000001 * tv.tv_usec;
-    return static_cast<double>(tv.tv_sec) + 1e-6 * tv.tv_usec;
+    return static_cast<timepoint_t>(tv.tv_sec) + 1e-6 * tv.tv_usec;
 }
 
 void exit_without_destructors(int code) { _exit(code); }
@@ -1782,10 +1768,7 @@ void setup_fork_guards() {
                    [] { pthread_atfork(nullptr, nullptr, [] { is_forked_proc = true; }); });
 }
 
-void save_term_foreground_process_group() {
-    ASSERT_IS_MAIN_THREAD();
-    initial_fg_process_group = tcgetpgrp(STDIN_FILENO);
-}
+void save_term_foreground_process_group() { initial_fg_process_group = tcgetpgrp(STDIN_FILENO); }
 
 void restore_term_foreground_process_group_for_exit() {
     // We wish to restore the tty to the initial owner. There's two ways this can go wrong:
@@ -1804,7 +1787,7 @@ void restore_term_foreground_process_group_for_exit() {
 bool is_main_thread() { return thread_id() == 1; }
 
 void assert_is_main_thread(const char *who) {
-    if (!is_main_thread() && !thread_asserts_cfg_for_testing) {
+    if (!likely(is_main_thread()) && !unlikely(thread_asserts_cfg_for_testing)) {
         FLOGF(error, L"%s called off of main thread.", who);
         FLOGF(error, L"Break on debug_thread_error to debug.");
         debug_thread_error();
@@ -1812,7 +1795,7 @@ void assert_is_main_thread(const char *who) {
 }
 
 void assert_is_not_forked_child(const char *who) {
-    if (is_forked_child()) {
+    if (unlikely(is_forked_child())) {
         FLOGF(error, L"%s called in a forked child.", who);
         FLOG(error, L"Break on debug_thread_error to debug.");
         debug_thread_error();
@@ -1820,7 +1803,7 @@ void assert_is_not_forked_child(const char *who) {
 }
 
 void assert_is_background_thread(const char *who) {
-    if (is_main_thread() && !thread_asserts_cfg_for_testing) {
+    if (unlikely(is_main_thread()) && !unlikely(thread_asserts_cfg_for_testing)) {
         FLOGF(error, L"%s called on the main thread (may block!).", who);
         FLOG(error, L"Break on debug_thread_error to debug.");
         debug_thread_error();
@@ -1830,7 +1813,7 @@ void assert_is_background_thread(const char *who) {
 void assert_is_locked(std::mutex &mutex, const char *who, const char *caller) {
     // Note that std::mutex.try_lock() is allowed to return false when the mutex isn't
     // actually locked; fortunately we are checking the opposite so we're safe.
-    if (mutex.try_lock()) {
+    if (unlikely(mutex.try_lock())) {
         FLOGF(error, L"%s is not locked when it should be in '%s'", who, caller);
         FLOG(error, L"Break on debug_thread_error to debug.");
         debug_thread_error();
@@ -1838,7 +1821,7 @@ void assert_is_locked(std::mutex &mutex, const char *who, const char *caller) {
     }
 }
 
-/// Test if the specified character is in a range that fish uses interally to store special tokens.
+/// Test if the specified character is in a range that fish uses internally to store special tokens.
 ///
 /// NOTE: This is used when tokenizing the input. It is also used when reading input, before
 /// tokenization, to replace such chars with REPLACEMENT_WCHAR if they're not part of a quoted
@@ -1867,13 +1850,13 @@ void redirect_tty_output() {
 
 /// Display a failed assertion message, dump a stack trace if possible, then die.
 [[noreturn]] void __fish_assert(const char *msg, const char *file, size_t line, int error) {
-    if (error) {
+    if (unlikely(error)) {
         FLOGF(error, L"%s:%zu: failed assertion: %s: errno %d (%s)", file, line, msg, error,
               std::strerror(error));
     } else {
         FLOGF(error, L"%s:%zu: failed assertion: %s", file, line, msg);
     }
-    show_stackframe(L'E', 99, 1);
+    show_stackframe(99, 1);
     abort();
 }
 
@@ -1898,7 +1881,9 @@ bool valid_var_name(const wchar_t *str) {
 bool valid_func_name(const wcstring &str) {
     if (str.empty()) return false;
     if (str.at(0) == L'-') return false;
+    // A function name needs to be a valid path, so no / and no NULL.
     if (str.find_first_of(L'/') != wcstring::npos) return false;
+    if (str.find_first_of(L'\0') != wcstring::npos) return false;
     return true;
 }
 
@@ -1912,14 +1897,16 @@ std::string get_executable_path(const char *argv0) {
     // https://opensource.apple.com/source/adv_cmds/adv_cmds-163/ps/print.c
     uint32_t buffSize = sizeof buff;
     if (_NSGetExecutablePath(buff, &buffSize) == 0) return std::string(buff);
-#elif defined(__BSD__) && defined(KERN_PROC_PATHNAME) && !defined(__NetBSD__)
+#elif defined(__BSD__) && defined(KERN_PROC_PATHNAME)
     // BSDs do not have /proc by default, (although it can be mounted as procfs via the Linux
     // compatibility layer). We can use sysctl instead: per sysctl(3), passing in a process ID of -1
     // returns the value for the current process.
-    //
-    // (this is broken on NetBSD, while /proc works, so we use that)
     size_t buff_size = sizeof buff;
+#if defined(__NetBSD__)
+    int name[] = {CTL_KERN, KERN_PROC_ARGS, getpid(), KERN_PROC_PATHNAME};
+#else
     int name[] = {CTL_KERN, KERN_PROC, KERN_PROC_PATHNAME, -1};
+#endif
     int result = sysctl(name, sizeof(name) / sizeof(int), buff, &buff_size, nullptr, 0);
     if (result != 0) {
         wperror(L"sysctl KERN_PROC_PATHNAME");
@@ -1938,7 +1925,18 @@ std::string get_executable_path(const char *argv0) {
     }
     if (len > 0) {
         buff[len] = '\0';
-        return std::string(buff);
+        // When /proc/self/exe points to a file that was deleted (or overwritten on update!)
+        // then linux adds a " (deleted)" suffix.
+        // If that's not a valid path, let's remove that awkward suffix.
+        std::string buffstr{buff};
+        if (access(buff, F_OK)) {
+            auto dellen = const_strlen(" (deleted)");
+            if (buffstr.size() > dellen &&
+                buffstr.compare(buffstr.size() - dellen, dellen, " (deleted)") == 0) {
+                buffstr = buffstr.substr(0, buffstr.size() - dellen);
+            }
+        }
+        return buffstr;
     }
 #endif
 
@@ -1979,14 +1977,14 @@ std::string get_path_to_tmp_dir() {
 // bullet-proof and that's OK.
 bool is_console_session() {
     static const bool console_session = [] {
-        ASSERT_IS_MAIN_THREAD();
-
-        const char *tty_name = ttyname(0);
+        char tty_name[PATH_MAX];
+        if (ttyname_r(STDIN_FILENO, tty_name, sizeof tty_name) != 0) {
+            return false;
+        }
         constexpr auto len = const_strlen("/dev/tty");
         const char *TERM = getenv("TERM");
         return
             // Test that the tty matches /dev/(console|dcons|tty[uv\d])
-            tty_name &&
             ((strncmp(tty_name, "/dev/tty", len) == 0 &&
               (tty_name[len] == 'u' || tty_name[len] == 'v' || isdigit(tty_name[len]))) ||
              strcmp(tty_name, "/dev/dcons") == 0 || strcmp(tty_name, "/dev/console") == 0)
@@ -1995,14 +1993,3 @@ bool is_console_session() {
     }();
     return console_session;
 }
-
-static_assert(const_strcmp("", "a") < 0, "const_strcmp failure");
-static_assert(const_strcmp("a", "a") == 0, "const_strcmp failure");
-static_assert(const_strcmp("a", "") > 0, "const_strcmp failure");
-static_assert(const_strcmp("aa", "a") > 0, "const_strcmp failure");
-static_assert(const_strcmp("a", "aa") < 0, "const_strcmp failure");
-static_assert(const_strcmp("b", "aa") > 0, "const_strcmp failure");
-
-static_assert(const_strlen("") == 0, "const_strlen failure");
-static_assert(const_strlen("a") == 1, "const_strlen failure");
-static_assert(const_strlen("hello") == 5, "const_strlen failure");

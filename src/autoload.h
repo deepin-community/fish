@@ -4,13 +4,14 @@
 
 #include "config.h"  // IWYU pragma: keep
 
-#include <cassert>
+#include <cstddef>
 #include <memory>
+#include <string>
 #include <unordered_map>
 #include <unordered_set>
 
 #include "common.h"
-#include "env.h"
+#include "maybe.h"
 #include "wutil.h"
 
 class autoload_file_cache_t;
@@ -87,6 +88,9 @@ class autoload_t {
     /// \return whether a command could potentially be autoloaded.
     /// This does not actually mark the command as being autoloaded.
     bool can_autoload(const wcstring &cmd);
+
+    /// \return whether autoloading has been attempted for a command.
+    bool has_attempted_autoload(const wcstring &cmd);
 
     /// \return the names of all commands that have been autoloaded. Note this includes "in-flight"
     /// commands.

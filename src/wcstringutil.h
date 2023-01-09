@@ -2,13 +2,20 @@
 #ifndef FISH_WCSTRINGUTIL_H
 #define FISH_WCSTRINGUTIL_H
 
+#include <limits.h>
+#include <stdint.h>
+
 #include <algorithm>
+#include <cstdlib>
 #include <cstring>
+#include <cwchar>
+#include <iterator>
+#include <limits>
 #include <string>
-#include <utility>
 
 #include "common.h"
 #include "expand.h"
+#include "maybe.h"
 
 /// Test if a string prefixes another. Returns true if a is a prefix of b.
 bool string_prefixes_string(const wcstring &proposed_prefix, const wcstring &value);
@@ -130,12 +137,19 @@ wcstring_list_t split_string(const wcstring &val, wchar_t sep);
 wcstring_list_t split_string_tok(const wcstring &val, const wcstring &seps,
                                  size_t max_results = std::numeric_limits<size_t>::max());
 
-/// Join a list of strings by a separator character.
+/// Join a list of strings by a separator character or string.
 wcstring join_strings(const wcstring_list_t &vals, wchar_t sep);
+wcstring join_strings(const wcstring_list_t &vals, const wchar_t *sep);
 
 inline wcstring to_string(long x) {
     wchar_t buff[64];
     format_long_safe(buff, x);
+    return wcstring(buff);
+}
+
+inline wcstring to_string(long long x) {
+    wchar_t buff[64];
+    format_llong_safe(buff, x);
     return wcstring(buff);
 }
 
@@ -293,5 +307,8 @@ class line_iterator_t {
         return true;
     }
 };
+
+/// Like fish_wcwidth, but returns 0 for characters with no real width instead of -1.
+int fish_wcwidth_visible(wchar_t widechar);
 
 #endif

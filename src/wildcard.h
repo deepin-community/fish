@@ -3,11 +3,36 @@
 #ifndef FISH_WILDCARD_H
 #define FISH_WILDCARD_H
 
-#include <vector>
+#include <stddef.h>
 
 #include "common.h"
 #include "complete.h"
 #include "expand.h"
+
+/// Description for generic executable.
+#define COMPLETE_EXEC_DESC _(L"command")
+/// Description for link to executable.
+#define COMPLETE_EXEC_LINK_DESC _(L"command link")
+/// Description for character device.
+#define COMPLETE_CHAR_DESC _(L"char device")
+/// Description for block device.
+#define COMPLETE_BLOCK_DESC _(L"block device")
+/// Description for fifo buffer.
+#define COMPLETE_FIFO_DESC _(L"fifo")
+/// Description for fifo buffer.
+#define COMPLETE_FILE_DESC _(L"file")
+/// Description for symlink.
+#define COMPLETE_SYMLINK_DESC _(L"symlink")
+/// Description for symlink.
+#define COMPLETE_DIRECTORY_SYMLINK_DESC _(L"dir symlink")
+/// Description for Rotten symlink.
+#define COMPLETE_BROKEN_SYMLINK_DESC _(L"broken symlink")
+/// Description for symlink loop.
+#define COMPLETE_LOOP_SYMLINK_DESC _(L"symlink loop")
+/// Description for socket files.
+#define COMPLETE_SOCKET_DESC _(L"socket")
+/// Description for directories.
+#define COMPLETE_DIRECTORY_DESC _(L"directory")
 
 // Enumeration of all wildcard types.
 enum {
@@ -61,9 +86,15 @@ wildcard_result_t wildcard_expand_string(const wcstring &wc, const wcstring &wor
 bool wildcard_match(const wcstring &str, const wcstring &wc,
                     bool leading_dots_fail_to_match = false);
 
-/// Check if the specified string contains wildcards.
-bool wildcard_has(const wcstring &, bool internal);
-bool wildcard_has(const wchar_t *, bool internal);
+// Check if the string has any unescaped wildcards (e.g. ANY_STRING).
+bool wildcard_has_internal(const wchar_t *s, size_t len);
+inline bool wildcard_has_internal(const wcstring &s) {
+    return wildcard_has_internal(s.c_str(), s.size());
+}
+
+/// Check if the specified string contains wildcards (e.g. *).
+bool wildcard_has(const wchar_t *s, size_t len);
+inline bool wildcard_has(const wcstring &s) { return wildcard_has(s.c_str(), s.size()); }
 
 /// Test wildcard completion.
 wildcard_result_t wildcard_complete(const wcstring &str, const wchar_t *wc,

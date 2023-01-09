@@ -1,8 +1,15 @@
 #!/usr/bin/env python3
-from pexpect_helper import SpawnedProc
+from pexpect_helper import SpawnedProc, control
 
 sp = SpawnedProc()
-send, sendline, sleep, expect_prompt = sp.send, sp.sendline, sp.sleep, sp.expect_prompt
+send, sendline, sleep, expect_prompt, expect_re, expect_str = (
+    sp.send,
+    sp.sendline,
+    sp.sleep,
+    sp.expect_prompt,
+    sp.expect_re,
+    sp.expect_str,
+)
 expect_prompt()
 
 sendline("bind '~' 'handle_tilde'")
@@ -30,3 +37,50 @@ expect_prompt()
 
 sendline("echo foo")
 expect_prompt("foo")
+
+# commandline is empty when a command is executed.
+sendline("set what (commandline)")
+expect_prompt()
+sendline('echo "<$what>"')
+expect_prompt("<>")
+
+# Test for undocumented -I flag.
+# TODO: consider removing.
+sendline("commandline -I foo")
+expect_prompt("foo")
+
+# See that the commandline is updated immediately inside completions.
+sendline("complete -c foo -xa '(commandline)'")
+expect_prompt()
+send("foo bar \t")
+expect_str("foo bar foo\ bar\ ")
+send("\b" * 64)
+
+# Commandline works when run on its own (#8807).
+sendline("commandline whatever")
+expect_re("prompt [0-9]+>whatever")
+
+# Test --current-process output
+send(control("u"))
+sendline(r"bind \cb 'set tmp (commandline --current-process)'")
+expect_prompt()
+send("echo process1; echo process2")
+send(control("a"))
+send(control("b"))
+send(control("k"))
+sendline("echo first process is [$tmp]")
+expect_str("first process is [echo process1]")
+
+send("echo process # comment")
+send(control("a"))
+send(control("b"))
+send(control("k"))
+sendline('echo "process extent is [$tmp]"')
+expect_str("process extent is [echo process # comment]")
+
+sendline(r"bind \cb 'set tmp (commandline --current-process | count)'")
+sendline(r'commandline "echo line1 \\" "# comment" "line2"')
+send(control("b"))
+send(control("u") * 6)
+sendline('echo "process spans $tmp lines"')
+expect_str("process spans 3 lines")

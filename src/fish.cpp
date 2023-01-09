@@ -18,38 +18,43 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA
 */
 #include "config.h"
 
-#include <errno.h>
 #include <fcntl.h>
 #include <getopt.h>
 #include <limits.h>
 #include <locale.h>
-#include <stddef.h>
-#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <strings.h>
 #include <sys/resource.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
+#include <algorithm>
 #include <cstring>
 #include <cwchar>
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
-#include "builtin.h"
+#include "ast.h"
 #include "common.h"
 #include "env.h"
 #include "event.h"
 #include "expand.h"
 #include "fallback.h"  // IWYU pragma: keep
+#include "fds.h"
 #include "fish_version.h"
 #include "flog.h"
 #include "function.h"
 #include "future_feature_flags.h"
+#include "global_safety.h"
 #include "history.h"
-#include "intern.h"
 #include "io.h"
+#include "maybe.h"
+#include "parse_constants.h"
+#include "parse_tree.h"
+#include "parse_util.h"
 #include "parser.h"
 #include "path.h"
 #include "proc.h"
@@ -222,8 +227,7 @@ static void source_config_in_directory(parser_t &parser, const wcstring &dir) {
     // test and the execution of the 'source' command. However, that is not a security problem in
     // this context so we ignore it.
     const wcstring config_pathname = dir + L"/config.fish";
-    const wcstring escaped_dir = escape_string(dir, ESCAPE_ALL);
-    const wcstring escaped_pathname = escaped_dir + L"/config.fish";
+    const wcstring escaped_pathname = escape_string(dir) + L"/config.fish";
     if (waccess(config_pathname, R_OK) != 0) {
         FLOGF(config, L"not sourcing %ls (not readable or does not exist)",
               escaped_pathname.c_str());
@@ -232,9 +236,10 @@ static void source_config_in_directory(parser_t &parser, const wcstring &dir) {
     FLOGF(config, L"sourcing %ls", escaped_pathname.c_str());
 
     const wcstring cmd = L"builtin source " + escaped_pathname;
-    set_is_within_fish_initialization(true);
+
+    parser.libdata().within_fish_init = true;
     parser.eval(cmd, io_chain_t());
-    set_is_within_fish_initialization(false);
+    parser.libdata().within_fish_init = false;
 }
 
 /// Parse init files. exec_path is the path of fish executable as determined by argv[0].
@@ -251,11 +256,28 @@ static void read_init(parser_t &parser, const struct config_paths_t &paths) {
     }
 }
 
-static int run_command_list(parser_t &parser, std::vector<std::string> *cmds,
+static int run_command_list(parser_t &parser, const std::vector<std::string> &cmds,
                             const io_chain_t &io) {
-    for (const auto &cmd : *cmds) {
+    for (const auto &cmd : cmds) {
         wcstring cmd_wcs = str2wcstring(cmd);
-        parser.eval(cmd_wcs, io);
+        // Parse into an ast and detect errors.
+        parse_error_list_t errors;
+        auto ast = ast::ast_t::parse(cmd_wcs, parse_flag_none, &errors);
+        bool errored = ast.errored();
+        if (!errored) {
+            errored = parse_util_detect_errors(ast, cmd_wcs, &errors);
+        }
+        if (!errored) {
+            // Construct a parsed source ref.
+            // Be careful to transfer ownership, this could be a very large string.
+            parsed_source_ref_t ps =
+                std::make_shared<parsed_source_t>(std::move(cmd_wcs), std::move(ast));
+            parser.eval(ps, io);
+        } else {
+            wcstring sb;
+            parser.get_backtrace(cmd_wcs, errors, sb);
+            std::fwprintf(stderr, L"%ls", sb.c_str());
+        }
     }
 
     return 0;
@@ -282,7 +304,7 @@ static int fish_parse_opt(int argc, char **argv, fish_cmd_opts_t *opts) {
         {"private", no_argument, nullptr, 'P'},
         {"help", no_argument, nullptr, 'h'},
         {"version", no_argument, nullptr, 'v'},
-        {nullptr, 0, nullptr, 0}};
+        {}};
 
     int opt;
     while ((opt = getopt_long(argc, argv, short_opts, long_opts, nullptr)) != -1) {
@@ -296,17 +318,7 @@ static int fish_parse_opt(int argc, char **argv, fish_cmd_opts_t *opts) {
                 break;
             }
             case 'd': {
-                char *end;
-                long tmp;
-
-                errno = 0;
-                tmp = strtol(optarg, &end, 10);
-
-                if (tmp >= 0 && tmp <= 10 && !*end && !errno) {
-                    debug_level = static_cast<int>(tmp);
-                } else {
-                    activate_flog_categories_by_pattern(str2wcstring(optarg));
-                }
+                activate_flog_categories_by_pattern(str2wcstring(optarg));
                 for (auto cat : get_flog_categories()) {
                     if (cat->enabled) {
                         std::fwprintf(stdout, L"Debug enabled for category: %ls\n", cat->name);
@@ -416,6 +428,7 @@ int main(int argc, char **argv) {
     set_main_thread();
     setup_fork_guards();
     signal_unblock_all();
+
     setlocale(LC_ALL, "");
 
     // struct stat tmp;
@@ -493,15 +506,24 @@ int main(int argc, char **argv) {
     }
     mutable_fish_features().set_from_string(opts.features);
     proc_init();
-    builtin_init();
     misc_init();
     reader_init();
 
     parser_t &parser = parser_t::principal_parser();
+    parser.set_syncs_uvars(!opts.no_config);
 
     if (!opts.no_exec && !opts.no_config) {
         read_init(parser, paths);
     }
+
+    if (is_interactive_session() && opts.no_config && !opts.no_exec) {
+        // If we have no config, we default to the default key bindings.
+        parser.vars().set_one(L"fish_key_bindings", ENV_UNEXPORT, L"fish_default_key_bindings");
+        if (function_exists(L"fish_default_key_bindings", parser)) {
+            run_command_list(parser, {"fish_default_key_bindings"}, {});
+        }
+    }
+
     // Re-read the terminal modes after config, it might have changed them.
     term_copy_modes();
 
@@ -522,8 +544,11 @@ int main(int argc, char **argv) {
 
     // Run post-config commands specified as arguments, if any.
     if (!opts.postconfig_cmds.empty()) {
-        res = run_command_list(parser, &opts.postconfig_cmds, {});
+        res = run_command_list(parser, opts.postconfig_cmds, {});
     }
+
+    // Clear signals in case we were interrupted (#9024).
+    signal_clear_cancel();
 
     if (!opts.batch_cmds.empty()) {
         // Run the commands specified as arguments, if any.
@@ -540,7 +565,7 @@ int main(int argc, char **argv) {
             list.push_back(str2wcstring(*ptr));
         }
         parser.vars().set(L"argv", ENV_DEFAULT, std::move(list));
-        res = run_command_list(parser, &opts.batch_cmds, {});
+        res = run_command_list(parser, opts.batch_cmds, {});
         parser.libdata().exit_current_script = false;
     } else if (my_optind == argc) {
         // Implicitly interactive mode.
@@ -553,7 +578,8 @@ int main(int argc, char **argv) {
         const char *file = *(argv + (my_optind++));
         autoclose_fd_t fd(open_cloexec(file, O_RDONLY));
         if (!fd.valid()) {
-            perror(file);
+            FLOGF(error, _(L"Error reading script file '%s':"), file);
+            perror("error");
         } else {
             wcstring_list_t list;
             for (char **ptr = argv + my_optind; *ptr; ptr++) {
@@ -562,13 +588,11 @@ int main(int argc, char **argv) {
             parser.vars().set(L"argv", ENV_DEFAULT, std::move(list));
 
             auto &ld = parser.libdata();
-            wcstring rel_filename = str2wcstring(file);
-            scoped_push<const wchar_t *> filename_push{&ld.current_filename,
-                                                       intern(rel_filename.c_str())};
+            filename_ref_t rel_filename = std::make_shared<wcstring>(str2wcstring(file));
+            scoped_push<filename_ref_t> filename_push{&ld.current_filename, rel_filename};
             res = reader_read(parser, fd.fd(), {});
             if (res) {
-                FLOGF(warning, _(L"Error while reading file %ls\n"),
-                      ld.current_filename ? ld.current_filename : _(L"Standard input"));
+                FLOGF(warning, _(L"Error while reading file %ls\n"), rel_filename->c_str());
             }
         }
     }
@@ -577,8 +601,7 @@ int main(int argc, char **argv) {
     event_fire(parser, event_t::process_exit(getpid(), exit_status));
 
     // Trigger any exit handlers.
-    wcstring_list_t event_args = {to_string(exit_status)};
-    event_fire_generic(parser, L"fish_exit", &event_args);
+    event_fire_generic(parser, L"fish_exit", {to_string(exit_status)});
 
     restore_term_mode();
     restore_term_foreground_process_group_for_exit();

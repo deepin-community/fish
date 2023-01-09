@@ -1,7 +1,7 @@
 function __fish_opam_using_command
     set -l cmd (commandline -opc)
-    if [ (count $cmd) -gt 1 ]
-        if [ $argv[1] = $cmd[2] ]
+    if test (count $cmd) -gt 1
+        if test $argv[1] = $cmd[2]
             return 0
         end
     end
@@ -10,8 +10,8 @@ end
 
 function __fish_opam_at_color
     set -l cmd (commandline -opc)
-    if [ (count $cmd) -gt 2 ]
-        if [ $cmd[-1] = --color ]
+    if test (count $cmd) -gt 2
+        if test $cmd[-1] = --color
             return 0
         end
     end
@@ -20,7 +20,7 @@ end
 
 function __fish_opam_needs_command
     set -l cmd (commandline -opc)
-    if [ (count $cmd) -eq 1 ]
+    if test (count $cmd) -eq 1
         return 0
     end
     return 1
@@ -102,3 +102,22 @@ complete -f -c opam -n '__fish_opam_using_command admin' -a check -d "Check a lo
 complete -f -c opam -n '__fish_opam_using_command admin' -a depexts -d "Add external dependencies."
 complete -f -c opam -n '__fish_opam_using_command admin' -a make -d "Initialize a repo for serving files."
 complete -f -c opam -n '__fish_opam_using_command admin' -a stats -d "Compute statistics."
+
+# opam switch
+set -l switchcommands create set remove export import reinstall list list-available show set-base set-description link
+complete -c opam -f -n "__fish_seen_subcommand_from switch; and not __fish_seen_subcommand_from $switchcommands" -a create -d 'Create a new switch, and install the given compiler there'
+complete -c opam -f -n "__fish_seen_subcommand_from switch; and not __fish_seen_subcommand_from $switchcommands" -a set -d 'Set the currently active switch'
+complete -c opam -f -n "__fish_seen_subcommand_from switch; and not __fish_seen_subcommand_from $switchcommands" -a remove -d 'Remove the given switch from disk'
+complete -c opam -n "__fish_seen_subcommand_from switch; and not __fish_seen_subcommand_from $switchcommands" -a export -d 'Save the current switch state to a file'
+complete -c opam -n "__fish_seen_subcommand_from switch; and not __fish_seen_subcommand_from $switchcommands" -a import -d 'Import a saved switch state'
+complete -c opam -f -n "__fish_seen_subcommand_from switch; and not __fish_seen_subcommand_from $switchcommands" -a reinstall -d 'Reinstall the given compiler switch and all its packages'
+complete -c opam -f -n "__fish_seen_subcommand_from switch; and not __fish_seen_subcommand_from $switchcommands" -a list -d 'Lists installed switches'
+complete -c opam -f -n "__fish_seen_subcommand_from switch; and not __fish_seen_subcommand_from $switchcommands" -a list-available -d 'Lists base packages that can be used to create a new switch'
+complete -c opam -f -n "__fish_seen_subcommand_from switch; and not __fish_seen_subcommand_from $switchcommands" -a show -d 'Prints the name of the current switch'
+complete -c opam -f -n "__fish_seen_subcommand_from switch; and not __fish_seen_subcommand_from $switchcommands" -a set-base -d 'Sets the packages forming the immutable base for the selected switch'
+complete -c opam -f -n "__fish_seen_subcommand_from switch; and not __fish_seen_subcommand_from $switchcommands" -a link -d 'Sets a local alias for a given switch'
+
+complete -c opam -f -n "__fish_seen_subcommand_from switch; and __fish_seen_subcommand_from set" -a '(opam switch list --short)'
+complete -c opam -f -n "__fish_seen_subcommand_from switch; and __fish_seen_subcommand_from remove" -a '(opam switch list --short)'
+
+complete -c opam -f -n "__fish_seen_subcommand_from switch; and __fish_seen_subcommand_from create" -a '(opam switch list-available --short)'

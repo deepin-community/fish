@@ -18,7 +18,7 @@ function __fish_git_prompt_show_upstream --description "Helper function for fish
     set -l name
 
     # Default to informative if __fish_git_prompt_show_informative_status is set
-    if set -q __fish_git_prompt_show_informative_status
+    if contains -- "$__fish_git_prompt_show_informative_status" yes true 1
         set informative 1
     end
 
@@ -77,6 +77,7 @@ function __fish_git_prompt_show_upstream --description "Helper function for fish
                 echo $svn_upstream[-1] | read -l __ svn_upstream __
                 set svn_upstream (string replace -r '@.*' '' -- $svn_upstream)
                 set -l cur_prefix
+
                 for i in (seq (count $svn_remote))
                     set -l remote $svn_remote[$i]
                     set -l mod_upstream (string replace "$remote" "" -- $svn_upstream)
@@ -167,10 +168,37 @@ function __fish_git_prompt_show_upstream --description "Helper function for fish
     test "$count" = "0 0"
 end
 
+# Decide if git is safe to run.
+# On Darwin, git is pre-installed as a stub, which will pop a dialog if you run it.
+if string match -q Darwin -- "$(uname)" && string match -q /usr/bin/git -- "$(command -s git)" && type -q xcode-select && type -q xcrun
+    if not xcode-select --print-path &>/dev/null
+        # Only the stub git is installed.
+        # Do not try to run it.
+        function __fish_git_prompt_ready
+            return 1
+        end
+    else
+        # git is installed, but on the first run it may be very slow as xcrun needs to populate the cache.
+        # Kick it off in the background to populate the cache.
+        command git --version &>/dev/null &
+        disown $last_pid &>/dev/null
+        function __fish_git_prompt_ready
+            path is "$(xcrun --show-cache-path 2>/dev/null)" || return 1
+            # git is ready, erase the function.
+            functions -e __fish_git_prompt_ready
+            return 0
+        end
+    end
+end
+
 function fish_git_prompt --description "Prompt function for Git"
     # If git isn't installed, there's nothing we can do
     # Return 1 so the calling prompt can deal with it
     if not command -sq git
+        return 1
+    end
+    # Fail if __fish_git_prompt_ready is defined and fails.
+    if functions -q __fish_git_prompt_ready && not __fish_git_prompt_ready
         return 1
     end
     set -l repo_info (command git rev-parse --git-dir --is-inside-git-dir --is-bare-repository --is-inside-work-tree HEAD 2>/dev/null)
@@ -214,22 +242,30 @@ function fish_git_prompt --description "Prompt function for Git"
     # That means if neither is set, this stays empty.
     #
     # So "!= true" or "!= false" are useful tests if you want to do something by default.
-    set -l informative (command git config --bool bash.showInformativeStatus)
+    set -l informative
+    set -l dirty
+    set -l untracked
+    command git config -z --get-regexp 'bash\.(showInformativeStatus|showDirtyState|showUntrackedFiles)' 2>/dev/null | while read -lz key value
+        switch $key
+            case bash.showinformativestatus
+                set informative $value
+            case bash.showdirtystate
+                set dirty $value
+            case bash.showuntrackedfiles
+                set untracked $value
+        end
+    end
 
-    set -l dirty (command git config --bool bash.showDirtyState)
+    # If we don't print these, there is no need to compute them. Note: For now, staged and dirty are coupled.
     if not set -q dirty[1]
-        set -q __fish_git_prompt_showdirtystate
+        contains -- "$__fish_git_prompt_showdirtystate" yes true 1
         and set dirty true
     end
-    # If we don't print these, there is no need to compute them.
-    # Note: For now, staged and dirty are coupled.
-    contains dirtystate $__fish_git_prompt_status_order
-    or contains stagedstate $__fish_git_prompt_status_order
+    contains dirtystate $__fish_git_prompt_status_order || contains stagedstate $__fish_git_prompt_status_order
     or set dirty false
 
-    set -l untracked (command git config --bool bash.showUntrackedFiles)
     if not set -q untracked[1]
-        set -q __fish_git_prompt_showuntrackedfiles
+        contains -- "$__fish_git_prompt_showuntrackedfiles" yes true 1
         and set untracked true
     end
     contains untrackedfiles $__fish_git_prompt_status_order
@@ -242,47 +278,63 @@ function fish_git_prompt --description "Prompt function for Git"
         # This is to allow overrides for the repository.
         if test "$informative" = true
             or begin
-                set -q __fish_git_prompt_show_informative_status
+                contains -- "$__fish_git_prompt_show_informative_status" yes true 1
                 and test "$dirty" != false
-                and test "$untracked" != false
             end
-            set informative_status (__fish_git_prompt_informative_status $git_dir)
+            set informative_status (untracked=$untracked __fish_git_prompt_informative_status $git_dir)
             if test -n "$informative_status"
                 set informative_status "$space$informative_status"
             end
         else
-            # This has to be set explicitly.
-            if test "$dirty" = true
-                set dirtystate (__fish_git_prompt_dirty)
+            if not test "$dirty" = true; and test "$untracked" = true
+                # Only untracked, ls-files is faster.
+                command git -c core.fsmonitor= ls-files --others --exclude-standard --directory --no-empty-directory --error-unmatch -- :/ >/dev/null 2>&1
+                and set untrackedfiles 1
+            else if test "$dirty" = true
+                # With both dirty and untracked, git status is ~10% faster.
+                # With just dirty, it's ~20%.
+                set -l opt -uno
+                test "$untracked" = true; and set opt -unormal
+                # Don't use `--ignored=no`; it was introduced in Git 2.16, from January 2018
+                # Ignored files are omitted by default
+                set -l stat (command git -c core.fsmonitor= status --porcelain -z $opt | string split0)
+
+                set dirtystate (string match -qr '^.[ACDMR]' -- $stat; and echo 1)
                 if test -n "$sha"
-                    set stagedstate (__fish_git_prompt_staged)
+                    set stagedstate (string match -qr '^[ACDMR].' -- $stat; and echo 1)
                 else
                     set invalidstate 1
                 end
+
+                test "$untracked" = true
+                and set untrackedfiles (string match -qr '\?\?' -- $stat; and echo 1)
             end
 
-            if set -q __fish_git_prompt_showstashstate
+            if contains -- "$__fish_git_prompt_showstashstate" yes true 1
                 and test -r $git_dir/logs/refs/stash
                 set stashstate 1
             end
-
-            if test "$untracked" = true
-                set untrackedfiles (__fish_git_prompt_untracked)
-            end
         end
 
+        # (showupstream has a variety of options, not just bool)
         if set -q __fish_git_prompt_showupstream
-            or set -q __fish_git_prompt_show_informative_status
+            or contains -- "$__fish_git_prompt_show_informative_status" yes true 1
             set p (__fish_git_prompt_show_upstream)
         end
     end
 
     set -l branch_color $___fish_git_prompt_color_branch
     set -l branch_done $___fish_git_prompt_color_branch_done
-    if set -q __fish_git_prompt_showcolorhints
+    if contains -- "$__fish_git_prompt_showcolorhints" yes true 1
         if test $detached = yes
             set branch_color $___fish_git_prompt_color_branch_detached
             set branch_done $___fish_git_prompt_color_branch_detached_done
+        else if test -n "$dirtystate$untrackedfiles"; and set -q __fish_git_prompt_color_branch_dirty
+            set branch_color (set_color $__fish_git_prompt_color_branch_dirty)
+            set branch_done (set_color $__fish_git_prompt_color_branch_dirty_done)
+        else if test -n "$stagedstate"; and set -q __fish_git_prompt_color_branch_staged
+            set branch_color (set_color $__fish_git_prompt_color_branch_staged)
+            set branch_done (set_color $__fish_git_prompt_color_branch_staged_done)
         end
     end
 
@@ -302,15 +354,18 @@ function fish_git_prompt --description "Prompt function for Git"
     end
 
     set b (string replace refs/heads/ '' -- $b)
-    set -q __fish_git_prompt_shorten_branch_char_suffix
-    or set -l __fish_git_prompt_shorten_branch_char_suffix "…"
-    if string match -qr '^\d+$' "$__fish_git_prompt_shorten_branch_len"; and test (string length "$b") -gt $__fish_git_prompt_shorten_branch_len
-        set b (string sub -l "$__fish_git_prompt_shorten_branch_len" "$b")"$__fish_git_prompt_shorten_branch_char_suffix"
+    if string match -qr '^\d+$' "$__fish_git_prompt_shorten_branch_len"
+        set -q __fish_git_prompt_shorten_branch_char_suffix
+        and set -l char -c "$__fish_git_prompt_shorten_branch_char_suffix"
+        set b (string shorten -m "$__fish_git_prompt_shorten_branch_len" $char -- "$b")
     end
     if test -n "$b"
         set b "$branch_color$b$branch_done"
+        if test -z "$dirtystate$untrackedfiles$stagedstate"; and test -n "$___fish_git_prompt_char_cleanstate"
+            and not contains -- "$__fish_git_prompt_show_informative_status" yes true 1
+            set b "$b$___fish_git_prompt_color_cleanstate$___fish_git_prompt_char_cleanstate$___fish_git_prompt_color_cleanstate_done"
+        end
     end
-
     if test -n "$c"
         set c "$___fish_git_prompt_color_bare$c$___fish_git_prompt_color_bare_done"
     end
@@ -335,38 +390,24 @@ end
 
 ### helper functions
 
-function __fish_git_prompt_staged --description "fish_git_prompt helper, tells whether or not the current branch has staged files"
-    # The "diff" functions all return > 0 if there _is_ a diff,
-    # but we want to return 0 if there are staged changes.
-    # So we invert the status.
-    not command git diff-index --cached --quiet HEAD -- 2>/dev/null
-    and echo 1
-end
-
-function __fish_git_prompt_untracked --description "fish_git_prompt helper, tells whether or not the current repository has untracked files"
-    command git ls-files --others --exclude-standard --directory --no-empty-directory --error-unmatch -- :/ >/dev/null 2>&1
-    and echo 1
-end
-
-function __fish_git_prompt_dirty --description "fish_git_prompt helper, tells whether or not the current branch has tracked, modified files"
-    # Like staged, invert the status because we want 0 to mean there are dirty files.
-    not command git diff --no-ext-diff --quiet --exit-code 2>/dev/null
-    and echo 1
-end
-
 function __fish_git_prompt_informative_status
     set -l stashstate 0
     set -l stashfile "$argv[1]/logs/refs/stash"
-    if set -q __fish_git_prompt_showstashstate; and test -e "$stashfile"
+    if contains -- "$__fish_git_prompt_showstashstate" yes true 1; and test -e "$stashfile"
         set stashstate (count < $stashfile)
     end
 
-    # Use git status --porcelain.
-    # This uses the "normal" untracked mode so untracked directories are considered as 1 entry.
-    # It's quite a bit faster and unlikely anyone cares about the number of files if it's *all* of the files
+    # If we're not told to show untracked files, we don't.
+    # If we are, we still use the "normal" mode because it's a lot faster,
+    # and it's unlikely anyone cares about the number of files if it's *all* of the files
     # in that directory.
+    set -l untr -uno
+    test "$untracked" = true
+    and set untr -unormal
+
+    # Use git status --porcelain.
     # The v2 format is better, but we don't actually care in this case.
-    set -l stats (string sub -l 2 (git status --porcelain -z -unormal | string split0))
+    set -l stats (string sub -l 2 (git -c core.fsmonitor= status --porcelain -z $untr | string split0))
     set -l invalidstate (string match -r '^UU' $stats | count)
     set -l stagedstate (string match -r '^[ACDMR].' $stats | count)
     set -l dirtystate (string match -r '^.[ACDMR]' $stats | count)
@@ -383,7 +424,7 @@ function __fish_git_prompt_informative_status
         end
     else
         for i in $__fish_git_prompt_status_order
-            if [ $$i != 0 ]
+            if test $$i != 0
                 set -l color_var ___fish_git_prompt_color_$i
                 set -l color_done_var ___fish_git_prompt_color_{$i}_done
                 set -l symbol_var ___fish_git_prompt_char_$i
@@ -475,8 +516,9 @@ function __fish_git_prompt_operation_branch_bare --description "fish_git_prompt 
             if test $status -ne 0
                 # Shorten the sha ourselves to 8 characters - this should be good for most repositories,
                 # and even for large ones it should be good for most commits
+                # No need for an ellipsis.
                 if set -q sha
-                    set branch (string match -r '^.{8}' -- $sha)…
+                    set branch (string shorten -m8 -c "" -- $sha)
                 else
                     set branch unknown
                 end
@@ -506,8 +548,8 @@ function __fish_git_prompt_set_char
 
     if set -q argv[3]
         and begin
-            set -q __fish_git_prompt_show_informative_status
-            or set -q __fish_git_prompt_use_informative_chars
+            contains -- "$__fish_git_prompt_show_informative_status" yes true 1
+            or contains -- "$__fish_git_prompt_use_informative_chars" yes true 1
         end
         set char $argv[3]
     end
@@ -521,8 +563,11 @@ function __fish_git_prompt_set_char
 end
 
 function __fish_git_prompt_validate_chars --description "fish_git_prompt helper, checks char variables"
+    # cleanstate is only defined with actual informative status.
+    contains -- "$__fish_git_prompt_show_informative_status" yes true 1
+    and __fish_git_prompt_set_char __fish_git_prompt_char_cleanstate '✔'
+    or __fish_git_prompt_set_char __fish_git_prompt_char_cleanstate ''
 
-    __fish_git_prompt_set_char __fish_git_prompt_char_cleanstate '✔'
     __fish_git_prompt_set_char __fish_git_prompt_char_dirtystate '*' '✚'
     __fish_git_prompt_set_char __fish_git_prompt_char_invalidstate '#' '✖'
     __fish_git_prompt_set_char __fish_git_prompt_char_stagedstate '+' '●'
@@ -583,7 +628,7 @@ function __fish_git_prompt_validate_colors --description "fish_git_prompt helper
     __fish_git_prompt_set_color __fish_git_prompt_color_upstream
 
     # Colors with defaults with showcolorhints
-    if set -q __fish_git_prompt_showcolorhints
+    if contains -- "$__fish_git_prompt_showcolorhints" yes true 1
         __fish_git_prompt_set_color __fish_git_prompt_color_flags (set_color --bold blue)
         __fish_git_prompt_set_color __fish_git_prompt_color_branch (set_color green)
         __fish_git_prompt_set_color __fish_git_prompt_color_dirtystate (set_color red)
@@ -604,51 +649,33 @@ function __fish_git_prompt_validate_colors --description "fish_git_prompt helper
 
 end
 
-set -l varargs
-for var in repaint describe_style show_informative_status use_informative_chars showdirtystate showstashstate showuntrackedfiles showupstream
-    set -a varargs --on-variable __fish_git_prompt_$var
-end
-function __fish_git_prompt_reset $varargs --description "Event handler, resets prompt when functionality changes"
+function __fish_git_prompt_reset -a type -a op -a var --description "Event handler, resets prompt when functionality changes" \
+    --on-variable=__fish_git_prompt_{show_informative_status,use_informative_chars}
     if status --is-interactive
-        if contains -- $argv[3] __fish_git_prompt_show_informative_status __fish_git_prompt_use_informative_chars
-            # Clear characters that have different defaults with/without informative status
-            for name in cleanstate dirtystate invalidstate stagedstate stashstate stateseparator untrackedfiles upstream_ahead upstream_behind
-                set -e ___fish_git_prompt_char_$name
-            end
-            # Clear init so we reset the chars next time.
-            set -e ___fish_git_prompt_init
-        end
+        # Clear characters that have different defaults with/without informative status
+        set -e ___fish_git_prompt_char_{name,cleanstate,dirtystate,invalidstate,stagedstate,stashstate,stateseparator,untrackedfiles,upstream_ahead,upstream_behind}
+        # Clear init so we reset the chars next time.
+        set -e ___fish_git_prompt_init
     end
 end
 
-set -l varargs
-for var in '' _prefix _suffix _bare _merging _cleanstate _invalidstate _upstream _flags _branch _dirtystate _stagedstate _branch_detached _stashstate _untrackedfiles
-    set -a varargs --on-variable __fish_git_prompt_color$var
-end
-set -a varargs --on-variable __fish_git_prompt_showcolorhints
-function __fish_git_prompt_reset_color $varargs --description "Event handler, resets prompt when any color changes"
+function __fish_git_prompt_reset_color -a type -a op -a var --description "Event handler, resets prompt when any color changes" \
+    --on-variable=__fish_git_prompt_color{'',_prefix,_suffix,_bare,_merging,_cleanstate,_invalidstate,_upstream,_flags,_branch,_dirtystate,_stagedstate,_branch_detached,_stashstate,_untrackedfiles} --on-variable=__fish_git_prompt_showcolorhints
     if status --is-interactive
-        set -e ___fish_git_prompt_init
-        set -l var $argv[3]
         set -e _$var
         set -e _{$var}_done
-        if test $var = __fish_git_prompt_color -o $var = __fish_git_prompt_color_flags -o $var = __fish_git_prompt_showcolorhints
+        set -e ___fish_git_prompt_init
+        if contains -- $var __fish_git_prompt_color __fish_git_prompt_color_flags __fish_git_prompt_showcolorhints
             # reset all the other colors too
-            for name in prefix suffix bare merging branch dirtystate stagedstate invalidstate stashstate untrackedfiles upstream flags
-                set -e ___fish_git_prompt_color_$name
-                set -e ___fish_git_prompt_color_{$name}_done
-            end
+            set -e ___fish_git_prompt_color_{prefix,suffix,bare,merging,branch,dirtystate,stagedstate,invalidstate,stashstate,untrackedfiles,upstream,flags}{,_done}
         end
     end
 end
 
-set -l varargs
-for var in cleanstate dirtystate invalidstate stagedstate stashstate stateseparator untrackedfiles upstream_ahead upstream_behind upstream_diverged upstream_equal upstream_prefix
-    set -a varargs --on-variable __fish_git_prompt_char_$var
-end
-function __fish_git_prompt_reset_char $varargs --description "Event handler, resets prompt when any char changes"
+function __fish_git_prompt_reset_char -a type -a op -a var --description "Event handler, resets prompt when any char changes" \
+    --on-variable=__fish_git_prompt_char_{cleanstate,dirtystate,invalidstate,stagedstate,stashstate,stateseparator,untrackedfiles,upstream_ahead,upstream_behind,upstream_diverged,upstream_equal,upstream_prefix}
     if status --is-interactive
         set -e ___fish_git_prompt_init
-        set -e _$argv[3]
+        set -e _$var
     end
 end

@@ -14,8 +14,8 @@ set(bindir ${CMAKE_INSTALL_BINDIR})
 set(sysconfdir ${CMAKE_INSTALL_SYSCONFDIR})
 set(mandir ${CMAKE_INSTALL_MANDIR})
 
-set(rel_datadir ${CMAKE_INSTALL_DATADIR})
 set(datadir ${CMAKE_INSTALL_FULL_DATADIR})
+file(RELATIVE_PATH rel_datadir ${CMAKE_INSTALL_PREFIX} ${datadir})
 
 set(docdir ${CMAKE_INSTALL_DOCDIR})
 
@@ -91,7 +91,9 @@ fish_create_dirs(${rel_datadir}/fish ${rel_datadir}/fish/completions
                  ${rel_datadir}/fish/tools/web_config
                  ${rel_datadir}/fish/tools/web_config/js
                  ${rel_datadir}/fish/tools/web_config/partials
-                 ${rel_datadir}/fish/tools/web_config/sample_prompts)
+                 ${rel_datadir}/fish/tools/web_config/sample_prompts
+                 ${rel_datadir}/fish/tools/web_config/themes
+                 )
 
 configure_file(share/__fish_build_paths.fish.in share/__fish_build_paths.fish)
 install(FILES share/config.fish
@@ -147,6 +149,7 @@ install(DIRECTORY share/tools/web_config
         PATTERN "*.html"
         PATTERN "*.py"
         PATTERN "*.js"
+        PATTERN "*.theme"
         PATTERN "*.fish")
 
 # Building the man pages is optional: if Sphinx isn't installed, they're not built
@@ -167,13 +170,14 @@ if(GETTEXT_FOUND)
   endforeach()
 endif()
 
-install(FILES fish.desktop DESTINATION ${rel_datadir}/applications)
-install(FILES fish.png DESTINATION ${rel_datadir}/pixmaps)
+if (NOT APPLE)
+    install(FILES fish.desktop DESTINATION ${rel_datadir}/applications)
+    install(FILES ${SPHINX_SRC_DIR}/python_docs_theme/static/fish.png DESTINATION ${rel_datadir}/pixmaps)
+endif()
 
 # Group install targets into a InstallTargets folder
 set_property(TARGET build_fish_pc CHECK-FISH-BUILD-VERSION-FILE
-                    test_fishscript
-                    test_prep tests_buildroot_target
+                    tests_buildroot_target
              PROPERTY FOLDER cmake/InstallTargets)
 
 # Make a target build_root that installs into the buildroot directory, for testing.

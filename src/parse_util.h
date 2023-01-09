@@ -7,16 +7,19 @@
 #include <vector>
 
 #include "common.h"
-#include "parse_tree.h"
-#include "tokenizer.h"
+#include "maybe.h"
+#include "parse_constants.h"
 
 namespace ast {
 struct argument_t;
-}
+class ast_t;
+}  // namespace ast
+struct tok_t;
 
-/// Same as parse_util_locate_cmdsubst, but handles square brackets [ ].
-int parse_util_locate_slice(const wchar_t *in, wchar_t **begin, wchar_t **end,
-                            bool accept_incomplete);
+/// Handles slices: the square brackets in an expression like $foo[5..4]
+/// \return the length of the slice starting at \p in, or 0 if there is no slice, or -1 on error.
+/// This never accepts incomplete slices.
+long parse_util_slice_length(const wchar_t *in);
 
 /// Alternative API. Iterate over command substitutions.
 ///
@@ -28,10 +31,13 @@ int parse_util_locate_slice(const wchar_t *in, wchar_t **begin, wchar_t **end,
 /// \param out_end On output, the offset of the end of the command substitution (close paren), or
 /// the end of the string if it was incomplete
 /// \param accept_incomplete whether to permit missing closing parenthesis
+/// \param inout_is_quoted whether the cursor is in a double-quoted context.
+/// \param out_has_dollar whether the command substitution has the optional leading $.
 /// \return -1 on syntax error, 0 if no subshells exist and 1 on success
 int parse_util_locate_cmdsubst_range(const wcstring &str, size_t *inout_cursor_offset,
                                      wcstring *out_contents, size_t *out_start, size_t *out_end,
-                                     bool accept_incomplete);
+                                     bool accept_incomplete, bool *inout_is_quoted = nullptr,
+                                     bool *out_has_dollar = nullptr);
 
 /// Find the beginning and end of the command substitution under the cursor. If no subshell is
 /// found, the entire string is returned. If the current command substitution is not ended, i.e. the
@@ -77,8 +83,8 @@ void parse_util_token_extent(const wchar_t *buff, size_t cursor_pos, const wchar
                              const wchar_t **tok_end, const wchar_t **prev_begin,
                              const wchar_t **prev_end);
 
-/// Get the linenumber at the specified character offset.
-int parse_util_lineno(const wchar_t *str, size_t offset);
+/// Get the line number at the specified character offset.
+int parse_util_lineno(const wcstring &str, size_t offset);
 
 /// Calculate the line number of the specified cursor position.
 int parse_util_get_line_from_offset(const wcstring &str, size_t pos);
@@ -86,7 +92,7 @@ int parse_util_get_line_from_offset(const wcstring &str, size_t pos);
 /// Get the offset of the first character on the specified line.
 size_t parse_util_get_offset_from_line(const wcstring &str, int line);
 
-/// Return the total offset of the buffer for the cursor position nearest to the specified poition.
+/// Return the total offset of the buffer for the cursor position nearest to the specified position.
 size_t parse_util_get_offset(const wcstring &str, int line, long line_offset);
 
 /// Return the given string, unescaping wildcard characters but not performing any other character
@@ -100,12 +106,8 @@ bool parse_util_argument_is_help(const wcstring &s);
 ///
 /// \param cmd The command to be analyzed
 /// \param pos An index in the string which is inside the parameter
-/// \param quote If not NULL, store the type of quote this parameter has, can be either ', " or \\0,
-/// meaning the string is not quoted.
-/// \param offset If not NULL, get_param will store the offset to the beginning of the parameter.
-/// \param out_type If not NULL, get_param will store the token type.
-void parse_util_get_parameter_info(const wcstring &cmd, const size_t pos, wchar_t *quote,
-                                   size_t *offset, token_type_t *out_type);
+/// \return the type of quote used by the parameter: either ' or " or \0.
+wchar_t parse_util_get_quote_type(const wcstring &cmd, size_t pos);
 
 /// Attempts to escape the string 'cmd' using the given quote type, as determined by the quote
 /// character. The quote can be a single quote or double quote, or L'\0' to indicate no quoting (and

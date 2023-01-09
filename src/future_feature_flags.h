@@ -2,10 +2,7 @@
 #ifndef FISH_FUTURE_FEATURE_FLAGS_H
 #define FISH_FUTURE_FEATURE_FLAGS_H
 
-#include <assert.h>
-
 #include <atomic>
-#include <unordered_map>
 
 #include "common.h"
 
@@ -21,6 +18,9 @@ class features_t {
 
         /// Whether string replace -r double-unescapes the replacement.
         string_replace_backslash,
+
+        /// Whether "&" is not-special if followed by a word character.
+        ampersand_nobg_in_token,
 
         /// The number of flags.
         flag_count
@@ -60,6 +60,9 @@ class features_t {
 
         /// Default flag value.
         const bool default_value;
+
+        /// Whether the value can still be changed or not.
+        const bool read_only;
     };
 
     /// The metadata, indexed by flag.

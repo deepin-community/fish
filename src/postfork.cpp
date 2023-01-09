@@ -5,20 +5,20 @@
 #include <fcntl.h>
 #include <paths.h>
 #include <signal.h>
-#include <stdio.h>
 #include <time.h>
+#include <unistd.h>
 
 #include <cstring>
-#include <memory>
 #ifdef HAVE_SPAWN_H
 #include <spawn.h>
 #endif
-#include <cwchar>
+#include <string>
+#include <vector>
 
 #include "common.h"
 #include "exec.h"
+#include "fds.h"
 #include "flog.h"
-#include "io.h"
 #include "iothread.h"
 #include "job_group.h"
 #include "postfork.h"
@@ -36,9 +36,6 @@
 
 /// The number of nanoseconds to sleep between attempts to call fork().
 #define FORK_SLEEP_TIME 1000000
-
-/// Fork error message.
-#define FORK_ERROR "Could not create child process - exiting"
 
 extern bool is_thompson_shell_script(const char *path);
 static char *get_interpreter(const char *command, char *buffer, size_t buff_size);
@@ -60,18 +57,42 @@ void report_setpgid_error(int err, bool is_parent, pid_t desired_pgid, const job
     narrow_string_safe(argv0, p->argv0());
     narrow_string_safe(command, j->command_wcstr());
 
-    debug_safe(1, "Could not send %s %s, '%s' in job %s, '%s' from group %s to group %s",
+    FLOGF_SAFE(warning, "Could not send %s %s, '%s' in job %s, '%s' from group %s to group %s",
                is_parent ? "child" : "self", pid_buff, argv0, job_id_buff, command, getpgid_buff,
                job_pgid_buff);
 
     if (is_windows_subsystem_for_linux() && errno == EPERM) {
-        debug_safe(1,
+        FLOGF_SAFE(warning,
                    "Please update to Windows 10 1809/17763 or higher to address known issues "
                    "with process groups and zombie processes.");
     }
 
     errno = err;
-    safe_perror("setpgid");
+    switch (errno) {
+        case EACCES: {
+            FLOGF_SAFE(error, "setpgid: Process %s has already exec'd", pid_buff);
+            break;
+        }
+        case EINVAL: {
+            FLOGF_SAFE(error, "setpgid: pgid %s unsupported", getpgid_buff);
+            break;
+        }
+        case EPERM: {
+            FLOGF_SAFE(error, "setpgid: Process %s is a session leader or pgid %s does not match",
+                       pid_buff, getpgid_buff);
+            break;
+        }
+        case ESRCH: {
+            FLOGF_SAFE(error, "setpgid: Process ID %s does not match", pid_buff);
+            break;
+        }
+        default: {
+            char errno_buff[64];
+            format_long_safe(errno_buff, errno);
+            FLOGF_SAFE(error, "setpgid: Unknown error number %s", errno_buff);
+            break;
+        }
+    }
 }
 
 int execute_setpgid(pid_t pid, pid_t pgroup, bool is_parent) {
@@ -95,10 +116,10 @@ int execute_setpgid(pid_t pid, pid_t pgroup, bool is_parent) {
             // the case in fish, anywhere) or to change the process group ID of a session
             // leader (again, can never be the case). I'm pretty sure this is a WSL bug, as
             // we see the same with tcsetpgrp(2) in other places and it disappears on retry.
-            debug_safe(2, "setpgid(2) returned EPERM. Retrying");
+            FLOGF_SAFE(proc_pgroup, "setpgid(2) returned EPERM. Retrying");
             continue;
         }
-#ifdef __BSD__
+#if defined(__BSD__) || defined(__APPLE__)
         // POSIX.1 doesn't specify that zombie processes are required to be considered extant and/or
         // children of the parent for purposes of setpgid(2). In particular, FreeBSD (at least up to
         // 12.2) does not consider a child that has already forked, exec'd, and exited to "exist"
@@ -116,7 +137,7 @@ int execute_setpgid(pid_t pid, pid_t pgroup, bool is_parent) {
     }
 }
 
-int child_setup_process(pid_t new_termowner, pid_t fish_pgrp, const job_t &job, bool is_forked,
+int child_setup_process(pid_t claim_tty_from, const job_t &job, bool is_forked,
                         const dup2_list_t &dup2s) {
     // Note we are called in a forked child.
     for (const auto &act : dup2s.get_actions()) {
@@ -134,13 +155,13 @@ int child_setup_process(pid_t new_termowner, pid_t fish_pgrp, const job_t &job, 
         }
         if (err < 0) {
             if (is_forked) {
-                debug_safe(4, "redirect_in_child_after_fork failed in child_setup_process");
+                FLOGF_SAFE(warning, "failed to set up file descriptors in child_setup_process");
                 exit_without_destructors(1);
             }
             return err;
         }
     }
-    if (new_termowner != INVALID_PID && new_termowner != fish_pgrp) {
+    if (claim_tty_from >= 0 && tcgetpgrp(STDIN_FILENO) == claim_tty_from) {
         // Assign the terminal within the child to avoid the well-known race between tcsetgrp() in
         // the parent and the child executing. We are not interested in error handling here, except
         // we try to avoid this for non-terminals; in particular pipelines often make non-terminal
@@ -149,12 +170,10 @@ int child_setup_process(pid_t new_termowner, pid_t fish_pgrp, const job_t &job, 
         // another process which may happen if we are run in the background with job control
         // enabled. Note if stdin is not a tty, then tcgetpgrp() will return -1 and we will not
         // enter this.
-        if (tcgetpgrp(STDIN_FILENO) == fish_pgrp) {
-            // Ensure this doesn't send us to the background (see #5963)
-            signal(SIGTTIN, SIG_IGN);
-            signal(SIGTTOU, SIG_IGN);
-            (void)tcsetpgrp(STDIN_FILENO, new_termowner);
-        }
+        // Ensure this doesn't send us to the background (see #5963)
+        signal(SIGTTIN, SIG_IGN);
+        signal(SIGTTOU, SIG_IGN);
+        (void)tcsetpgrp(STDIN_FILENO, getpid());
     }
     sigset_t sigmask;
     sigemptyset(&sigmask);
@@ -171,13 +190,11 @@ int child_setup_process(pid_t new_termowner, pid_t fish_pgrp, const job_t &job, 
 /// FORK_LAPS times, with a very slight delay between each lap. If fork fails even then, the process
 /// will exit with an error message.
 pid_t execute_fork() {
-    ASSERT_IS_MAIN_THREAD();
-
     if (JOIN_THREADS_BEFORE_FORK) {
         // Make sure we have no outstanding threads before we fork. This is a pretty sketchy thing
         // to do here, both because exec.cpp shouldn't have to know about iothreads, and because the
         // completion handlers may do unexpected things.
-        debug_safe(4, "waiting for threads to drain.");
+        FLOGF_SAFE(iothread, "waiting for threads to drain.");
         iothread_drain_all();
     }
 
@@ -205,8 +222,26 @@ pid_t execute_fork() {
         }
     }
 
-    debug_safe(0, FORK_ERROR);
-    safe_perror("fork");
+    // These are all the errno numbers for fork() I can find.
+    // Also ENOSYS, but I doubt anyone is running
+    // fish on a platform without an MMU.
+    switch (errno) {
+        case EAGAIN: {
+            // We should have retried these already?
+            FLOGF_SAFE(error, "fork: Out of resources. Check RLIMIT_NPROC and pid_max.");
+            break;
+        }
+        case ENOMEM: {
+            FLOGF_SAFE(error, "fork: Out of memory.");
+            break;
+        }
+        default: {
+            char errno_buff[64];
+            format_long_safe(errno_buff, errno);
+            FLOGF_SAFE(error, "fork: Unknown error number %s", errno_buff);
+            break;
+        }
+    }
     FATAL_EXIT();
     return 0;
 }
@@ -221,10 +256,10 @@ bool posix_spawner_t::check_fail(int err) {
 }
 
 posix_spawner_t::~posix_spawner_t() {
-    if (attr_) {
+    if (attr_.has_value()) {
         posix_spawnattr_destroy(this->attr());
     }
-    if (actions_) {
+    if (actions_.has_value()) {
         posix_spawn_file_actions_destroy(this->actions());
     }
 }
@@ -246,13 +281,13 @@ posix_spawner_t::posix_spawner_t(const job_t *j, const dup2_list_t &dup2s) {
     // desired_pgid tracks the pgroup for the process. If it is none, the pgroup is left unchanged.
     // If it is zero, create a new pgroup from the pid. If it is >0, join that pgroup.
     maybe_t<pid_t> desired_pgid = none();
-    if (auto job_pgid = j->group->get_pgid()) {
-        desired_pgid = *job_pgid;
-    } else {
-        assert(j->group->needs_pgid_assignment() && "We should be expecting a pgid");
-        // We are the first external proc in the job group. Set the desired_pgid to 0 to indicate we
-        // should creating a new process group.
-        desired_pgid = 0;
+    {
+        auto pgid = j->group->get_pgid();
+        if (pgid.has_value()) {
+            desired_pgid = *pgid;
+        } else if (j->processes.front()->leads_pgrp) {
+            desired_pgid = 0;
+        }
     }
 
     // Set the handling for job control signals back to the default.
@@ -304,7 +339,7 @@ maybe_t<pid_t> posix_spawner_t::spawn(const char *cmd, char *const argv[], char 
     pid_t pid = -1;
     if (check_fail(posix_spawn(&pid, cmd, &*actions_, &*attr_, argv, envp))) {
         // The shebang wasn't introduced until UNIX Seventh Edition, so if
-        // the kernel won't run the binary we hand it off to the intpreter
+        // the kernel won't run the binary we hand it off to the interpreter
         // after performing a binary safety check, recommended by POSIX: a
         // line needs to exist before the first \0 with a lowercase letter
         if (error_ == ENOEXEC && is_thompson_shell_script(cmd)) {
@@ -313,7 +348,11 @@ maybe_t<pid_t> posix_spawner_t::spawn(const char *cmd, char *const argv[], char 
             std::vector<char *> argv2;
             char interp[] = _PATH_BSHELL;
             argv2.push_back(interp);
-            for (size_t i = 0; argv[i] != nullptr; i++) {
+            // The command to call should use the full path,
+            // not what we would pass as argv0.
+            std::string cmd2 = cmd;
+            argv2.push_back(&cmd2[0]);
+            for (size_t i = 1; argv[i] != nullptr; i++) {
                 argv2.push_back(argv[i]);
             }
             argv2.push_back(nullptr);
@@ -331,62 +370,86 @@ maybe_t<pid_t> posix_spawner_t::spawn(const char *cmd, char *const argv[], char 
 
 void safe_report_exec_error(int err, const char *actual_cmd, const char *const *argv,
                             const char *const *envv) {
-    debug_safe(0, "Failed to execute process '%s'. Reason:", actual_cmd);
-
     switch (err) {
         case E2BIG: {
-            char sz1[128], sz2[128];
+            char sz1[128];
 
             long arg_max = -1;
 
             size_t sz = 0;
+            size_t szenv = 0;
             const char *const *p;
             for (p = argv; *p; p++) {
                 sz += std::strlen(*p) + 1;
             }
 
             for (p = envv; *p; p++) {
-                sz += std::strlen(*p) + 1;
+                szenv += std::strlen(*p) + 1;
             }
+            sz += szenv;
 
             format_size_safe(sz1, sz);
             arg_max = sysconf(_SC_ARG_MAX);
 
             if (arg_max > 0) {
                 if (sz >= static_cast<unsigned long long>(arg_max)) {
+                    char sz2[128];
                     format_size_safe(sz2, static_cast<unsigned long long>(arg_max));
-                    debug_safe(
-                        0,
-                        "The total size of the argument and environment lists %s exceeds the "
-                        "operating system limit of %s.",
-                        sz1, sz2);
+                    FLOGF_SAFE(
+                        exec,
+                        "Failed to execute process '%s': the total size of the argument list and "
+                        "exported variables (%s) exceeds the OS limit of %s.",
+                        actual_cmd, sz1, sz2);
                 } else {
                     // MAX_ARG_STRLEN, a linux thing that limits the size of one argument. It's
                     // defined in binfmts.h, but we don't want to include that just to be able to
                     // print the real limit.
-                    debug_safe(0,
-                               "One of your arguments exceeds the operating system's argument "
-                               "length limit.");
+                    FLOGF_SAFE(exec,
+                               "Failed to execute process '%s': An argument or exported variable "
+                               "exceeds the OS "
+                               "argument length limit.",
+                               actual_cmd);
+                }
+
+                if (szenv >= static_cast<unsigned long long>(arg_max) / 2) {
+                    FLOGF_SAFE(exec,
+                               "Hint: Your exported variables take up over half the limit. Try "
+                               "erasing or unexporting variables.");
                 }
             } else {
-                debug_safe(0,
-                           "The total size of the argument and environment lists (%s) exceeds the "
-                           "operating system limit.",
-                           sz1);
+                FLOGF_SAFE(
+                    exec,
+                    "Failed to execute process '%s': the total size of the argument list and "
+                    "exported variables (%s) exceeds the "
+                    "operating system limit.",
+                    actual_cmd, sz1);
             }
-
-            debug_safe(0, "Try running the command again with fewer arguments.");
             break;
         }
 
         case ENOEXEC: {
-            const char *err = safe_strerror(errno);
-            debug_safe(0, "exec: %s", err);
-
-            debug_safe(0,
-                       "The file '%s' is marked as an executable but could not be run by the "
+            FLOGF_SAFE(exec,
+                       "Failed to execute process: '%s' the file could not be run by the "
                        "operating system.",
                        actual_cmd);
+            char interpreter_buff[128] = {};
+            const char *interpreter =
+                get_interpreter(actual_cmd, interpreter_buff, sizeof interpreter_buff);
+            if (!interpreter) {
+                // Paths ending in ".fish" need to start with a shebang
+                if (const char *lastdot = strrchr(actual_cmd, '.')) {
+                    if (0 == strcmp(lastdot, ".fish")) {
+                        FLOGF_SAFE(exec,
+                                   "fish scripts require an interpreter directive (must start with "
+                                   "'#!/path/to/fish').");
+                    }
+                }
+            } else {
+                // If the shebang line exists, we would get an ENOENT or similar instead,
+                // so I don't know how to reach this.
+                FLOGF_SAFE(exec, "Maybe the interpreter directive (#! line) is broken?",
+                           actual_cmd);
+            }
             break;
         }
 
@@ -399,32 +462,102 @@ void safe_report_exec_error(int err, const char *actual_cmd, const char *const *
             const char *interpreter =
                 get_interpreter(actual_cmd, interpreter_buff, sizeof interpreter_buff);
             if (interpreter && 0 != access(interpreter, X_OK)) {
-                // Detect windows line endings and complain specifically about them.
+                // Detect Windows line endings and complain specifically about them.
                 auto len = strlen(interpreter);
                 if (len && interpreter[len - 1] == '\r') {
-                    debug_safe(0,
-                               "The file uses windows line endings (\\r\\n). Run dos2unix or "
-                               "similar to fix it.");
+                    FLOGF_SAFE(exec,
+                               "Failed to execute process '%s':  The file uses Windows line "
+                               "endings (\\r\\n). Run dos2unix or similar to fix it.",
+                               actual_cmd);
                 } else {
-                    debug_safe(0,
-                               "The file '%s' specified the interpreter '%s', which is not an "
+                    FLOGF_SAFE(exec,
+                               "Failed to execute process '%s': The file specified the interpreter "
+                               "'%s', which is not an "
                                "executable command.",
                                actual_cmd, interpreter);
                 }
+            } else if (access(actual_cmd, X_OK) == 0) {
+                FLOGF_SAFE(exec,
+                           "Failed to execute process '%s': The file exists and is executable. "
+                           "Check the interpreter or linker?",
+                           actual_cmd);
             } else {
-                debug_safe(0, "The file '%s' does not exist or could not be executed.", actual_cmd);
+                FLOGF_SAFE(exec,
+                           "Failed to execute process '%s': The file does not exist or could not "
+                           "be executed.",
+                           actual_cmd);
             }
             break;
         }
 
         case ENOMEM: {
-            debug_safe(0, "Out of memory");
+            FLOGF_SAFE(exec, "Out of memory");
+            break;
+        }
+        case EACCES: {
+            FLOGF_SAFE(exec, "Failed to execute process '%s': The file could not be accessed.",
+                       actual_cmd);
+            break;
+        }
+        case ETXTBSY: {
+            FLOGF_SAFE(exec, "Failed to execute process '%s': File is currently open for writing.",
+                       actual_cmd);
+            break;
+        }
+        case ELOOP: {
+            FLOGF_SAFE(
+                exec,
+                "Failed to execute process '%s': Too many layers of symbolic links. Maybe a loop?",
+                actual_cmd);
+            break;
+        }
+        case EINVAL: {
+            FLOGF_SAFE(exec, "Failed to execute process '%s': Unsupported format.", actual_cmd);
+            break;
+        }
+        case EISDIR: {
+            FLOGF_SAFE(exec, "Failed to execute process '%s': File is a directory.", actual_cmd);
+            break;
+        }
+        case ENOTDIR: {
+            FLOGF_SAFE(exec, "Failed to execute process '%s': A path component is not a directory.",
+                       actual_cmd);
             break;
         }
 
+        case EMFILE: {
+            FLOGF_SAFE(exec, "Failed to execute process '%s': Too many open files in this process.",
+                       actual_cmd);
+            break;
+        }
+        case ENFILE: {
+            FLOGF_SAFE(exec, "Failed to execute process '%s': Too many open files on the system.",
+                       actual_cmd);
+            break;
+        }
+        case ENAMETOOLONG: {
+            FLOGF_SAFE(exec, "Failed to execute process '%s': Name is too long.", actual_cmd);
+            break;
+        }
+        case EPERM: {
+            FLOGF_SAFE(exec,
+                       "Failed to execute process '%s': No permission. Either suid/sgid is "
+                       "forbidden or you lack capabilities.",
+                       actual_cmd);
+            break;
+        }
+#ifdef EBADARCH
+        case EBADARCH: {
+            FLOGF_SAFE(exec, "Failed to execute process '%s': Bad CPU type in executable.",
+                       actual_cmd);
+            break;
+        }
+#endif
         default: {
-            const char *err = safe_strerror(errno);
-            debug_safe(0, "exec: %s", err);
+            char errnum_buff[64];
+            format_long_safe(errnum_buff, err);
+            FLOGF_SAFE(exec, "Failed to execute process '%s', unknown error number %s", actual_cmd,
+                       errnum_buff);
             break;
         }
     }
@@ -451,6 +584,9 @@ static char *get_interpreter(const char *command, char *buffer, size_t buff_size
     if (std::strncmp(buffer, "#! /", const_strlen("#! /")) == 0) {
         return buffer + 3;
     } else if (std::strncmp(buffer, "#!/", const_strlen("#!/")) == 0) {
+        return buffer + 2;
+    } else if (std::strncmp(buffer, "#!", const_strlen("#!")) == 0) {
+        // Relative path, basically always an issue.
         return buffer + 2;
     }
     return nullptr;

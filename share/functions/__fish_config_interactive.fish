@@ -4,19 +4,11 @@
 # This function is called by the __fish_on_interactive function, which is defined in config.fish.
 #
 function __fish_config_interactive -d "Initializations that should be performed when entering interactive mode"
-    if test $__fish_initialized -lt 3000
-        # Perform transitions relevant to going from fish 2.x to 3.x.
-
-        # Migrate old universal abbreviations to the new scheme.
-        __fish_abbr_old | source
+    # For one-off upgrades of the fish version
+    if not set -q __fish_initialized
+        set -U __fish_initialized 0
     end
 
-    # Make sure this function is only run once.
-    if set -q __fish_config_interactive_done
-        return
-    end
-
-    set -g __fish_config_interactive_done
     set -g __fish_active_key_bindings
 
     # usage: __init_uvar VARIABLE VALUES...
@@ -26,21 +18,29 @@ function __fish_config_interactive -d "Initializations that should be performed 
         end
     end
 
-    #
     # If we are starting up for the first time, set various defaults.
-    if test $__fish_initialized -lt 3100
+    if test $__fish_initialized -lt 3400
+        # Create empty configuration directores if they do not already exist
+        test -e $__fish_config_dir/completions/ -a -e $__fish_config_dir/conf.d/ -a -e $__fish_config_dir/functions/ ||
+            mkdir -p $__fish_config_dir/{completions, conf.d, functions}
+
+        # Create config.fish with some boilerplate if it does not exist
+        test -e $__fish_config_dir/config.fish || echo "\
+if status is-interactive
+    # Commands to run in interactive sessions can go here
+end" >$__fish_config_dir/config.fish
 
         # Regular syntax highlighting colors
         __init_uvar fish_color_normal normal
-        __init_uvar fish_color_command 005fd7
-        __init_uvar fish_color_param 00afff
-        __init_uvar fish_color_redirection 00afff
-        __init_uvar fish_color_comment 990000
-        __init_uvar fish_color_error ff0000
-        __init_uvar fish_color_escape 00a6b2
-        __init_uvar fish_color_operator 00a6b2
-        __init_uvar fish_color_end 009900
-        __init_uvar fish_color_quote 999900
+        __init_uvar fish_color_command blue
+        __init_uvar fish_color_param cyan
+        __init_uvar fish_color_redirection cyan --bold
+        __init_uvar fish_color_comment red
+        __init_uvar fish_color_error brred
+        __init_uvar fish_color_escape brcyan
+        __init_uvar fish_color_operator brcyan
+        __init_uvar fish_color_end green
+        __init_uvar fish_color_quote yellow
         __init_uvar fish_color_autosuggestion 555 brblack
         __init_uvar fish_color_user brgreen
         __init_uvar fish_color_host normal
@@ -63,9 +63,10 @@ function __fish_config_interactive -d "Initializations that should be performed 
 
         # Pager colors
         __init_uvar fish_pager_color_prefix normal --bold --underline
-        __init_uvar fish_pager_color_completion
-        __init_uvar fish_pager_color_description B3A06D yellow
+        __init_uvar fish_pager_color_completion normal
+        __init_uvar fish_pager_color_description B3A06D yellow -i
         __init_uvar fish_pager_color_progress brwhite --background=cyan
+        __init_uvar fish_pager_color_selected_background -r
 
         #
         # Directory history colors
@@ -256,9 +257,15 @@ function __fish_config_interactive -d "Initializations that should be performed 
     end
 
     # Notify terminals when $PWD changes (issue #906).
-    # VTE based terminals, Terminal.app, iTerm.app (TODO), and foot support this.
+    # VTE based terminals, Terminal.app, iTerm.app (TODO), foot, and kitty support this.
     if not set -q FISH_UNIT_TESTS_RUNNING
-        and test 0"$VTE_VERSION" -ge 3405 -o "$TERM_PROGRAM" = Apple_Terminal -a (string match -r '\d+' 0"$TERM_PROGRAM_VERSION") -ge 309 -o "$TERM_PROGRAM" = WezTerm -o "$TERM" = foot
+        and begin
+            string match -q -- 'foot*' $TERM
+            or string match -q -- 'xterm-kitty*' $TERM
+            or test 0"$VTE_VERSION" -ge 3405
+            or test "$TERM_PROGRAM" = Apple_Terminal && test (string match -r '\d+' 0"$TERM_PROGRAM_VERSION") -ge 309
+            or test "$TERM_PROGRAM" = WezTerm
+        end
         function __update_cwd_osc --on-variable PWD --description 'Notify capable terminals when $PWD changes'
             if status --is-command-substitution || set -q INSIDE_EMACS
                 return
@@ -268,17 +275,9 @@ function __fish_config_interactive -d "Initializations that should be performed 
         __update_cwd_osc # Run once because we might have already inherited a PWD from an old tab
     end
 
-    # Create empty configuration directores if they do not already exist
-    test -e $__fish_config_dir/completions/ -a -e $__fish_config_dir/conf.d/ -a -e $__fish_config_dir/functions/ ||
-        mkdir -p $__fish_config_dir/{completions, conf.d, functions}
-
-    # Create config.fish with some boilerplate if it does not exist
-    test -e $__fish_config_dir/config.fish || echo "\
-if status is-interactive
-    # Commands to run in interactive sessions can go here
-end" >$__fish_config_dir/config.fish
-
     # Bump this whenever some code below needs to run once when upgrading to a new version.
     # The universal variable __fish_initialized is initialized in share/config.fish.
-    set __fish_initialized 3100
+    set __fish_initialized 3400
+
+    functions -e __fish_config_interactive
 end

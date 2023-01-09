@@ -1,38 +1,31 @@
 // History functions, part of the user interface.
 #include "config.h"  // IWYU pragma: keep
 
-#include <ctype.h>
 #include <errno.h>
 #include <fcntl.h>
-#include <pthread.h>
-#include <stddef.h>
 #include <stdio.h>
-#include <stdlib.h>
 
-#include <cstdint>
 #include <cstring>
 // We need the sys/file.h for the flock() declaration on Linux but not OS X.
 #include <sys/file.h>  // IWYU pragma: keep
 #include <sys/stat.h>
 #include <unistd.h>
-#include <wctype.h>
 
 #include <algorithm>
-#include <atomic>
 #include <chrono>
 #include <cwchar>
 #include <functional>
 #include <iterator>
 #include <map>
-#include <numeric>
 #include <random>
-#include <type_traits>
 #include <unordered_set>
 
 #include "ast.h"
 #include "common.h"
 #include "env.h"
+#include "expand.h"
 #include "fallback.h"  // IWYU pragma: keep
+#include "fds.h"
 #include "flog.h"
 #include "global_safety.h"
 #include "history.h"
@@ -40,11 +33,10 @@
 #include "io.h"
 #include "iothread.h"
 #include "lru.h"
+#include "operation_context.h"
 #include "parse_constants.h"
 #include "parse_util.h"
-#include "parser.h"
 #include "path.h"
-#include "reader.h"
 #include "wcstringutil.h"
 #include "wildcard.h"  // IWYU pragma: keep
 #include "wutil.h"     // IWYU pragma: keep
@@ -122,13 +114,11 @@ maybe_t<wcstring> history_filename(const wcstring &session_id, const wcstring &s
     return result;
 }
 
-
 }  // anonymous namespace
 
-class history_lru_cache_t : public lru_cache_t<history_lru_cache_t, history_item_t> {
+class history_lru_cache_t : public lru_cache_t<history_item_t> {
    public:
-    explicit history_lru_cache_t(size_t max)
-        : lru_cache_t<history_lru_cache_t, history_item_t>(max) {}
+    explicit history_lru_cache_t(size_t max) : lru_cache_t<history_item_t>(max) {}
 
     /// Function to add a history item.
     void add_item(history_item_t item) {
@@ -241,7 +231,9 @@ struct history_impl_t {
     uint32_t disable_automatic_save_counter{0};
 
     // Deleted item contents.
-    std::unordered_set<wcstring> deleted_items{};
+    // Boolean describes if it should be deleted only in this session or in all
+    // (used in deduplication).
+    std::unordered_map<wcstring, bool> deleted_items{};
 
     // The buffer containing the history file contents.
     std::unique_ptr<history_file_contents_t> file_contents{};
@@ -333,6 +325,9 @@ struct history_impl_t {
     // Irreversibly clears history.
     void clear();
 
+    // Clears only session.
+    void clear_session();
+
     // Populates from older location ()in config path, rather than data path).
     void populate_from_config_path();
 
@@ -377,7 +372,7 @@ bool history_impl_t::maybe_lock_file(int fd, int lock_type) {
     // is on a remote filesystem.
     if (abandoned_locking) return false;
     if (history_t::chaos_mode) return false;
-    if (path_get_data_is_remote() == 1) return false;
+    if (path_get_data_remoteness() == dir_remoteness_t::remote) return false;
 
     double start_time = timef();
     int retval = flock(fd, lock_type);
@@ -454,7 +449,7 @@ void history_impl_t::save_unless_disabled() {
 // case-sensitive, matches.
 void history_impl_t::remove(const wcstring &str_to_remove) {
     // Add to our list of deleted items.
-    deleted_items.insert(str_to_remove);
+    deleted_items.insert(std::pair<wcstring, bool>(str_to_remove, false));
 
     size_t idx = new_items.size();
     while (idx--) {
@@ -587,7 +582,9 @@ void history_impl_t::populate_from_file_contents() {
     old_item_offsets.clear();
     if (file_contents) {
         size_t cursor = 0;
-        while (auto offset = file_contents->offset_of_next_item(&cursor, boundary_timestamp)) {
+        maybe_t<size_t> offset;
+        while ((offset =
+                    file_contents->offset_of_next_item(&cursor, boundary_timestamp)).has_value()) {
             // Remember this item.
             old_item_offsets.push_back(*offset);
         }
@@ -624,14 +621,24 @@ void history_impl_t::load_old_if_needed() {
     }
 }
 
-bool history_search_t::go_backwards() {
+bool history_search_t::go_to_next_match(history_search_direction_t direction) {
     // Backwards means increasing our index.
-    const auto max_index = static_cast<size_t>(-1);
+    size_t invalid_index;
+    ssize_t increment;
 
-    if (current_index_ == max_index) return false;
+    if (direction == history_search_direction_t::backward) {
+        invalid_index = static_cast<size_t>(-1);
+        increment = 1;
+    } else {
+        assert(direction == history_search_direction_t::forward);
+        invalid_index = 0;
+        increment = -1;
+    }
+
+    if (current_index_ == invalid_index) return false;
 
     size_t index = current_index_;
-    while (++index < max_index) {
+    while ((index += increment) != invalid_index) {
         history_item_t item = history_->item_at_index(index);
 
         // We're done if it's empty or we cancelled.
@@ -663,6 +670,8 @@ const history_item_t &history_search_t::current_item() const {
 }
 
 const wcstring &history_search_t::current_string() const { return this->current_item().str(); }
+
+size_t history_search_t::current_index() const { return this->current_index_; }
 
 void history_impl_t::clear_file_state() {
     // Erase everything we know about our file.
@@ -718,15 +727,27 @@ bool history_impl_t::rewrite_to_temporary_file(int existing_fd, int dst_fd) cons
     // old file contents).
     if (auto local_file = history_file_contents_t::create(existing_fd)) {
         size_t cursor = 0;
-        while (auto offset = local_file->offset_of_next_item(&cursor, 0)) {
+        maybe_t<size_t> offset;
+        while ((offset = local_file->offset_of_next_item(&cursor, 0)).has_value()) {
             // Try decoding an old item.
             history_item_t old_item = local_file->decode_item(*offset);
 
-            if (old_item.empty() || deleted_items.count(old_item.str()) > 0) {
-                continue;
+            // If old item is newer than session always erase if in deleted.
+            if (old_item.timestamp() > boundary_timestamp) {
+                if (old_item.empty() || deleted_items.count(old_item.str()) > 0) {
+                    continue;
+                }
+                lru.add_item(std::move(old_item));
+            } else {
+                // If old item is older and in deleted items don't erase if added by
+                // clear_session.
+                if (old_item.empty() || (deleted_items.count(old_item.str()) > 0 &&
+                                         !deleted_items.at(old_item.str()))) {
+                    continue;
+                }
+                // Add this old item.
+                lru.add_item(std::move(old_item));
             }
-            // Add this old item.
-            lru.add_item(std::move(old_item));
         }
     }
 
@@ -1074,6 +1095,15 @@ void history_impl_t::clear() {
     this->clear_file_state();
 }
 
+void history_impl_t::clear_session() {
+    for (const auto &item : new_items) {
+        deleted_items.insert(std::pair<wcstring, bool>(item.str(), true));
+    }
+
+    new_items.clear();
+    first_unwritten_new_item_index = 0;
+}
+
 bool history_impl_t::is_default() const { return name == DFLT_FISH_HISTORY_SESSION_ID; }
 
 bool history_impl_t::is_empty() {
@@ -1174,9 +1204,7 @@ static bool should_import_bash_history_line(const wcstring &line) {
     // In doing this test do not allow incomplete strings. Hence the "false" argument.
     parse_error_list_t errors;
     parse_util_detect_errors(line, &errors);
-    if (!errors.empty()) return false;
-
-    return true;
+    return errors.empty();
 }
 
 /// Import a bash command history file. Bash's history format is very simple: just lines with #s for
@@ -1321,7 +1349,15 @@ struct history_t::impl_wrapper_t {
 void history_impl_t::resolve_pending() { this->has_pending_item = false; }
 
 bool history_t::chaos_mode = false;
+
+/* OpenBSD's mmap is not synchronized with other file operations. In particular it appears we may
+ * write() a file, fsync() it, close it, mmap() it, and call msync(), and we still may not see the
+ * newly written data. Just don't try mmap here. */
+#if defined(__OpenBSD__)
+bool history_t::never_mmap = true;
+#else
 bool history_t::never_mmap = false;
+#endif
 
 history_t::history_t(wcstring name) : wrap_(make_unique<impl_wrapper_t>(std::move(name))) {}
 
@@ -1431,7 +1467,7 @@ static void do_1_history_search(history_t *hist, history_search_type_t search_ty
                                 const cancel_checker_t &cancel_check) {
     history_search_t searcher = history_search_t(hist, search_string, search_type,
                                                  case_sensitive ? 0 : history_search_ignore_case);
-    while (!cancel_check() && searcher.go_backwards()) {
+    while (!cancel_check() && searcher.go_to_next_match(history_search_direction_t::backward)) {
         if (!func(searcher.current_item())) {
             break;
         }
@@ -1446,8 +1482,10 @@ bool history_t::search(history_search_type_t search_type, const wcstring_list_t 
     wcstring_list_t collected;
     wcstring formatted_record;
     size_t remaining = max_items;
+    bool output_error = false;
 
-    // The function we use to act on each item.
+    // The function we use to act on each item. The return value indicates whether the search should
+    // continue (true) or stop (on false).
     std::function<bool(const history_item_t &item)> func = [&](const history_item_t &item) -> bool {
         if (remaining == 0) return false;
         remaining -= 1;
@@ -1457,7 +1495,11 @@ bool history_t::search(history_search_type_t search_type, const wcstring_list_t 
             collected.push_back(std::move(formatted_record));
         } else {
             // We can output this immediately.
-            streams.out.append(formatted_record);
+            if (!streams.out.append(formatted_record)) {
+                // This can happen if the user hit Ctrl-C to abort (maybe after the first page?).
+                output_error = true;
+                return false;
+            }
         }
         return true;
     };
@@ -1478,13 +1520,22 @@ bool history_t::search(history_search_type_t search_type, const wcstring_list_t 
     }
 
     // Output any items we collected (which only happens in reverse).
-    for (auto iter = collected.rbegin(); iter != collected.rend(); ++iter) {
-        streams.out.append(*iter);
+    for (auto iter = collected.rbegin(); !output_error && iter != collected.rend(); ++iter) {
+        if (!streams.out.append(*iter)) {
+            // Don't force an error if output was aborted (typically via Ctrl-C/SIGINT); just don't
+            // try writing any more.
+            output_error = true;
+        }
     }
+
+    // We are intentionally not returning false in case of an output error, as the user aborting the
+    // output early (the most common case) isn't a reason to exit w/ a non-zero status code.
     return true;
 }
 
 void history_t::clear() { impl()->clear(); }
+
+void history_t::clear_session() { impl()->clear_session(); }
 
 void history_t::populate_from_config_path() { impl()->populate_from_config_path(); }
 

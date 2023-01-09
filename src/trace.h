@@ -7,7 +7,6 @@
 #include "common.h"
 
 class parser_t;
-class process_t;
 
 /// Trace an "argv": a list of arguments. Each argument is escaped.
 /// If \p command is not null, it is traced first (and not escaped)
@@ -15,6 +14,9 @@ void trace_argv(const parser_t &parser, const wchar_t *command, const wcstring_l
 
 /// \return whether tracing is enabled.
 bool trace_enabled(const parser_t &parser);
+
+/// Enable or disable tracing.
+void trace_set_enabled(bool do_enable);
 
 /// Convenience helper to trace a single string if tracing is enabled.
 void trace_if_enabled(const parser_t &parser, const wchar_t *command,

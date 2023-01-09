@@ -7,22 +7,28 @@
 #include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
-#include <libgen.h>
 #include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <sys/mount.h>
 #include <sys/stat.h>
-#include <sys/statvfs.h>
 #include <sys/types.h>
 #include <unistd.h>
 #include <wctype.h>
 
-#include <atomic>
+#ifdef HAVE_XLOCALE_H
+#include <xlocale.h>
+#endif
+
+#include <algorithm>
 #include <cstring>
 #include <cwchar>
+#include <iterator>
+#include <locale>
+#include <mutex>
 #include <string>
 #include <unordered_map>
+#include <utility>
+#include <vector>
 
 #include "common.h"
 #include "fallback.h"  // IWYU pragma: keep
@@ -36,92 +42,6 @@ const file_id_t kInvalidFileID{};
 
 /// Map used as cache by wgettext.
 static owning_lock<std::unordered_map<wcstring, wcstring>> wgettext_map;
-
-bool wreaddir_resolving(DIR *dir, const wcstring &dir_path, wcstring &out_name, bool *out_is_dir) {
-    struct dirent *result = readdir(dir);
-    if (!result) {
-        out_name.clear();
-        return false;
-    }
-
-    out_name = str2wcstring(result->d_name);
-    if (!out_is_dir) {
-        return true;
-    }
-
-    // The caller cares if this is a directory, so check.
-    bool is_dir = false;
-    // We may be able to skip stat, if the readdir can tell us the file type directly.
-    bool check_with_stat = true;
-#ifdef HAVE_STRUCT_DIRENT_D_TYPE
-    if (result->d_type == DT_DIR) {
-        // Known directory.
-        is_dir = true;
-        check_with_stat = false;
-    } else if (result->d_type == DT_LNK || result->d_type == DT_UNKNOWN) {
-        // We want to treat symlinks to directories as directories. Use stat to resolve it.
-        check_with_stat = true;
-    } else {
-        // Regular file.
-        is_dir = false;
-        check_with_stat = false;
-    }
-#endif  // HAVE_STRUCT_DIRENT_D_TYPE
-    if (check_with_stat) {
-        // We couldn't determine the file type from the dirent; check by stat'ing it.
-        cstring fullpath = wcs2string(dir_path);
-        fullpath.push_back('/');
-        fullpath.append(result->d_name);
-        struct stat buf;
-        if (stat(fullpath.c_str(), &buf) != 0) {
-            is_dir = false;
-        } else {
-            is_dir = S_ISDIR(buf.st_mode);
-        }
-    }
-    *out_is_dir = is_dir;
-    return true;
-}
-
-bool wreaddir(DIR *dir, wcstring &out_name) {
-    struct dirent *result = readdir(dir);
-    if (!result) {
-        out_name.clear();
-        return false;
-    }
-
-    out_name = str2wcstring(result->d_name);
-    return true;
-}
-
-bool wreaddir_for_dirs(DIR *dir, wcstring *out_name) {
-    struct dirent *result = nullptr;
-    while (!result) {
-        result = readdir(dir);
-        if (!result) break;
-
-#if HAVE_STRUCT_DIRENT_D_TYPE
-        switch (result->d_type) {
-            case DT_DIR:
-            case DT_LNK:
-            case DT_UNKNOWN: {
-                break;  // these may be directories
-            }
-            default: {
-                break;  // nothing else can
-            }
-        }
-#else
-        // We can't determine if it's a directory or not, so just return it.
-        break;
-#endif
-    }
-
-    if (result && out_name) {
-        *out_name = str2wcstring(result->d_name);
-    }
-    return result != nullptr;
-}
 
 wcstring wgetcwd() {
     char cwd[PATH_MAX];
@@ -139,21 +59,174 @@ DIR *wopendir(const wcstring &name) {
     return opendir(tmp.c_str());
 }
 
-dir_t::dir_t(const wcstring &path) {
-    const cstring tmp = wcs2string(path);
-    this->dir = opendir(tmp.c_str());
+#ifdef HAVE_STRUCT_DIRENT_D_TYPE
+static maybe_t<dir_entry_type_t> dirent_type_to_entry_type(uint8_t dt) {
+    switch (dt) {
+        case DT_FIFO:
+            return dir_entry_type_t::fifo;
+        case DT_CHR:
+            return dir_entry_type_t::chr;
+        case DT_DIR:
+            return dir_entry_type_t::dir;
+        case DT_BLK:
+            return dir_entry_type_t::blk;
+        case DT_REG:
+            return dir_entry_type_t::reg;
+        case DT_LNK:
+            return dir_entry_type_t::lnk;
+        case DT_SOCK:
+            return dir_entry_type_t::sock;
+#if defined(DT_WHT)
+        // OpenBSD doesn't have this one
+        case DT_WHT:
+            return dir_entry_type_t::whiteout;
+#endif
+        case DT_UNKNOWN:
+        default:
+            return none();
+    }
 }
+#endif
 
-dir_t::~dir_t() {
-    if (this->dir != nullptr) {
-        closedir(this->dir);
-        this->dir = nullptr;
+static maybe_t<dir_entry_type_t> stat_mode_to_entry_type(mode_t m) {
+    switch (m & S_IFMT) {
+        case S_IFIFO:
+            return dir_entry_type_t::fifo;
+        case S_IFCHR:
+            return dir_entry_type_t::chr;
+        case S_IFDIR:
+            return dir_entry_type_t::dir;
+        case S_IFBLK:
+            return dir_entry_type_t::blk;
+        case S_IFREG:
+            return dir_entry_type_t::reg;
+        case S_IFLNK:
+            return dir_entry_type_t::lnk;
+        case S_IFSOCK:
+            return dir_entry_type_t::sock;
+#if defined(S_IFWHT)
+        case S_IFWHT:
+            return dir_entry_type_t::whiteout;
+#endif
+        default:
+            return none();
     }
 }
 
-bool dir_t::valid() const { return this->dir != nullptr; }
+dir_iter_t::entry_t::entry_t() = default;
+dir_iter_t::entry_t::~entry_t() = default;
 
-bool dir_t::read(wcstring &name) const { return wreaddir(this->dir, name); }
+void dir_iter_t::entry_t::reset() {
+    this->name.clear();
+    this->inode = {};
+    this->type_.reset();
+    this->stat_.reset();
+}
+
+maybe_t<dir_entry_type_t> dir_iter_t::entry_t::check_type() const {
+    // Call stat if needed to populate our type, swallowing errors.
+    if (!this->type_) {
+        this->do_stat();
+    }
+    return this->type_;
+}
+
+const maybe_t<struct stat> &dir_iter_t::entry_t::stat() const {
+    if (!stat_) {
+        (void)this->do_stat();
+    }
+    return stat_;
+}
+
+void dir_iter_t::entry_t::do_stat() const {
+    // We want to set both our type and our stat buffer.
+    // If we follow symlinks and stat() errors with a bad symlink, set the type to link, but do not
+    // populate the stat buffer.
+    if (this->dirfd_ < 0) {
+        return;
+    }
+    std::string narrow = wcs2string(this->name);
+    struct stat s {};
+    if (fstatat(this->dirfd_, narrow.c_str(), &s, 0) == 0) {
+        this->stat_ = s;
+        this->type_ = stat_mode_to_entry_type(s.st_mode);
+    } else {
+        switch (errno) {
+            case ELOOP:
+                this->type_ = dir_entry_type_t::lnk;
+                break;
+
+            case EACCES:
+            case EIO:
+            case ENOENT:
+            case ENOTDIR:
+            case ENAMETOOLONG:
+                // These are "expected" errors.
+                this->type_ = none();
+                break;
+
+            default:
+                wperror(L"fstatat");
+                break;
+        }
+    }
+}
+
+dir_iter_t::dir_iter_t(const wcstring &path) {
+    dir_.reset(wopendir(path));
+    if (!dir_) {
+        error_ = errno;
+        return;
+    }
+    entry_.dirfd_ = dirfd(&*dir_);
+}
+
+dir_iter_t::dir_iter_t(dir_iter_t &&rhs) { *this = std::move(rhs); }
+
+dir_iter_t &dir_iter_t::operator=(dir_iter_t &&rhs) {
+    // Steal the fields; ensure rhs no longer has DIR* and forgets its fd.
+    this->dir_ = std::move(rhs.dir_);
+    this->error_ = rhs.error_;
+    this->entry_ = std::move(rhs.entry_);
+    rhs.dir_ = nullptr;
+    rhs.entry_.dirfd_ = -1;
+    return *this;
+}
+
+void dir_iter_t::rewind() {
+    if (dir_) {
+        rewinddir(&*dir_);
+    }
+}
+
+dir_iter_t::~dir_iter_t() = default;
+
+const dir_iter_t::entry_t *dir_iter_t::next() {
+    if (!dir_) {
+        return nullptr;
+    }
+    errno = 0;
+    struct dirent *dent = readdir(&*dir_);
+    if (!dent) {
+        error_ = errno;
+        return nullptr;
+    }
+    // Skip . and ..
+    if (!strcmp(dent->d_name, ".") || !strcmp(dent->d_name, "..")) {
+        return next();
+    }
+    entry_.reset();
+    entry_.name = str2wcstring(dent->d_name);
+    entry_.inode = dent->d_ino;
+#ifdef HAVE_STRUCT_DIRENT_D_TYPE
+    auto type = dirent_type_to_entry_type(dent->d_type);
+    // Do not store symlinks as we will need to resolve them.
+    if (type != dir_entry_type_t::lnk) {
+        entry_.type_ = type;
+    }
+#endif
+    return &entry_;
+}
 
 int wstat(const wcstring &file_name, struct stat *buf) {
     const cstring tmp = wcs2string(file_name);
@@ -203,64 +276,27 @@ int make_fd_blocking(int fd) {
     return err == -1 ? errno : 0;
 }
 
-static inline void safe_append(char *buffer, const char *s, size_t buffsize) {
-    std::strncat(buffer, s, buffsize - std::strlen(buffer) - 1);
-}
-
-// In general, strerror is not async-safe, and therefore we cannot use it directly. So instead we
-// have to grub through sys_nerr and sys_errlist directly On GNU toolchain, this will produce a
-// deprecation warning from the linker (!!), which appears impossible to suppress!
-const char *safe_strerror(int err) {
-#if defined(__UCLIBC__)
-    // uClibc does not have sys_errlist, however, its strerror is believed to be async-safe.
-    // See issue #808.
-    return std::strerror(err);
-#elif defined(HAVE__SYS__ERRS) || defined(HAVE_SYS_ERRLIST)
-#ifdef HAVE_SYS_ERRLIST
-    if (err >= 0 && err < sys_nerr && sys_errlist[err] != nullptr) {
-        return sys_errlist[err];
+maybe_t<wcstring> wreadlink(const wcstring &file_name) {
+    struct stat buf;
+    if (lwstat(file_name, &buf) == -1) {
+        return none();
     }
-#elif defined(HAVE__SYS__ERRS)
-    extern const char _sys_errs[];
-    extern const int _sys_index[];
-    extern int _sys_num_err;
-
-    if (err >= 0 && err < _sys_num_err) {
-        return &_sys_errs[_sys_index[err]];
+    ssize_t bufsize = buf.st_size + 1;
+    char target_buf[bufsize];
+    const std::string tmp = wcs2string(file_name);
+    ssize_t nbytes = readlink(tmp.c_str(), target_buf, bufsize);
+    if (nbytes == -1) {
+        wperror(L"readlink");
+        return none();
     }
-#endif  // either HAVE__SYS__ERRS or HAVE_SYS_ERRLIST
-#endif  // defined(HAVE__SYS__ERRS) || defined(HAVE_SYS_ERRLIST)
-
-    int saved_err = errno;
-    static char buff[384];  // use a shared buffer for this case
-    char errnum_buff[64];
-    format_long_safe(errnum_buff, err);
-
-    buff[0] = '\0';
-    safe_append(buff, "unknown error (errno was ", sizeof buff);
-    safe_append(buff, errnum_buff, sizeof buff);
-    safe_append(buff, ")", sizeof buff);
-
-    errno = saved_err;
-    return buff;
-}
-
-void safe_perror(const char *message) {
-    // Note we cannot use strerror, because on Linux it uses gettext, which is not safe.
-    int err = errno;
-
-    char buff[384];
-    buff[0] = '\0';
-
-    if (message) {
-        safe_append(buff, message, sizeof buff);
-        safe_append(buff, ": ", sizeof buff);
+    // The link might have been modified after our call to lstat.  If the link now points to a path
+    // that's longer than the original one, we can't read everything in our buffer.  Simply give
+    // up. We don't need to report an error since our only caller will already fall back to ENOENT.
+    if (nbytes == bufsize) {
+        return none();
     }
-    safe_append(buff, safe_strerror(err), sizeof buff);
-    safe_append(buff, "\n", sizeof buff);
 
-    ignore_result(write(STDERR_FILENO, buff, std::strlen(buff)));
-    errno = err;
+    return str2wcstring(target_buf, nbytes);
 }
 
 /// Wide character realpath. The last path component does not need to be valid. If an error occurs,
@@ -341,10 +377,12 @@ wcstring normalize_path(const wcstring &path, bool allow_leading_double_slashes)
         }
     }
     wcstring result = join_strings(new_comps, sep);
-    // Prepend one or two leading slashes.
-    // Two slashes are preserved. Three+ slashes are collapsed to one. (!)
-    result.insert(0, allow_leading_double_slashes && leading_slashes > 2 ? 1 : leading_slashes,
-                  sep);
+    // If we don't allow leading double slashes, collapse them to 1 if there are any.
+    int numslashes = leading_slashes > 0 ? 1 : 0;
+    // If we do, prepend one or two leading slashes.
+    // Yes, three+ slashes are collapsed to one. (!)
+    if (allow_leading_double_slashes && leading_slashes == 2) numslashes = 2;
+    result.insert(0, numslashes, sep);
     // Ensure ./ normalizes to . and not empty.
     if (result.empty()) result.push_back(L'.');
     return result;
@@ -499,7 +537,7 @@ ssize_t wwrite_to_fd(const wchar_t *input, size_t input_len, int fd) {
             ssize_t samt = write(fd, cursor, remaining);
             if (samt < 0) return false;
             total_written += samt;
-            size_t amt = static_cast<size_t>(samt);
+            auto amt = static_cast<size_t>(samt);
             assert(amt <= remaining && "Wrote more than requested");
             remaining -= amt;
             cursor += amt;
@@ -534,6 +572,15 @@ ssize_t wwrite_to_fd(const wchar_t *input, size_t input_len, int fd) {
     if (success) success = flush_accum();
     return success ? total_written : -1;
 }
+
+enum : wint_t {
+    PUA1_START = 0xE000,
+    PUA1_END = 0xF900,
+    PUA2_START = 0xF0000,
+    PUA2_END = 0xFFFFE,
+    PUA3_START = 0x100000,
+    PUA3_END = 0x10FFFE,
+};
 
 /// Return one if the code point is in a Unicode private use area.
 static int fish_is_pua(wint_t wc) {
@@ -574,6 +621,21 @@ locale_t fish_c_locale() {
     return loc;
 }
 
+static bool fish_numeric_locale_is_valid = false;
+
+void fish_invalidate_numeric_locale() { fish_numeric_locale_is_valid = false; }
+
+locale_t fish_numeric_locale() {
+    // The current locale, except LC_NUMERIC isn't forced to C.
+    static locale_t loc = nullptr;
+    if (!fish_numeric_locale_is_valid) {
+        if (loc != nullptr) freelocale(loc);
+        auto cur = duplocale(LC_GLOBAL_LOCALE);
+        loc = newlocale(LC_NUMERIC_MASK, "", cur);
+        fish_numeric_locale_is_valid = true;
+    }
+    return loc;
+}
 /// Like fish_wcstol(), but fails on a value outside the range of an int.
 ///
 /// This is needed because BSD and GNU implementations differ in several ways that make it really
@@ -710,15 +772,14 @@ unsigned long long fish_wcstoull(const wchar_t *str, const wchar_t **endptr, int
 
 /// Like wcstod(), but wcstod() is enormously expensive on some platforms so this tries to have a
 /// fast path.
-double fish_wcstod(const wchar_t *str, wchar_t **endptr) {
+double fish_wcstod(const wchar_t *str, wchar_t **endptr, size_t len) {
+    // We can ignore the locale because we use LC_NUMERIC=C!
     // The "fast path." If we're all ASCII and we fit inline, use strtod().
     char narrow[128];
-    size_t len = std::wcslen(str);
     size_t len_plus_0 = 1 + len;
-    auto is_digit = [](wchar_t c) { return '0' <= c && c <= '9'; };
-    if (len_plus_0 <= sizeof narrow && std::all_of(str, str + len, is_digit)) {
+    auto is_ascii = [](wchar_t c) { return 0 <= c && c <= 127; };
+    if (len_plus_0 <= sizeof narrow && std::all_of(str, str + len, is_ascii)) {
         // Fast path. Copy the string into a local buffer and run strtod() on it.
-        // We can ignore the locale-taking version because we are limited to ASCII digits.
         std::copy(str, str + len_plus_0, narrow);
         char *narrow_endptr = nullptr;
         double ret = strtod(narrow, endptr ? &narrow_endptr : nullptr);
@@ -728,7 +789,76 @@ double fish_wcstod(const wchar_t *str, wchar_t **endptr) {
         }
         return ret;
     }
-    return wcstod_l(str, endptr, fish_c_locale());
+    return std::wcstod(str, endptr);
+}
+
+double fish_wcstod(const wchar_t *str, wchar_t **endptr) {
+    return fish_wcstod(str, endptr, std::wcslen(str));
+}
+double fish_wcstod(const wcstring &str, wchar_t **endptr) {
+    return fish_wcstod(str.c_str(), endptr, str.size());
+}
+
+/// Like wcstod(), but allows underscore separators. Leading, trailing, and multiple underscores are
+/// allowed, as are underscores next to decimal (.), exponent (E/e/P/p), and hexadecimal (X/x)
+/// delimiters. This consumes trailing underscores -- endptr will point past the last underscore
+/// which is legal to include in a parse (according to the above rules). Free-floating leading
+/// underscores ("_ 3") are not allowed and will result in a no-parse. Underscores are not allowed
+/// before or inside of "infinity" or "nan" input. Trailing underscores after "infinity" or "nan"
+/// are not consumed.
+double fish_wcstod_underscores(const wchar_t *str, wchar_t **endptr) {
+    const wchar_t *orig = str;
+    while (iswspace(*str)) str++;  // Skip leading whitespace.
+    size_t leading_whitespace = size_t(str - orig);
+    auto is_sign = [](wchar_t c) { return c == L'+' || c == L'-'; };
+    auto is_inf_or_nan_char = [](wchar_t c) {
+        return c == L'i' || c == L'I' || c == L'n' || c == L'N';
+    };
+    // We don't do any underscore-stripping for infinity/NaN.
+    if (is_inf_or_nan_char(*str) || (is_sign(*str) && is_inf_or_nan_char(*(str + 1)))) {
+        return fish_wcstod(orig, endptr);
+    }
+    // We build a string to pass to the system wcstod, pruned of underscores. We will take all
+    // leading alphanumeric characters that can appear in a strtod numeric literal, dots (.), and
+    // signs (+/-). In order to be more clever, for example to stop earlier in the case of strings
+    // like "123xxxxx", we would need to do a full parse, because sometimes 'a' is a hex digit and
+    // sometimes it is the end of the parse, sometimes a dot '.' is a decimal delimiter and
+    // sometimes it is the end of the valid parse, as in "1_2.3_4.5_6", etc.
+    wcstring pruned;
+    // We keep track of the positions *in the pruned string* where there used to be underscores. We
+    // will pass the pruned version of the input string to the system wcstod, which in turn will
+    // tell us how many characters it consumed. Then we will set our own endptr based on (1) the
+    // number of characters consumed from the pruned string, and (2) how many underscores came
+    // before the last consumed character. The alternative to doing it this way (for example, "only
+    // deleting the correct underscores") would require actually parsing the input string, so that
+    // we can know when to stop grabbing characters and dropping underscores, as in "1_2.3_4.5_6".
+    std::vector<size_t> underscores;
+    // If we wanted to future-proof against a strtod from the future that, say, allows octal
+    // literals using 0o, etc., we could just use iswalnum, instead of iswxdigit and P/p/X/x checks.
+    while (iswxdigit(*str) || *str == L'P' || *str == L'p' || *str == L'X' || *str == L'x' ||
+           is_sign(*str) || *str == L'.' || *str == L'_') {
+        if (*str == L'_') {
+            underscores.push_back(pruned.length());
+        } else {
+            pruned.push_back(*str);
+        }
+        str++;
+    }
+    const wchar_t *pruned_begin = pruned.c_str();
+    const wchar_t *pruned_end = nullptr;
+    double result = fish_wcstod(pruned_begin, (wchar_t **)(&pruned_end));
+    if (pruned_end == pruned_begin) {
+        if (endptr) *endptr = (wchar_t *)orig;
+        return result;
+    }
+    auto consumed_underscores_end =
+        std::upper_bound(underscores.begin(), underscores.end(), size_t(pruned_end - pruned_begin));
+    size_t num_underscores_consumed = std::distance(underscores.begin(), consumed_underscores_end);
+    if (endptr) {
+        *endptr = (wchar_t *)(orig + leading_whitespace + (pruned_end - pruned_begin) +
+                              num_underscores_consumed);
+    }
+    return result;
 }
 
 file_id_t file_id_t::from_stat(const struct stat &buf) {
@@ -765,9 +895,7 @@ file_id_t file_id_for_fd(int fd) {
     return result;
 }
 
-file_id_t file_id_for_fd(const autoclose_fd_t &fd) {
-    return file_id_for_fd(fd.fd());
-}
+file_id_t file_id_for_fd(const autoclose_fd_t &fd) { return file_id_for_fd(fd.fd()); }
 
 file_id_t file_id_for_path(const wcstring &path) {
     file_id_t result = kInvalidFileID;
@@ -791,7 +919,6 @@ bool file_id_t::operator==(const file_id_t &rhs) const { return this->compare_fi
 
 bool file_id_t::operator!=(const file_id_t &rhs) const { return !(*this == rhs); }
 
-
 wcstring file_id_t::dump() const {
     using llong = long long;
     wcstring result;
@@ -806,13 +933,29 @@ wcstring file_id_t::dump() const {
 }
 
 template <typename T>
-int compare(T a, T b) {
+static int compare(T a, T b) {
     if (a < b) {
         return -1;
     } else if (a > b) {
         return 1;
     }
     return 0;
+}
+
+/// \return true if \param rhs has higher mtime seconds than this file_id_t.
+/// If identical, nanoseconds are compared.
+bool file_id_t::older_than(const file_id_t &rhs) const {
+    int ret = compare(mod_seconds, rhs.mod_seconds);
+    if (!ret) ret = compare(mod_nanoseconds, rhs.mod_nanoseconds);
+    switch (ret) {
+        case -1:
+            return true;
+        case 1:
+        case 0:
+            return false;
+        default:
+            DIE("unreachable");
+    }
 }
 
 int file_id_t::compare_file_id(const file_id_t &rhs) const {

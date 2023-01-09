@@ -2,7 +2,8 @@
 #ifndef FISH_SIGNALH
 #define FISH_SIGNALH
 
-#include <signal.h>
+#include <csignal>
+#include <cstdint>
 
 /// Get the integer signal value representing the specified signal, or -1 of no signal was found.
 int wcs2sig(const wchar_t *str);
@@ -39,7 +40,7 @@ void get_signals_with_handlers(sigset_t *set);
 int signal_check_cancel();
 
 /// Set the cancellation signal to zero.
-/// In generaly this should only be done in interactive sessions.
+/// In generally this should only be done in interactive sessions.
 void signal_clear_cancel();
 
 enum class topic_t : uint8_t;

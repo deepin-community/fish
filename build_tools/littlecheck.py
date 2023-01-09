@@ -6,7 +6,6 @@ from __future__ import unicode_literals
 from __future__ import print_function
 
 import argparse
-from collections import deque
 import datetime
 import io
 import re
@@ -97,8 +96,6 @@ def esc(m):
     map = {
         "\n": "\\n",
         "\\": "\\\\",
-        "'": "\\'",
-        '"': '\\"',
         "\a": "\\a",
         "\b": "\\b",
         "\f": "\\f",
@@ -203,6 +200,7 @@ class TestFailure(object):
         self.diff = diff
         self.lines = lines
         self.checks = checks
+        self.signal = None
 
     def message(self):
         fields = self.testrun.config.colors()
@@ -227,6 +225,11 @@ class TestFailure(object):
             )
         filemsg = "" if self.testrun.config.progress else " in {name}"
         fmtstrs = ["{RED}Failure{RESET}" + filemsg + ":", ""]
+        if self.signal:
+            fmtstrs += [
+                "  Process was killed by signal {BOLD}" + self.signal + "{RESET}",
+                ""
+            ]
         if self.line and self.check:
             fmtstrs += [
                 "  The {check_type} on line {input_lineno} wants:",
@@ -299,11 +302,11 @@ class TestFailure(object):
                         )
                         if b:
                             bstr = (
-                                "'{BLUE}"
-                                + b.line.escaped_text(for_formatting=True)
-                                + "{RESET}'"
-                                + " on line "
+                                "on line "
                                 + str(b.line.number)
+                                + ": {BLUE}"
+                                + b.line.escaped_text(for_formatting=True)
+                                + "{RESET}"
                             )
                             lastcheckline = b.line.number
 
@@ -434,6 +437,12 @@ class TestRun(object):
         for i in checkq[::-1]:
             usedchecks.append(i)
 
+        # If we have no more output, there's no reason to give
+        # SCREENFULS of text.
+        # So we truncate the check list.
+        if len(usedchecks) > len(usedlines):
+            usedchecks = usedchecks[:len(usedlines) + 5]
+
         # Do a SequenceMatch! This gives us a diff-like thing.
         diff = SequenceMatcher(a=usedlines, b=usedchecks, autojunk=False)
         # If there's a mismatch or still lines or checkers, we have a failure.
@@ -468,7 +477,6 @@ class TestRun(object):
             """
             return [s + "\n" for s in s.decode("utf-8").split("\n")]
 
-        PIPE = subprocess.PIPE
         if self.config.verbose:
             print(self.subbed_command)
         proc = runproc(self.subbed_command)
@@ -503,7 +511,34 @@ class TestRun(object):
             # Trim a trailing newline
             if outfail.error_annotation_lines[-1].text == "\n":
                 del outfail.error_annotation_lines[-1]
-        return outfail if outfail else errfail
+        failure = outfail if outfail else errfail
+
+        if failure and status < 0:
+            # Process was killed by a signal and failed,
+            # add a message.
+            import signal
+            # Unfortunately strsignal only exists in python 3.8+,
+            # and signal.signals is 3.5+.
+            if hasattr(signal, "Signals"):
+                try:
+                    sig = signal.Signals(-status)
+                    failure.signal = sig.name + " (" + signal.strsignal(sig.value) + ")"
+                except ValueError:
+                    failure.signal = str(-status)
+            else:
+                # No easy way to get the full list,
+                # make up a dict.
+                signals = {
+                    signal.SIGABRT: "SIGABRT",
+                    signal.SIGBUS: "SIGBUS",
+                    signal.SIGFPE: "SIGFPE",
+                    signal.SIGILL: "SIGILL",
+                    signal.SIGSEGV: "SIGSEGV",
+                    signal.SIGTERM: "SIGTERM",
+                }
+                failure.signal = signals.get(-status, str(-status))
+
+        return failure
 
 
 class CheckCmd(object):
@@ -593,13 +628,13 @@ class Checker(object):
 
         # Find run commands.
         self.runcmds = [RunCmd.parse(sl) for sl in group1s(RUN_RE)]
+        self.shebang_cmd = None
         if not self.runcmds:
             # If no RUN command has been given, fall back to the shebang.
             if lines[0].text.startswith("#!"):
                 # Remove the "#!" at the beginning, and the newline at the end.
                 cmd = lines[0].text[2:-1]
-                if not find_command(cmd):
-                    raise CheckerError("Command could not be found: " + cmd)
+                self.shebang_cmd = cmd
                 self.runcmds = [RunCmd(cmd + " %s", lines[0])]
             else:
                 raise CheckerError("No runlines ('# RUN') found")
@@ -627,10 +662,12 @@ def check_file(input_file, name, subs, config, failure_handler):
         proc = runproc(
             perform_substitution(reqcmd.args, subs)
         )
-        stdout, stderr = proc.communicate()
-        status = proc.returncode
+        proc.communicate()
         if proc.returncode > 0:
             return SKIP
+
+    if checker.shebang_cmd is not None and not find_command(checker.shebang_cmd):
+        raise CheckerError("Command could not be found: " + checker.shebang_cmd)
 
     # Only then run the RUN lines.
     for runcmd in checker.runcmds:
@@ -688,6 +725,13 @@ def get_argparse():
         help="Show the files to be checked",
         default=False,
     )
+    parser.add_argument(
+        "--force-color",
+        action="store_true",
+        dest="force_color",
+        help="Force usage of color even if not connected to a terminal",
+        default=False,
+    )
     parser.add_argument("file", nargs="+", help="File to check")
     return parser
 
@@ -698,13 +742,16 @@ def main():
     def_subs = {"%": "%"}
     def_subs.update(parse_subs(args.substitute))
 
-    failure_count = 0
+    tests_count = 0
+    failed = False
+    skip_count = 0
     config = Config()
-    config.colorize = sys.stdout.isatty()
+    config.colorize = args.force_color or sys.stdout.isatty()
     config.progress = args.progress
     fields = config.colors()
 
     for path in args.file:
+        tests_count += 1
         fields["path"] = path
         if config.progress:
             print("Testing file {path} ... ".format(**fields), end="")
@@ -713,8 +760,10 @@ def main():
         subs["s"] = path
         starttime = datetime.datetime.now()
         ret = check_path(path, subs, config, TestFailure.print_message)
+        if ret is SKIP:
+            skip_count += 1
         if not ret:
-            failure_count += 1
+            failed = True
         elif config.progress:
             endtime = datetime.datetime.now()
             duration_ms = round((endtime - starttime).total_seconds() * 1000)
@@ -728,7 +777,15 @@ def main():
                     duration=duration_ms, reason=reason, **fields
                 )
             )
-    sys.exit(failure_count)
+
+    # To facilitate integration with testing frameworks, use exit code 125 to indicate that all
+    # tests have been skipped (primarily for use when tests are run one at a time). Exit code 125 is
+    # used to indicate to automated `git bisect` runs that a revision has been skipped; we use it
+    # for the same reasons git does.
+    if skip_count > 0 and skip_count == tests_count:
+        sys.exit(125)
+
+    sys.exit(1 if failed else 0)
 
 
 if __name__ == "__main__":

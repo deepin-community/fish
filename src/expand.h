@@ -7,8 +7,7 @@
 
 #include "config.h"
 
-#include <stddef.h>
-
+#include <initializer_list>
 #include <map>
 #include <string>
 #include <vector>
@@ -18,7 +17,6 @@
 #include "maybe.h"
 #include "parse_constants.h"
 
-class environment_t;
 class env_var_t;
 class environment_t;
 class operation_context_t;
@@ -40,8 +38,8 @@ enum class expand_flag {
     directories_only,
     /// Generate descriptions, stored in the description field of completions.
     gen_descriptions,
-    /// Don't expand home directories.
-    skip_home_directories,
+    /// Un-expand home directories to tildes after.
+    preserve_home_tildes,
     /// Allow fuzzy matching.
     fuzzy_match,
     /// Disallow directory abbreviations like /u/l/b for /usr/local/bin. Only applicable if
@@ -204,14 +202,6 @@ void expand_tilde(wcstring &input, const environment_t &vars);
 
 /// Perform the opposite of tilde expansion on the string, which is modified in place.
 wcstring replace_home_directory_with_tilde(const wcstring &str, const environment_t &vars);
-
-/// Abbreviation support. Expand src as an abbreviation, returning the expanded form if found,
-/// none() if not.
-maybe_t<wcstring> expand_abbreviation(const wcstring &src, const environment_t &vars);
-
-/// \return a snapshot of all abbreviations as a map abbreviation->expansion.
-/// The abbreviations are unescaped, i.e. they may not be valid variable identifiers (#6166).
-std::map<wcstring, wcstring> get_abbreviations(const environment_t &vars);
 
 // Terrible hacks
 bool fish_xdm_login_hack_hack_hack_hack(std::vector<std::string> *cmds, int argc,

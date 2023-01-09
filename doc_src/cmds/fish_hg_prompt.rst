@@ -6,6 +6,10 @@ fish_hg_prompt - output Mercurial information for use in a prompt
 Synopsis
 --------
 
+.. synopsis::
+
+    fish_hg_prompt
+
 ::
 
      function fish_prompt
@@ -21,7 +25,7 @@ The fish_hg_prompt function displays information about the current Mercurial rep
 
 By default, only the current branch is shown because ``hg status`` can be slow on a large repository. You can enable a more informative prompt by setting the variable ``$fish_prompt_hg_show_informative_status``, for example::
 
-	set --universal fish_prompt_hg_show_informative_status
+    set --universal fish_prompt_hg_show_informative_status
 
 If you enabled the informative status, there are numerous customization options, which can be controlled with fish variables.
 
@@ -47,7 +51,7 @@ The status symbols themselves:
 
 Finally, ``$fish_prompt_hg_status_order``, which can be used to change the order the status symbols appear in. It defaults to ``added modified copied deleted untracked unmerged``.
 
-See also :ref:`fish_vcs_prompt <cmd-fish_vcs_prompt>`, which will call all supported version control prompt functions, including git, Mercurial and Subversion.
+See also :doc:`fish_vcs_prompt <fish_vcs_prompt>`, which will call all supported version control prompt functions, including git, Mercurial and Subversion.
 
 Example
 -------

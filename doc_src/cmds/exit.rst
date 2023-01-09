@@ -1,4 +1,5 @@
 .. _cmd-exit:
+.. program::exit
 
 exit - exit the shell
 =====================
@@ -6,13 +7,16 @@ exit - exit the shell
 Synopsis
 --------
 
-::
+.. synopsis::
 
-    exit [STATUS]
+    exit [CODE]
 
 Description
 -----------
 
-``exit`` causes fish to exit. If ``STATUS`` is supplied, it will be converted to an integer and used as the exit status. Otherwise, the exit status will be that of the last command executed.
+**exit** is a special builtin that causes the shell to exit. Either 255 or the *CODE* supplied is used, whichever is lesser.
+Otherwise, the exit status will be that of the last command executed.
 
-If exit is called while sourcing a file (using the :ref:`source <cmd-source>` builtin) the rest of the file will be skipped, but the shell itself will not exit.
+If exit is called while sourcing a file (using the :doc:`source <source>` builtin) the rest of the file will be skipped, but the shell itself will not exit.
+
+The **--help** or **-h** option displays help about using this command.

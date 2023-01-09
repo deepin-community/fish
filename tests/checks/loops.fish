@@ -107,17 +107,17 @@ echo "while true; end" | $fish --no-execute
 for status in a b c
     echo $status
 end
-#CHECKERR: {{.*}}loops.fish (line {{\d+}}): You cannot use read-only variable 'status' in a for loop
+#CHECKERR: {{.*}}loops.fish (line {{\d+}}): for: status: cannot overwrite read-only variable
 #CHECKERR: for status in a b c
-#CHECKERR: ^
+#CHECKERR:     ^~~~~^
 
 # "That goes for non-electric ones as well (#5548)"
 for hostname in a b c
     echo $hostname
 end
-#CHECKERR: {{.*}}loops.fish (line {{\d+}}): You cannot use read-only variable 'hostname' in a for loop
+#CHECKERR: {{.*}}loops.fish (line {{\d+}}): for: hostname: cannot overwrite read-only variable
 #CHECKERR: for hostname in a b c
-#CHECKERR: ^
+#CHECKERR:     ^~~~~~~^
 
 # For loop control vars available outside the for block
 begin
@@ -127,6 +127,8 @@ begin
     end
     set --show loop_var
 end
+#CHECK: $loop_var: set in local scope, unexported, with 1 elements
+#CHECK: $loop_var[1]: |c|
 
 set -g loop_var global_val
 function loop_test
@@ -139,6 +141,8 @@ function loop_test
 end
 loop_test
 set --show loop_var
+#CHECK: $loop_var: set in local scope, unexported, with 1 elements
+#CHECK: $loop_var[1]: |b|
 
 begin
     set -l loop_var
@@ -147,10 +151,6 @@ begin
     set --show loop_var
 end
 set --show loop_var
-#CHECK: $loop_var: set in local scope, unexported, with 1 elements
-#CHECK: $loop_var[1]: |c|
-#CHECK: $loop_var: set in local scope, unexported, with 1 elements
-#CHECK: $loop_var[1]: |b|
 #CHECK: $loop_var: set in global scope, unexported, with 1 elements
 #CHECK: $loop_var[1]: |global_val|
 #CHECK: $loop_var: set in global scope, unexported, with 1 elements

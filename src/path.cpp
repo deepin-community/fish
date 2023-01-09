@@ -6,8 +6,6 @@
 #include "path.h"
 
 #include <errno.h>
-#include <sys/mount.h>
-#include <sys/param.h>
 #include <sys/stat.h>
 #if defined(__linux__)
 #include <sys/statfs.h>
@@ -15,10 +13,8 @@
 #include <unistd.h>
 
 #include <cstring>
-#include <cwchar>
-#include <memory>
 #include <string>
-#include <type_traits>
+#include <utility>
 #include <vector>
 
 #include "common.h"
@@ -29,89 +25,94 @@
 #include "wcstringutil.h"
 #include "wutil.h"  // IWYU pragma: keep
 
-// Note that PREFIX is defined in the `Makefile` and is thus defined when this module is compiled.
-// This ensures we always default to "/bin", "/usr/bin" and the bin dir defined for the fish
-// programs. Possibly with a duplicate dir if PREFIX is empty, "/", "/usr" or "/usr/". If the PREFIX
-// duplicates /bin or /usr/bin that is harmless other than a trivial amount of time testing a path
-// we've already tested.
-const wcstring_list_t dflt_pathsv({L"/bin", L"/usr/bin", PREFIX L"/bin"});
+// PREFIX is defined at build time.
+static const wcstring_list_t kDefaultPath({L"/bin", L"/usr/bin", PREFIX L"/bin"});
 
-static bool path_get_path_core(const wcstring &cmd, wcstring *out_path,
-                               const maybe_t<env_var_t> &bin_path_var) {
+static get_path_result_t path_get_path_core(const wcstring &cmd, const wcstring_list_t &pathsv) {
+    const get_path_result_t noent_res{ENOENT, wcstring{}};
+    get_path_result_t result{};
+
+    /// Test if the given path can be executed.
+    /// \return 0 on success, an errno value on failure.
+    auto test_path = [](const wcstring &path) -> int {
+        std::string narrow = wcs2string(path);
+        struct stat buff;
+        if (access(narrow.c_str(), X_OK) != 0 || stat(narrow.c_str(), &buff) != 0) {
+            return errno;
+        }
+        return S_ISREG(buff.st_mode) ? 0 : EACCES;
+    };
+
+    if (cmd.empty()) {
+        return noent_res;
+    }
+
+    // Commands cannot contain NUL byte.
+    if (cmd.find(L'\0') != wcstring::npos) {
+        return noent_res;
+    }
+
     // If the command has a slash, it must be an absolute or relative path and thus we don't bother
     // looking for a matching command.
     if (cmd.find(L'/') != wcstring::npos) {
-        std::string narrow = wcs2string(cmd);
-        if (access(narrow.c_str(), X_OK) != 0) {
-            return false;
-        }
-
-        struct stat buff;
-        if (stat(narrow.c_str(), &buff)) {
-            return false;
-        }
-        if (S_ISREG(buff.st_mode)) {
-            if (out_path) out_path->assign(cmd);
-            return true;
-        }
-        errno = EACCES;
-        return false;
+        int merr = test_path(cmd);
+        return get_path_result_t{merr, cmd};
     }
 
-    const wcstring_list_t *pathsv;
-    if (bin_path_var) {
-        pathsv = &bin_path_var->as_list();
-    } else {
-        pathsv = &dflt_pathsv;
-    }
-
-    int err = ENOENT;
-    for (auto next_path : *pathsv) {
+    get_path_result_t best = noent_res;
+    wcstring proposed_path;
+    for (const auto &next_path : pathsv) {
         if (next_path.empty()) continue;
-        append_path_component(next_path, cmd);
-        std::string narrow = wcs2string(next_path);
-        if (access(narrow.c_str(), X_OK) == 0) {
-            struct stat buff;
-            if (stat(narrow.c_str(), &buff) == -1) {
-                if (errno != EACCES) {
-                    wperror(L"stat");
-                }
-                continue;
+        proposed_path = next_path;
+        append_path_component(proposed_path, cmd);
+        int merr = test_path(proposed_path);
+        if (merr == 0) {
+            // We found one.
+            best = get_path_result_t{merr, std::move(proposed_path)};
+            break;
+        } else if (merr != ENOENT && best.err == ENOENT) {
+            // Keep the first *interesting* error and path around.
+            // ENOENT isn't interesting because not having a file is the normal case.
+            // Ignore if the parent directory is already inaccessible.
+            if (waccess(wdirname(proposed_path), X_OK) == 0) {
+                best = get_path_result_t{merr, std::move(proposed_path)};
             }
-            if (S_ISREG(buff.st_mode)) {
-                if (out_path) *out_path = std::move(next_path);
-                return true;
-            }
-            err = EACCES;
         }
     }
-
-    errno = err;
-    return false;
+    return best;
 }
 
-bool path_get_path(const wcstring &cmd, wcstring *out_path, const environment_t &vars) {
-    return path_get_path_core(cmd, out_path, vars.get(L"PATH"));
+maybe_t<wcstring> path_get_path(const wcstring &cmd, const environment_t &vars) {
+    auto result = path_try_get_path(cmd, vars);
+    if (result.err != 0) {
+        return none();
+    }
+    wcstring path = std::move(result.path);
+    return path;
 }
 
-bool path_is_executable(const std::string &path) {
+get_path_result_t path_try_get_path(const wcstring &cmd, const environment_t &vars) {
+    auto pathvar = vars.get(L"PATH");
+    return path_get_path_core(cmd, pathvar ? pathvar->as_list() : kDefaultPath);
+}
+
+static bool path_is_executable(const std::string &path) {
     if (access(path.c_str(), X_OK)) return false;
     struct stat buff;
     if (stat(path.c_str(), &buff) == -1) {
         if (errno != EACCES) wperror(L" stat");
         return false;
     }
-    if (!S_ISREG(buff.st_mode)) return false;
-    return true;
+    return S_ISREG(buff.st_mode);
 }
 
-/// \return 1 if the path is remote, 0 if local, -1 if unknown.
-static int path_is_remote(const wcstring &path) {
+/// \return whether the given path is on a remote filesystem.
+static dir_remoteness_t path_remoteness(const wcstring &path) {
     std::string narrow = wcs2string(path);
 #if defined(__linux__)
     struct statfs buf {};
     if (statfs(narrow.c_str(), &buf) < 0) {
-        return -1;
+        return dir_remoteness_t::unknown;
     }
     // Linux has constants for these like NFS_SUPER_MAGIC, SMB_SUPER_MAGIC, CIFS_MAGIC_NUMBER but
     // these are in varying headers. Simply hard code them.
@@ -121,23 +122,23 @@ static int path_is_remote(const wcstring &path) {
         case 0x517B:       // SMB_SUPER_MAGIC
         case 0xFE534D42U:  // SMB2_MAGIC_NUMBER - not in the manpage
         case 0xFF534D42U:  // CIFS_MAGIC_NUMBER
-            return 1;
+            return dir_remoteness_t::remote;
         default:
             // Other FSes are assumed local.
-            return 0;
+            return dir_remoteness_t::local;
     }
 #elif defined(ST_LOCAL)
     // ST_LOCAL is a flag to statvfs, which is itself standardized.
     // In practice the only system to use this path is NetBSD.
     struct statvfs buf {};
-    if (statvfs(narrow.c_str(), &buf) < 0) return -1;
-    return (buf.f_flag & ST_LOCAL) ? 0 : 1;
+    if (statvfs(narrow.c_str(), &buf) < 0) return dir_remoteness_t::unknown;
+    return (buf.f_flag & ST_LOCAL) ? dir_remoteness_t::local : dir_remoteness_t::remote;
 #elif defined(MNT_LOCAL)
     struct statfs buf {};
-    if (statfs(narrow.c_str(), &buf) < 0) return -1;
-    return (buf.f_flags & MNT_LOCAL) ? 0 : 1;
+    if (statfs(narrow.c_str(), &buf) < 0) return dir_remoteness_t::unknown;
+    return (buf.f_flags & MNT_LOCAL) ? dir_remoteness_t::local : dir_remoteness_t::remote;
 #else
-    return -1;
+    return dir_remoteness_t::unknown;
 #endif
 }
 
@@ -185,24 +186,20 @@ wcstring_list_t path_apply_cdpath(const wcstring &dir, const wcstring &wd,
         }
         // Always append $PWD
         cdpathsv.push_back(L".");
-        for (wcstring next_path : cdpathsv) {
-            if (next_path.empty()) next_path = L".";
-            if (next_path == L".") {
-                // next_path is just '.', and we have a working directory, so use the wd instead.
-                next_path = wd;
-            }
-
+        for (const wcstring &path : cdpathsv) {
+            wcstring abspath;
             // We want to return an absolute path (see issue 6220)
-            if (string_prefixes_string(L"./", next_path)) {
-                next_path = next_path.replace(0, 2, wd);
-            } else if (string_prefixes_string(L"../", next_path) || next_path == L"..") {
-                next_path = next_path.insert(0, wd);
+            if (path.empty() || (path.front() != L'/' && path.front() != L'~')) {
+                abspath = wd;
+                abspath += L'/';
             }
+            abspath += path;
 
-            expand_tilde(next_path, env_vars);
-            if (next_path.empty()) continue;
+            expand_tilde(abspath, env_vars);
+            if (abspath.empty()) continue;
+            abspath = normalize_path(abspath);
 
-            wcstring whole_path = std::move(next_path);
+            wcstring whole_path = std::move(abspath);
             append_path_component(whole_path, dir);
             paths.push_back(whole_path);
         }
@@ -218,11 +215,11 @@ maybe_t<wcstring> path_get_cdpath(const wcstring &dir, const wcstring &wd,
     assert(!wd.empty() && wd.back() == L'/');
     auto paths = path_apply_cdpath(dir, wd, env_vars);
 
-    for (const wcstring &dir : paths) {
+    for (const wcstring &a_dir : paths) {
         struct stat buf;
-        if (wstat(dir, &buf) == 0) {
+        if (wstat(a_dir, &buf) == 0) {
             if (S_ISDIR(buf.st_mode)) {
-                return dir;
+                return a_dir;
             }
             err = ENOTDIR;
         }
@@ -329,16 +326,17 @@ static int create_directory(const wcstring &d) {
     return ok ? 0 : -1;
 }
 
+namespace {
 /// The following type wraps up a user's "base" directories, corresponding (conceptually if not
 /// actually) to XDG spec.
 struct base_directory_t {
-    wcstring path{};       /// the path where we attempted to create the directory.
-    int err{0};            /// the error code if creating the directory failed, or 0 on success.
-    int is_remote{-1};     /// 1 if the directory is remote (e.g. NFS), 0 if local, -1 if unknown.
-    bool used_xdg{false};  /// whether an XDG variable was used in resolving the directory.
-
+    wcstring path{};  /// the path where we attempted to create the directory.
+    dir_remoteness_t remoteness{dir_remoteness_t::unknown};  // whether the dir is remote
+    int err{0};  /// the error code if creating the directory failed, or 0 on success.
     bool success() const { return err == 0; }
+    bool used_xdg{false};  /// whether an XDG variable was used in resolving the directory.
 };
+}  // namespace
 
 /// Attempt to get a base directory, creating it if necessary. If a variable named \p xdg_var is
 /// set, use that directory; otherwise use the path \p non_xdg_homepath rooted in $HOME. \return the
@@ -369,7 +367,7 @@ static base_directory_t make_base_directory(const wcstring &xdg_var,
     } else {
         result.err = 0;
         // Need to append a trailing slash to check the contents of the directory, not its parent.
-        result.is_remote = path_is_remote(result.path + L'/');
+        result.remoteness = path_remoteness(result.path + L'/');
     }
     return result;
 }
@@ -387,20 +385,20 @@ static const base_directory_t &get_config_directory() {
 void path_emit_config_directory_messages(env_stack_t &vars) {
     const auto &data = get_data_directory();
     if (!data.success()) {
-        maybe_issue_path_warning(L"data", _(L"Your history will not be saved."), data.used_xdg,
+        maybe_issue_path_warning(L"data", _(L"can not save history"), data.used_xdg,
                                  L"XDG_DATA_HOME", data.path, data.err, vars);
     }
-    if (data.is_remote > 0) {
+    if (data.remoteness == dir_remoteness_t::remote) {
         FLOG(path, "data path appears to be on a network volume");
     }
 
     const auto &config = get_config_directory();
     if (!config.success()) {
-        maybe_issue_path_warning(L"config", _(L"Your personal settings will not be saved."),
+        maybe_issue_path_warning(L"config", _(L"can not save universal variables or functions"),
                                  config.used_xdg, L"XDG_CONFIG_HOME", config.path, config.err,
                                  vars);
     }
-    if (config.is_remote > 0) {
+    if (config.remoteness == dir_remoteness_t::remote) {
         FLOG(path, "config path appears to be on a network volume");
     }
 }
@@ -417,9 +415,9 @@ bool path_get_data(wcstring &path) {
     return dir.success();
 }
 
-int path_get_data_is_remote() { return get_data_directory().is_remote; }
+dir_remoteness_t path_get_data_remoteness() { return get_data_directory().remoteness; }
 
-int path_get_config_is_remote() { return get_config_directory().is_remote; }
+dir_remoteness_t path_get_config_remoteness() { return get_config_directory().remoteness; }
 
 void path_make_canonical(wcstring &path) {
     // Ignore trailing slashes, unless it's the first character.

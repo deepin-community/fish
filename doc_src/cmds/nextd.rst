@@ -6,18 +6,20 @@ nextd - move forward through directory history
 Synopsis
 --------
 
-::
+.. synopsis::
 
-    nextd [ -l | --list ] [POS]
+    nextd [-l | --list] [POS]
 
 Description
 -----------
 
-``nextd`` moves forwards ``POS`` positions in the :ref:`history of visited directories <directory-history>`; if the end of the history has been hit, a warning is printed.
+``nextd`` moves forwards *POS* positions in the :ref:`history of visited directories <directory-history>`; if the end of the history has been hit, a warning is printed.
 
-If the ``-l`` or ``--list`` flag is specified, the current directory history is also displayed.
+If the **-l** or **--list** option is specified, the current directory history is also displayed.
 
-Note that the ``cd`` command limits directory history to the 25 most recently visited directories. The history is stored in the ``$dirprev`` and ``$dirnext`` variables which this command manipulates.
+The **-h** or **--help** option displays help about using this command.
+
+Note that the ``cd`` command limits directory history to the 25 most recently visited directories. The history is stored in the :envvar:`dirprev` and :envvar:`dirnext` variables which this command manipulates.
 
 Example
 -------
@@ -39,6 +41,6 @@ Example
 See Also
 --------
 
-- the :ref:`cdh <cmd-cdh>` command to display a prompt to quickly navigate the history
-- the :ref:`dirh <cmd-dirh>` command to print the directory history
-- the :ref:`prevd <cmd-prevd>` command to move backward
+- the :doc:`cdh <cdh>` command to display a prompt to quickly navigate the history
+- the :doc:`dirh <dirh>` command to print the directory history
+- the :doc:`prevd <prevd>` command to move backward

@@ -9,27 +9,28 @@
 #include <unistd.h>
 
 #include <list>
+#include <memory>
 #include <unordered_map>
-#include <vector>
+#include <utility>
 
 #include "common.h"
 
 /// The bits of a job necessary to support 'wait' and '--on-process-exit'.
 /// This may outlive the job.
 struct wait_handle_t {
-    /// Construct from a pid and base name.
-    wait_handle_t(pid_t pid, wcstring name) : pid(pid), base_name(std::move(name)) {}
+    /// Construct from a pid, job id, and base name.
+    wait_handle_t(pid_t pid, internal_job_id_t jid, wcstring name)
+        : pid(pid), internal_job_id(jid), base_name(std::move(name)) {}
 
     /// The pid of this process.
-    pid_t pid{};
+    const pid_t pid{};
 
     /// The internal job id of the job which contained this process.
-    /// This is initially 0; it is set when the job is completed.
-    internal_job_id_t internal_job_id{};
+    const internal_job_id_t internal_job_id{};
 
     /// The "base name" of this process.
     /// For example if the process is "/bin/sleep" then this will be 'sleep'.
-    wcstring base_name{};
+    const wcstring base_name{};
 
     /// The value appropriate for populating $status, if completed.
     int status{0};
@@ -41,7 +42,7 @@ using wait_handle_ref_t = std::shared_ptr<wait_handle_t>;
 
 /// Support for storing a list of wait handles, with a max limit set at initialization.
 /// Note this class is not safe for concurrent access.
-class wait_handle_store_t {
+class wait_handle_store_t : noncopyable_t {
    public:
     // Our wait handles are arranged in a linked list for its iterator invalidation semantics: we
     // may remove one without needing to update the map from pid -> handle.
@@ -71,10 +72,6 @@ class wait_handle_store_t {
 
     /// Convenience to return the size, for testing.
     size_t size() const { return handles_.size(); }
-
-    /// No copying allowed.
-    wait_handle_store_t(const wait_handle_store_t &) = delete;
-    void operator=(const wait_handle_store_t &) = delete;
 
    private:
     using list_node_t = typename wait_handle_list_t::iterator;

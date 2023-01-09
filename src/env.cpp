@@ -12,13 +12,13 @@
 #include <unistd.h>
 
 #include <algorithm>
-#include <iterator>
+#include <map>
 #include <mutex>
 #include <set>
 #include <utility>
 #include <vector>
 
-#include "builtin_bind.h"
+#include "abbrs.h"
 #include "common.h"
 #include "env_dispatch.h"
 #include "env_universal_common.h"
@@ -30,6 +30,7 @@
 #include "history.h"
 #include "input.h"
 #include "kill.h"
+#include "null_terminated_array.h"
 #include "path.h"
 #include "proc.h"
 #include "reader.h"
@@ -61,16 +62,17 @@ bool term_has_xn = false;
 /// This is typically initialized in env_init(), and is considered empty before then.
 static acquired_lock<env_universal_t> uvars() {
     // Leaked to avoid shutdown dtor registration.
-    static owning_lock<env_universal_t> *const s_universal_variables =
-        new owning_lock<env_universal_t>();
+    static auto const s_universal_variables = new owning_lock<env_universal_t>();
     return s_universal_variables->acquire();
 }
+
+/// Set when a universal variable has been modified but not yet been written to disk via sync().
+static relaxed_atomic_bool_t s_uvars_locally_modified{false};
 
 /// Whether we were launched with no_config; in this case setting a uvar instead sets a global.
 static relaxed_atomic_bool_t s_uvar_scope_is_global{false};
 
-bool env_universal_barrier() { return env_stack_t::principal().universal_barrier(); }
-
+namespace {
 struct electric_var_t {
     enum {
         freadonly = 1 << 0,  // May not be modified by the user.
@@ -107,26 +109,16 @@ static constexpr const electric_var_t electric_variables[] = {
     {L"umask", electric_var_t::fcomputed},
     {L"version", electric_var_t::freadonly},
 };
-ASSERT_SORT_ORDER(electric_variables, .name);
+ASSERT_SORTED_BY_NAME(electric_variables);
 
 const electric_var_t *electric_var_t::for_name(const wchar_t *name) {
-    auto begin = std::begin(electric_variables);
-    auto end = std::end(electric_variables);
-
-    electric_var_t search{name, 0};
-    auto binsearch = std::lower_bound(begin, end, search,
-                                      [&](const electric_var_t &v1, const electric_var_t &v2) {
-                                          return wcscmp(v1.name, v2.name) < 0;
-                                      });
-    if (binsearch != end && wcscmp(name, binsearch->name) == 0) {
-        return &*binsearch;
-    }
-    return nullptr;
+    return get_by_sorted_name(name, electric_variables);
 }
 
 const electric_var_t *electric_var_t::for_name(const wcstring &name) {
     return electric_var_t::for_name(name.c_str());
 }
+}  // namespace
 
 /// Check if a variable may not be set using the set command.
 static bool is_read_only(const wchar_t *key) {
@@ -203,23 +195,60 @@ maybe_t<env_var_t> null_environment_t::get(const wcstring &key, env_mode_flags_t
     UNUSED(mode);
     return none();
 }
-wcstring_list_t null_environment_t::get_names(int flags) const {
+wcstring_list_t null_environment_t::get_names(env_mode_flags_t flags) const {
     UNUSED(flags);
     return {};
 }
 
-/// Set up the USER variable.
-static void setup_user(bool force) {
-    auto &vars = env_stack_t::globals();
-    if (force || vars.get(L"USER").missing_or_empty()) {
-        struct passwd userinfo;
-        struct passwd *result;
-        char buf[8192];
-        int retval = getpwuid_r(getuid(), &userinfo, buf, sizeof(buf), &result);
+/// Set up the USER and HOME variable.
+static void setup_user(env_stack_t &vars) {
+    auto uid = geteuid();
+    auto user_var = vars.get(L"USER");
+    struct passwd userinfo;
+    struct passwd *result;
+    char buf[8192];
+
+    // If we have a $USER, we try to get the passwd entry for the name.
+    // If that has the same UID that we use, we assume the data is correct.
+    if (!user_var.missing_or_empty()) {
+        std::string unam_narrow = wcs2string(user_var->as_string());
+        int retval = getpwnam_r(unam_narrow.c_str(), &userinfo, buf, sizeof(buf), &result);
         if (!retval && result) {
-            const wcstring uname = str2wcstring(userinfo.pw_name);
-            vars.set_one(L"USER", ENV_GLOBAL | ENV_EXPORT, uname);
+            if (result->pw_uid == uid) {
+                // The uid matches but we still might need to set $HOME.
+                if (vars.get(L"HOME").missing_or_empty()) {
+                    if (userinfo.pw_dir) {
+                        vars.set_one(L"HOME", ENV_GLOBAL | ENV_EXPORT,
+                                     str2wcstring(userinfo.pw_dir));
+                    } else {
+                        vars.set_empty(L"HOME", ENV_GLOBAL | ENV_EXPORT);
+                    }
+                }
+                return;
+            }
         }
+    }
+
+    // Either we didn't have a $USER or it had a different uid.
+    // We need to get the data *again* via the uid.
+    int retval = getpwuid_r(uid, &userinfo, buf, sizeof(buf), &result);
+    if (!retval && result) {
+        const wcstring uname = str2wcstring(userinfo.pw_name);
+        vars.set_one(L"USER", ENV_GLOBAL | ENV_EXPORT, uname);
+        // Only change $HOME if it's empty, so we allow e.g. `HOME=(mktemp -d)`.
+        // This is okay with common `su` and `sudo` because they set $HOME.
+        if (vars.get(L"HOME").missing_or_empty()) {
+            if (userinfo.pw_dir) {
+                vars.set_one(L"HOME", ENV_GLOBAL | ENV_EXPORT, str2wcstring(userinfo.pw_dir));
+            } else {
+                // We cannot get $HOME. This triggers warnings for history and config.fish already,
+                // so it isn't necessary to warn here as well.
+                vars.set_empty(L"HOME", ENV_GLOBAL | ENV_EXPORT);
+            }
+        }
+    } else if (vars.get(L"HOME").missing_or_empty()) {
+        // If $USER is empty as well (which we tried to set above), we can't get $HOME.
+        vars.set_empty(L"HOME", ENV_GLOBAL | ENV_EXPORT);
     }
 }
 
@@ -256,13 +285,17 @@ static void setup_path() {
     }
 }
 
+static std::map<wcstring, wcstring> inheriteds;
+
+const std::map<wcstring, wcstring> &env_get_inherited() { return inheriteds; }
+
 void env_init(const struct config_paths_t *paths, bool do_uvars, bool default_paths) {
     env_stack_t &vars = env_stack_t::principal();
     // Import environment variables. Walk backwards so that the first one out of any duplicates wins
     // (See issue #2784).
     wcstring key, val;
     const char *const *envp = environ;
-    size_t i = 0;
+    int i = 0;
     while (envp && envp[i]) i++;
     while (i--) {
         const wcstring key_and_val = str2wcstring(envp[i]);  // like foo=bar
@@ -272,9 +305,11 @@ void env_init(const struct config_paths_t *paths, bool do_uvars, bool default_pa
             if (!electric_var_t::for_name(key_and_val)) {
                 vars.set_empty(key_and_val, ENV_EXPORT | ENV_GLOBAL);
             }
+            inheriteds[key] = L"";
         } else {
             key.assign(key_and_val, 0, eql);
             val.assign(key_and_val, eql + 1, wcstring::npos);
+            inheriteds[key] = val;
             if (!electric_var_t::for_name(key)) {
                 // fish_user_paths should not be exported; attempting to re-import it from
                 // a value we previously (due to user error) exported will cause impossibly
@@ -299,51 +334,10 @@ void env_init(const struct config_paths_t *paths, bool do_uvars, bool default_pa
         }
     }
 
-    // Some `su`s keep $USER when changing to root.
-    // This leads to issues later on (and e.g. in prompts),
-    // so we work around it by resetting $USER.
-    // TODO: Figure out if that su actually checks if username == "root"(as the man page says) or
-    // UID == 0.
-    uid_t uid = getuid();
-    setup_user(uid == 0);
-
-    // Set up the HOME variable.
-    // Unlike $USER, it doesn't seem that `su`s pass this along
-    // if the target user is root, unless "--preserve-environment" is used.
-    // Since that is an explicit choice, we should allow it to enable e.g.
-    //     env HOME=(mktemp -d) su --preserve-environment fish
-    //
-    // Note: This needs to be *before* path_get_*, because that uses $HOME!
-    if (vars.get(L"HOME").missing_or_empty()) {
-        auto user_var = vars.get(L"USER");
-        if (!user_var.missing_or_empty()) {
-            std::string unam_narrow = wcs2string(user_var->as_string());
-            struct passwd userinfo;
-            struct passwd *result;
-            char buf[8192];
-            int retval = getpwnam_r(unam_narrow.c_str(), &userinfo, buf, sizeof(buf), &result);
-            if (retval || !result) {
-                // Maybe USER is set but it's bogus. Reset USER from the db and try again.
-                setup_user(true);
-                user_var = vars.get(L"USER");
-                if (!user_var.missing_or_empty()) {
-                    unam_narrow = wcs2string(user_var->as_string());
-                    retval = getpwnam_r(unam_narrow.c_str(), &userinfo, buf, sizeof(buf), &result);
-                }
-            }
-            if (!retval && result && userinfo.pw_dir) {
-                const wcstring dir = str2wcstring(userinfo.pw_dir);
-                vars.set_one(L"HOME", ENV_GLOBAL | ENV_EXPORT, dir);
-            } else {
-                // We cannot get $HOME. This triggers warnings for history and config.fish already,
-                // so it isn't necessary to warn here as well.
-                vars.set_empty(L"HOME", ENV_GLOBAL | ENV_EXPORT);
-            }
-        } else {
-            // If $USER is empty as well (which we tried to set above), we can't get $HOME.
-            vars.set_empty(L"HOME", ENV_GLOBAL | ENV_EXPORT);
-        }
-    }
+    // Set $USER, $HOME and $EUID
+    // This involves going to passwd and stuff.
+    vars.set_one(L"EUID", ENV_GLOBAL, to_string(static_cast<unsigned long long>(geteuid())));
+    setup_user(vars);
 
     wcstring user_config_dir;
     path_get_config(user_config_dir);
@@ -358,6 +352,11 @@ void env_init(const struct config_paths_t *paths, bool do_uvars, bool default_pa
 
     // Set up $IFS - this used to be in share/config.fish, but really breaks if it isn't done.
     vars.set_one(L"IFS", ENV_GLOBAL, L"\n \t");
+
+    // Ensure this var is present even before an interactive command is run so that if it is used
+    // in a function like `fish_prompt` or `fish_right_prompt` it is defined at the time the first
+    // prompt is written.
+    vars.set_one(L"CMD_DURATION", ENV_UNEXPORT, L"0");
 
     // Set up the version variable.
     wcstring version = str2wcstring(get_fish_version());
@@ -425,7 +424,10 @@ void env_init(const struct config_paths_t *paths, bool do_uvars, bool default_pa
     init_input();
 
     // Complain about invalid config paths.
-    path_emit_config_directory_messages(vars);
+    // HACK: Assume the defaults are correct (in practice this is only --no-config anyway).
+    if (!default_paths) {
+        path_emit_config_directory_messages(vars);
+    }
 
     // Initialize our uvars if requested.
     if (!do_uvars) {
@@ -434,7 +436,9 @@ void env_init(const struct config_paths_t *paths, bool do_uvars, bool default_pa
         // Set up universal variables using the default path.
         callback_data_list_t callbacks;
         uvars()->initialize(callbacks);
-        env_universal_callbacks(&vars, callbacks);
+        for (const callback_data_t &cb : callbacks) {
+            env_dispatch_var_change(cb.key, vars);
+        }
 
         // Do not import variables that have the same name and value as
         // an exported universal variable. See issues #5258 and #5348.
@@ -449,6 +453,10 @@ void env_init(const struct config_paths_t *paths, bool do_uvars, bool default_pa
                 vars.globals().remove(name, ENV_GLOBAL | ENV_EXPORT);
             }
         }
+
+        // Import any abbreviations from uvars.
+        // Note we do not dynamically react to changes.
+        abbrs_get_set()->import_from_uvars(table);
     }
 }
 
@@ -469,8 +477,9 @@ struct query_t {
     // Whether any scopes were specified.
     bool has_scope;
 
-    // Whether to search local, global, universal scopes.
+    // Whether to search local, function, global, universal scopes.
     bool local;
+    bool function;
     bool global;
     bool universal;
 
@@ -490,8 +499,9 @@ struct query_t {
     bool user;
 
     explicit query_t(env_mode_flags_t mode) {
-        has_scope = mode & (ENV_LOCAL | ENV_GLOBAL | ENV_UNIVERSAL);
+        has_scope = mode & (ENV_LOCAL | ENV_FUNCTION | ENV_GLOBAL | ENV_UNIVERSAL);
         local = !has_scope || (mode & ENV_LOCAL);
+        function = !has_scope || (mode & ENV_FUNCTION);
         global = !has_scope || (mode & ENV_GLOBAL);
         universal = !has_scope || (mode & ENV_UNIVERSAL);
 
@@ -510,6 +520,14 @@ struct query_t {
     bool export_matches(const env_var_t &var) const {
         if (has_export_unexport) {
             return var.exports() ? exports : unexports;
+        } else {
+            return true;
+        }
+    }
+
+    bool pathvar_matches(const env_var_t &var) const {
+        if (has_pathvar_unpathvar) {
+            return var.is_pathvar() ? pathvar : unpathvar;
         } else {
             return true;
         }
@@ -547,7 +565,7 @@ class env_node_t {
 }  // namespace
 
 using env_node_ref_t = std::shared_ptr<env_node_t>;
-class env_scoped_impl_t : public environment_t {
+class env_scoped_impl_t : public environment_t, noncopyable_t {
     /// A struct wrapping up parser-local variables. These are conceptually variables that differ in
     /// different fish internal processes.
     struct perproc_data_t {
@@ -562,7 +580,7 @@ class env_scoped_impl_t : public environment_t {
     }
 
     maybe_t<env_var_t> get(const wcstring &key, env_mode_flags_t mode = ENV_DEFAULT) const override;
-    wcstring_list_t get_names(int flags) const override;
+    wcstring_list_t get_names(env_mode_flags_t flags) const override;
 
     perproc_data_t &perproc_data() { return perproc_data_; }
     const perproc_data_t &perproc_data() const { return perproc_data_; }
@@ -572,11 +590,6 @@ class env_scoped_impl_t : public environment_t {
     ~env_scoped_impl_t() override = default;
 
     std::shared_ptr<owning_null_terminated_array_t> export_array();
-
-    env_scoped_impl_t(env_scoped_impl_t &&) = delete;
-    env_scoped_impl_t(const env_scoped_impl_t &) = delete;
-    void operator=(env_scoped_impl_t &&) = delete;
-    void operator=(const env_scoped_impl_t &) = delete;
 
    protected:
     // A linked list of scopes.
@@ -602,6 +615,7 @@ class env_scoped_impl_t : public environment_t {
     // query.
     maybe_t<env_var_t> try_get_computed(const wcstring &key) const;
     maybe_t<env_var_t> try_get_local(const wcstring &key) const;
+    maybe_t<env_var_t> try_get_function(const wcstring &key) const;
     maybe_t<env_var_t> try_get_global(const wcstring &key) const;
     maybe_t<env_var_t> try_get_universal(const wcstring &key) const;
 
@@ -669,8 +683,6 @@ bool env_scoped_impl_t::export_array_needs_regeneration() const {
 }
 
 std::shared_ptr<owning_null_terminated_array_t> env_scoped_impl_t::create_export_array() const {
-    var_table_t table;
-
     FLOG(env_export, L"create_export_array() recalc");
     var_table_t vals;
     get_exported(this->globals_, vals);
@@ -682,9 +694,9 @@ std::shared_ptr<owning_null_terminated_array_t> env_scoped_impl_t::create_export
         assert(var && "Variable should be present in uvars");
         // Note that std::map::insert does NOT overwrite a value already in the map,
         // which we depend on here.
-        // Note: Using std::move around make_pair prevents the compiler from implementing
+        // Note: Using std::move around emplace prevents the compiler from implementing
         // copy elision.
-        vals.insert(std::make_pair(key, std::move(*var)));
+        vals.emplace(key, std::move(*var));
     }
 
     // Dorky way to add our single exported computed variable.
@@ -729,7 +741,7 @@ maybe_t<env_var_t> env_scoped_impl_t::try_get_computed(const wcstring &key) cons
             return none();
         }
 
-        std::shared_ptr<history_t> history = reader_get_history();
+        std::shared_ptr<history_t> history = commandline_get_state().history;
         if (!history) {
             history = history_t::with_name(history_session_id(*this));
         }
@@ -769,23 +781,31 @@ maybe_t<env_var_t> env_scoped_impl_t::try_get_computed(const wcstring &key) cons
 }
 
 maybe_t<env_var_t> env_scoped_impl_t::try_get_local(const wcstring &key) const {
-    auto cursor = locals_;
-    while (cursor) {
-        auto where = cursor->env.find(key);
-        if (where != cursor->env.end()) {
-            return where->second;
-        }
-        cursor = cursor->next;
+    maybe_t<env_var_t> entry;
+    for (auto cur = locals_; cur; cur = cur->next) {
+        if ((entry = cur->find_entry(key))) break;
     }
-    return none();
+    return entry;  // this is either the entry or none() from find_entry
+}
+
+maybe_t<env_var_t> env_scoped_impl_t::try_get_function(const wcstring &key) const {
+    maybe_t<env_var_t> entry;
+    auto node = locals_;
+    while (node->next) {
+        node = node->next;
+        // The first node that introduces a new scope is ours.
+        // If this doesn't happen, we go on until we've reached the
+        // topmost local scope.
+        if (node->new_scope) break;
+    }
+    for (auto cur = node; cur; cur = cur->next) {
+        if ((entry = cur->find_entry(key))) break;
+    }
+    return entry;  // this is either the entry or none() from find_entry
 }
 
 maybe_t<env_var_t> env_scoped_impl_t::try_get_global(const wcstring &key) const {
-    auto where = globals_->env.find(key);
-    if (where != globals_->env.end()) {
-        return where->second;
-    }
-    return none();
+    return globals_->find_entry(key);
 }
 
 maybe_t<env_var_t> env_scoped_impl_t::try_get_universal(const wcstring &key) const {
@@ -804,6 +824,9 @@ maybe_t<env_var_t> env_scoped_impl_t::get(const wcstring &key, env_mode_flags_t 
     if (!result && query.local) {
         result = try_get_local(key);
     }
+    if (!result && query.function) {
+        result = try_get_function(key);
+    }
     if (!result && query.global) {
         result = try_get_global(key);
     }
@@ -814,10 +837,14 @@ maybe_t<env_var_t> env_scoped_impl_t::get(const wcstring &key, env_mode_flags_t 
     if (result && !query.export_matches(*result)) {
         result = none();
     }
+    // Same for pathvars
+    if (result && !query.pathvar_matches(*result)) {
+        result = none();
+    }
     return result;
 }
 
-wcstring_list_t env_scoped_impl_t::get_names(int flags) const {
+wcstring_list_t env_scoped_impl_t::get_names(env_mode_flags_t flags) const {
     const query_t query(flags);
     std::set<wcstring> names;
 
@@ -852,7 +879,7 @@ wcstring_list_t env_scoped_impl_t::get_names(int flags) const {
         names.insert(uni_list.begin(), uni_list.end());
     }
 
-    return wcstring_list_t(names.begin(), names.end());
+    return {names.begin(), names.end()};
 }
 
 /// Recursive helper to snapshot a series of nodes.
@@ -877,6 +904,7 @@ std::shared_ptr<environment_t> env_scoped_impl_t::snapshot() const {
 }
 
 // A struct that wraps up the result of setting or removing a variable.
+namespace {
 struct mod_result_t {
     // The publicly visible status of the set call.
     int status{ENV_OK};
@@ -889,6 +917,7 @@ struct mod_result_t {
 
     explicit mod_result_t(int status) : status(status) {}
 };
+}  // namespace
 
 /// A mutable subclass of env_scoped_impl_t.
 class env_stack_impl_t final : public env_scoped_impl_t {
@@ -1054,10 +1083,8 @@ void env_stack_impl_t::set_in_node(const env_node_ref_t &node, const wcstring &k
         val = colon_split(val);
     }
 
-    var = var.setting_vals(std::move(val))
-              .setting_exports(res_exports)
-              .setting_pathvar(res_pathvar)
-              .setting_read_only(is_read_only(key));
+    var =
+        var.setting_vals(std::move(val)).setting_exports(res_exports).setting_pathvar(res_pathvar);
 
     // Perhaps mark that this node contains an exported variable, or shadows an exported variable.
     // If so regenerate the export list.
@@ -1115,7 +1142,6 @@ maybe_t<int> env_stack_impl_t::try_set_electric(const wcstring &key, const query
 /// Set a universal variable, inheriting as applicable from the given old variable.
 void env_stack_impl_t::set_universal(const wcstring &key, wcstring_list_t val,
                                      const query_t &query) {
-    ASSERT_IS_MAIN_THREAD();
     auto oldvar = uvars()->get(key);
     // Resolve whether or not to export.
     bool exports = false;
@@ -1158,7 +1184,8 @@ mod_result_t env_stack_impl_t::set(const wcstring &key, env_mode_flags_t mode,
                                    wcstring_list_t val) {
     const query_t query(mode);
     // Handle electric and read-only variables.
-    if (auto ret = try_set_electric(key, query, val)) {
+    auto ret = try_set_electric(key, query, val);
+    if (ret.has_value()) {
         return mod_result_t{*ret};
     }
 
@@ -1193,6 +1220,22 @@ mod_result_t env_stack_impl_t::set(const wcstring &key, env_mode_flags_t mode,
         } else if (query.local) {
             assert(locals_ != globals_ && "Locals should not be globals");
             set_in_node(locals_, key, std::move(val), flags);
+        } else if (query.function) {
+            // "Function" scope is:
+            // Either the topmost local scope of the nearest function,
+            // or the top-level local scope if no function exists.
+            //
+            // This is distinct from the unspecified scope,
+            // which is the global scope if no function exists.
+            auto node = locals_;
+            while (node->next) {
+                node = node->next;
+                // The first node that introduces a new scope is ours.
+                // If this doesn't happen, we go on until we've reached the
+                // topmost local scope.
+                if (node->new_scope) break;
+            }
+            set_in_node(node, key, std::move(val), flags);
         } else {
             DIE("Unknown scope");
         }
@@ -1209,7 +1252,7 @@ mod_result_t env_stack_impl_t::set(const wcstring &key, env_mode_flags_t mode,
         result.uvar_modified = true;
     } else {
         // Unspecified scope with no existing variables.
-        auto node = resolve_unspecified_scope();
+        node = resolve_unspecified_scope();
         assert(node && "Should always resolve some scope");
         set_in_node(node, key, std::move(val), flags);
         result.global_modified = (node == globals_);
@@ -1236,6 +1279,13 @@ mod_result_t env_stack_impl_t::remove(const wcstring &key, int mode) {
             result.global_modified = true;
         } else if (query.local) {
             result.status = remove_from_chain(locals_, key) ? ENV_OK : ENV_NOT_FOUND;
+        } else if (query.function) {
+            auto node = locals_;
+            while (node->next) {
+                node = node->next;
+                if (node->new_scope) break;
+            }
+            result.status = remove_from_chain(node, key) ? ENV_OK : ENV_NOT_FOUND;
         } else {
             DIE("Unknown scope");
         }
@@ -1251,23 +1301,25 @@ mod_result_t env_stack_impl_t::remove(const wcstring &key, int mode) {
     return result;
 }
 
-bool env_stack_t::universal_barrier() {
-    // Only perform universal barriers for the principal env stack.
-    // This means that changes from other fish processes will only be visible when the "main thread
-    // runs."
-    if (!is_principal()) return false;
-
-    ASSERT_IS_MAIN_THREAD();
-    if (s_uvar_scope_is_global) return false;
+std::vector<event_t> env_stack_t::universal_sync(bool always) {
+    if (s_uvar_scope_is_global) return {};
+    if (!always && !s_uvars_locally_modified) return {};
+    s_uvars_locally_modified = false;
 
     callback_data_list_t callbacks;
     bool changed = uvars()->sync(callbacks);
     if (changed) {
         universal_notifier_t::default_notifier().post_notification();
     }
-
-    env_universal_callbacks(this, callbacks);
-    return changed || !callbacks.empty();
+    // React internally to changes to special variables like LANG, and populate on-variable events.
+    std::vector<event_t> result;
+    for (const callback_data_t &cb : callbacks) {
+        env_dispatch_var_change(cb.key, *this);
+        event_t evt =
+            cb.is_erase() ? event_t::variable_erase(cb.key) : event_t::variable_set(cb.key);
+        result.push_back(std::move(evt));
+    }
+    return result;
 }
 
 statuses_t env_stack_t::get_last_statuses() const {
@@ -1305,10 +1357,11 @@ maybe_t<env_var_t> env_stack_t::get(const wcstring &key, env_mode_flags_t mode) 
     return acquire_impl()->get(key, mode);
 }
 
-wcstring_list_t env_stack_t::get_names(int flags) const { return acquire_impl()->get_names(flags); }
+wcstring_list_t env_stack_t::get_names(env_mode_flags_t flags) const {
+    return acquire_impl()->get_names(flags);
+}
 
-int env_stack_t::set(const wcstring &key, env_mode_flags_t mode, wcstring_list_t vals,
-                     std::vector<event_t> *out_events) {
+int env_stack_t::set(const wcstring &key, env_mode_flags_t mode, wcstring_list_t vals) {
     // Historical behavior.
     if (vals.size() == 1 && (key == L"PWD" || key == L"HOME")) {
         path_make_canonical(vals.front());
@@ -1330,42 +1383,34 @@ int env_stack_t::set(const wcstring &key, env_mode_flags_t mode, wcstring_list_t
         if (ret.global_modified || is_principal()) {
             env_dispatch_var_change(key, *this);
         }
-        if (out_events) {
-            out_events->push_back(event_t::variable(key, {L"VARIABLE", L"SET", key}));
-        }
     }
-    // If the principal stack modified universal variables, then post a barrier.
-    if (ret.uvar_modified && is_principal()) {
-        universal_barrier();
+    // Mark if we modified a uvar.
+    if (ret.uvar_modified) {
+        s_uvars_locally_modified = true;
     }
     return ret.status;
 }
 
-int env_stack_t::set_one(const wcstring &key, env_mode_flags_t mode, wcstring val,
-                         std::vector<event_t> *out_events) {
+int env_stack_t::set_one(const wcstring &key, env_mode_flags_t mode, wcstring val) {
     wcstring_list_t vals;
     vals.push_back(std::move(val));
-    return set(key, mode, std::move(vals), out_events);
+    return set(key, mode, std::move(vals));
 }
 
-int env_stack_t::set_empty(const wcstring &key, env_mode_flags_t mode,
-                           std::vector<event_t> *out_events) {
-    return set(key, mode, {}, out_events);
+int env_stack_t::set_empty(const wcstring &key, env_mode_flags_t mode) {
+    return set(key, mode, {});
 }
 
-int env_stack_t::remove(const wcstring &key, int mode, std::vector<event_t> *out_events) {
+int env_stack_t::remove(const wcstring &key, int mode) {
     mod_result_t ret = acquire_impl()->remove(key, mode);
     if (ret.status == ENV_OK) {
         if (ret.global_modified || is_principal()) {
             // Important to not hold the lock here.
             env_dispatch_var_change(key, *this);
         }
-        if (out_events) {
-            out_events->push_back(event_t::variable(key, {L"VARIABLE", L"ERASE", key}));
-        }
     }
-    if (ret.uvar_modified && is_principal()) {
-        universal_barrier();
+    if (ret.uvar_modified) {
+        s_uvars_locally_modified = true;
     }
     return ret.status;
 }

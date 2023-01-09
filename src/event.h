@@ -8,12 +8,15 @@
 
 #include <unistd.h>
 
-#include <map>
+#include <cstdint>
 #include <memory>
+#include <utility>
 #include <vector>
 
 #include "common.h"
-#include "io.h"
+#include "global_safety.h"
+
+struct io_streams_t;
 
 /// The process id that is used to match any process id.
 #define EVENT_ANY_PID 0
@@ -84,12 +87,20 @@ struct event_description_t {
 /// Represents a handler for an event.
 struct event_handler_t {
     /// Properties of the event to match.
-    event_description_t desc;
+    const event_description_t desc;
 
     /// Name of the function to invoke.
-    wcstring function_name{};
+    const wcstring function_name{};
 
-    explicit event_handler_t(event_type_t t) : desc(t) {}
+    /// A flag set when an event handler is removed from the global list.
+    /// Once set, this is never cleared.
+    relaxed_atomic_bool_t removed{false};
+
+    /// A flag set when an event handler is first fired.
+    relaxed_atomic_bool_t fired{false};
+
+    explicit event_handler_t(event_type_t t) : desc(std::move(t)) {}
+
     event_handler_t(event_description_t d, wcstring name)
         : desc(std::move(d)), function_name(std::move(name)) {}
 };
@@ -105,8 +116,10 @@ struct event_t {
 
     explicit event_t(event_type_t t) : desc(t) {}
 
-    /// Create an event_type_t::variable event.
-    static event_t variable(wcstring name, wcstring_list_t args);
+    /// Create an event_type_t::variable event with the args for erasing a variable.
+    static event_t variable_erase(wcstring name);
+    /// Create an event_type_t::variable event with the args for setting a variable.
+    static event_t variable_set(wcstring name);
 
     /// Create a PROCESS_EXIT event.
     static event_t process_exit(pid_t pid, int status);
@@ -150,7 +163,6 @@ void event_print(io_streams_t &streams, const wcstring &type_filter);
 wcstring event_get_desc(const parser_t &parser, const event_t &e);
 
 /// Fire a generic event with the specified name.
-void event_fire_generic(parser_t &parser, const wchar_t *name,
-                        const wcstring_list_t *args = nullptr);
+void event_fire_generic(parser_t &parser, wcstring name, wcstring_list_t args = {});
 
 #endif

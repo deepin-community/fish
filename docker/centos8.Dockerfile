@@ -1,4 +1,12 @@
 FROM centos:8
+LABEL org.opencontainers.image.source=https://github.com/fish-shell/fish-shell
+
+# See https://stackoverflow.com/questions/70963985/error-failed-to-download-metadata-for-repo-appstream-cannot-prepare-internal
+
+RUN cd /etc/yum.repos.d/ && \
+  sed -i 's/mirrorlist/#mirrorlist/g' /etc/yum.repos.d/CentOS-* && \
+  sed -i 's|#baseurl=http://mirror.centos.org|baseurl=http://vault.centos.org|g' /etc/yum.repos.d/CentOS-*
+
 
 # install powertools to get ninja-build
 RUN dnf -y install dnf-plugins-core \
@@ -13,7 +21,9 @@ RUN dnf -y install dnf-plugins-core \
     ninja-build \
     python3 \
     openssl \
-    sudo
+    pcre2-devel \
+    sudo \
+  && yum clean all
 
 RUN pip3 install pexpect
 

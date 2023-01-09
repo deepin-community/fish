@@ -4,20 +4,20 @@
 #include "event.h"
 
 #include <signal.h>
-#include <stddef.h>
 #include <unistd.h>
 
 #include <algorithm>
+#include <array>
 #include <atomic>
-#include <functional>
+#include <bitset>
 #include <memory>
 #include <string>
-#include <type_traits>
 
 #include "common.h"
 #include "fallback.h"  // IWYU pragma: keep
-#include "input_common.h"
+#include "flog.h"
 #include "io.h"
+#include "maybe.h"
 #include "parser.h"
 #include "proc.h"
 #include "signal.h"
@@ -25,6 +25,7 @@
 #include "wcstringutil.h"
 #include "wutil.h"  // IWYU pragma: keep
 
+namespace {
 class pending_signals_t {
     static constexpr size_t SIGNAL_COUNT = NSIG;
 
@@ -32,7 +33,7 @@ class pending_signals_t {
     std::atomic<uint32_t> counter_{0};
 
     /// List of pending signals.
-    std::array<std::atomic<bool>, SIGNAL_COUNT> received_{};
+    std::array<relaxed_atomic_bool_t, SIGNAL_COUNT> received_{};
 
     /// The last counter visible in acquire_pending().
     /// This is not accessed from a signal handler.
@@ -42,8 +43,8 @@ class pending_signals_t {
     pending_signals_t() = default;
 
     /// No copying.
-    pending_signals_t(const pending_signals_t &);
-    void operator=(const pending_signals_t &);
+    pending_signals_t(const pending_signals_t &) = delete;
+    pending_signals_t &operator=(const pending_signals_t &) = delete;
 
     /// Mark a signal as pending. This may be called from a signal handler.
     /// We expect only one signal handler to execute at once.
@@ -51,7 +52,7 @@ class pending_signals_t {
     void mark(int which) {
         if (which >= 0 && static_cast<size_t>(which) < received_.size()) {
             // Must mark our received first, then pending.
-            received_[which].store(true, std::memory_order_relaxed);
+            received_[which] = true;
             uint32_t count = counter_.load(std::memory_order_relaxed);
             counter_.store(1 + count, std::memory_order_release);
         }
@@ -67,70 +68,95 @@ class pending_signals_t {
             return {};
         }
 
-        // The signal count has changed. Store the new counter and fetch all the signals that are
-        // set.
+        // The signal count has changed. Store the new counter and fetch all set signals.
         *current = count;
         std::bitset<SIGNAL_COUNT> result{};
-        uint32_t bit = 0;
-        for (auto &signal : received_) {
-            bool val = signal.load(std::memory_order_relaxed);
-            if (val) {
-                result.set(bit);
-                signal.store(false, std::memory_order_relaxed);
+        for (size_t i = 0; i < NSIG; i++) {
+            if (received_[i]) {
+                result.set(i);
+                received_[i] = false;
             }
-            bit++;
         }
         return result;
     }
 };
+}  // namespace
 
 static pending_signals_t s_pending_signals;
 
 /// List of event handlers.
 static owning_lock<event_handler_list_t> s_event_handlers;
 
-/// Variables (one per signal) set when a signal is observed. This is inspected by a signal handler.
-static volatile sig_atomic_t s_observed_signals[NSIG] = {};
+/// Tracks the number of registered event handlers for each signal.
+/// This is inspected by a signal handler. We assume no values in here overflow.
+static std::array<relaxed_atomic_t<uint32_t>, NSIG> s_observed_signals;
 
-static void set_signal_observed(int sig, bool val) {
-    if (sig >= 0 &&
-        static_cast<size_t>(sig) < sizeof s_observed_signals / sizeof *s_observed_signals) {
-        s_observed_signals[sig] = val;
+static inline void inc_signal_observed(int sig) {
+    if (0 <= sig && sig < NSIG) {
+        s_observed_signals[sig]++;
     }
+}
+
+static inline void dec_signal_observed(int sig) {
+    if (0 <= sig && sig < NSIG) {
+        s_observed_signals[sig]--;
+    }
+}
+
+bool event_is_signal_observed(int sig) {
+    // We are in a signal handler!
+    uint32_t count = 0;
+    if (0 <= sig && sig < NSIG) {
+        count = s_observed_signals[sig];
+    }
+    return count > 0;
+}
+
+/// \return true if a handler is "one shot": it fires at most once.
+static bool handler_is_one_shot(const event_handler_t &handler) {
+    switch (handler.desc.type) {
+        case event_type_t::process_exit:
+            return handler.desc.param1.pid != EVENT_ANY_PID;
+        case event_type_t::job_exit:
+            return handler.desc.param1.jobspec.pid != EVENT_ANY_PID;
+        case event_type_t::caller_exit:
+            return true;
+        case event_type_t::signal:
+        case event_type_t::variable:
+        case event_type_t::generic:
+        case event_type_t::any:
+            return false;
+    }
+    DIE("Unreachable");
 }
 
 /// Tests if one event instance matches the definition of an event class.
 /// In case of a match, \p only_once indicates that the event cannot match again by nature.
-static bool handler_matches(const event_handler_t &classv, const event_t &instance,
-                            bool &only_once) {
-    only_once = false;
-    if (classv.desc.type == event_type_t::any) return true;
-    if (classv.desc.type != instance.desc.type) return false;
+static bool handler_matches(const event_handler_t &handler, const event_t &instance) {
+    if (handler.desc.type == event_type_t::any) return true;
+    if (handler.desc.type != instance.desc.type) return false;
 
-    switch (classv.desc.type) {
+    switch (handler.desc.type) {
         case event_type_t::signal: {
-            return classv.desc.param1.signal == instance.desc.param1.signal;
+            return handler.desc.param1.signal == instance.desc.param1.signal;
         }
         case event_type_t::variable: {
-            return instance.desc.str_param1 == classv.desc.str_param1;
+            return instance.desc.str_param1 == handler.desc.str_param1;
         }
         case event_type_t::process_exit: {
-            if (classv.desc.param1.pid == EVENT_ANY_PID) return true;
-            only_once = true;
-            return classv.desc.param1.pid == instance.desc.param1.pid;
+            if (handler.desc.param1.pid == EVENT_ANY_PID) return true;
+            return handler.desc.param1.pid == instance.desc.param1.pid;
         }
         case event_type_t::job_exit: {
-            const auto &jobspec = classv.desc.param1.jobspec;
+            const auto &jobspec = handler.desc.param1.jobspec;
             if (jobspec.pid == EVENT_ANY_PID) return true;
-            only_once = true;
             return jobspec.internal_job_id == instance.desc.param1.jobspec.internal_job_id;
         }
         case event_type_t::caller_exit: {
-            only_once = true;
-            return classv.desc.param1.caller_id == instance.desc.param1.caller_id;
+            return handler.desc.param1.caller_id == instance.desc.param1.caller_id;
         }
         case event_type_t::generic: {
-            return classv.desc.str_param1 == instance.desc.str_param1;
+            return handler.desc.str_param1 == instance.desc.str_param1;
         }
         case event_type_t::any:
         default: {
@@ -141,7 +167,7 @@ static bool handler_matches(const event_handler_t &classv, const event_t &instan
 }
 
 /// Test if specified event is blocked.
-static int event_is_blocked(parser_t &parser, const event_t &e) {
+static bool event_is_blocked(parser_t &parser, const event_t &e) {
     (void)e;
     const block_t *block;
     size_t idx = 0;
@@ -195,20 +221,35 @@ wcstring event_get_desc(const parser_t &parser, const event_t &evt) {
 void event_add_handler(std::shared_ptr<event_handler_t> eh) {
     if (eh->desc.type == event_type_t::signal) {
         signal_handle(eh->desc.param1.signal);
-        set_signal_observed(eh->desc.param1.signal, true);
+        inc_signal_observed(eh->desc.param1.signal);
     }
 
     s_event_handlers.acquire()->push_back(std::move(eh));
 }
 
-void event_remove_function_handlers(const wcstring &name) {
+// \remove handlers for which \p func returns true.
+// Simultaneously update our signal_observed array.
+template <typename T>
+static void remove_handlers_if(const T &func) {
     auto handlers = s_event_handlers.acquire();
-    auto begin = handlers->begin(), end = handlers->end();
-    handlers->erase(std::remove_if(begin, end,
-                                   [&](const shared_ptr<event_handler_t> &eh) {
-                                       return eh->function_name == name;
-                                   }),
-                    end);
+    auto iter = handlers->begin();
+    while (iter != handlers->end()) {
+        event_handler_t *handler = iter->get();
+        if (func(*handler)) {
+            handler->removed = true;
+            if (handler->desc.type == event_type_t::signal) {
+                dec_signal_observed(handler->desc.param1.signal);
+            }
+            iter = handlers->erase(iter);
+        } else {
+            ++iter;
+        }
+    }
+}
+
+void event_remove_function_handlers(const wcstring &name) {
+    remove_handlers_if(
+        [&](const event_handler_t &handler) { return handler.function_name == name; });
 }
 
 event_handler_list_t event_get_function_handlers(const wcstring &name) {
@@ -218,16 +259,6 @@ event_handler_list_t event_get_function_handlers(const wcstring &name) {
         if (eh->function_name == name) {
             result.push_back(eh);
         }
-    }
-    return result;
-}
-
-bool event_is_signal_observed(int sig) {
-    // We are in a signal handler! Don't allocate memory, etc.
-    bool result = false;
-    if (sig >= 0 && static_cast<unsigned long>(sig) <
-                        sizeof(s_observed_signals) / sizeof(*s_observed_signals)) {
-        result = s_observed_signals[sig];
     }
     return result;
 }
@@ -244,62 +275,28 @@ static void event_fire_internal(parser_t &parser, const event_t &event) {
     scoped_push<bool> suppress_trace{&ld.suppress_fish_trace, true};
 
     // Capture the event handlers that match this event.
-    struct firing_handler_t {
-        std::shared_ptr<event_handler_t> handler;
-        bool delete_after_call;
-    };
-    std::vector<firing_handler_t> fire;
+    std::vector<std::shared_ptr<event_handler_t>> fire;
     {
-        for (const auto &handler : *s_event_handlers.acquire()) {
-            // Check if this event is a match.
-            bool only_once = false;
-            if (!handler_matches(*handler, event, only_once)) {
-                continue;
+        auto event_handlers = s_event_handlers.acquire();
+        for (const auto &handler : *event_handlers) {
+            if (handler_matches(*handler, event)) {
+                fire.push_back(handler);
             }
-
-            // If the nature of the event means it can't be fired more than once, deregister the
-            // event. This also works around a bug where jobs run without job control (no separate
-            // pgrp) cause handlers to run for each subsequent job started without job control
-            // (#7721). We can't erase it here because we check if the event is still extant before
-            // actually calling it below, so we instead push it along with its "delete after
-            // calling" value.
-            fire.push_back(firing_handler_t{handler, only_once});
         }
     }
 
     // Iterate over our list of matching events. Fire the ones that are still present.
-    for (const auto &firing_event : fire) {
-        auto &handler = firing_event.handler;
-        // Only fire if this event is still present.
-        // TODO: this is kind of crazy. We want to support removing (and thereby suppressing) an
-        // event handler from another, but we also don't want to hold the lock across callouts. How
-        // can we make this less silly?
-        {
-            auto event_handlers = s_event_handlers.acquire();
-            if (!contains(*event_handlers, handler)) {
-                continue;
-            }
-
-            // Delete the event before firing it so we don't have to lock and unlock the event
-            // handlers list when handing control off to the handler.
-            if (firing_event.delete_after_call) {
-                FLOGF(event, L"Pruning handler '%ls' before firing", event.desc.str_param1.c_str());
-                for (auto event_handler = event_handlers->begin();
-                     event_handler != event_handlers->end(); ++event_handler) {
-                    if (event_handler->get() == firing_event.handler.get()) {
-                        event_handlers->erase(event_handler);
-                        break;
-                    }
-                }
-            }
-        }
+    bool fired_one_shot = false;
+    for (const auto &handler : fire) {
+        // A previous handlers may have erased this one.
+        if (handler->removed) continue;
 
         // Construct a buffer to evaluate, starting with the function name and then all the
         // arguments.
         wcstring buffer = handler->function_name;
         for (const wcstring &arg : event.arguments) {
             buffer.push_back(L' ');
-            buffer.append(escape_string(arg, ESCAPE_ALL));
+            buffer.append(escape_string(arg));
         }
 
         // Event handlers are not part of the main flow of code, so they are marked as
@@ -307,11 +304,22 @@ static void event_fire_internal(parser_t &parser, const event_t &event) {
         scoped_push<bool> interactive{&ld.is_interactive, false};
         auto prev_statuses = parser.get_last_statuses();
 
-        FLOGF(event, L"Firing event '%ls'", event.desc.str_param1.c_str());
+        FLOGF(event, L"Firing event '%ls' to handler '%ls'", event.desc.str_param1.c_str(),
+              handler->function_name.c_str());
         block_t *b = parser.push_block(block_t::event_block(event));
         parser.eval(buffer, io_chain_t());
         parser.pop_block(b);
         parser.set_last_statuses(std::move(prev_statuses));
+
+        handler->fired = true;
+        fired_one_shot |= handler_is_one_shot(*handler);
+    }
+
+    // Remove any fired one-shot handlers.
+    if (fired_one_shot) {
+        remove_handlers_if([](const event_handler_t &handler) {
+            return handler.fired && handler_is_one_shot(handler);
+        });
     }
 }
 
@@ -480,12 +488,10 @@ void event_print(io_streams_t &streams, const wcstring &type_filter) {
     }
 }
 
-void event_fire_generic(parser_t &parser, const wchar_t *name, const wcstring_list_t *args) {
-    assert(name && "Null name");
-
+void event_fire_generic(parser_t &parser, wcstring name, wcstring_list_t args) {
     event_t ev(event_type_t::generic);
-    ev.desc.str_param1 = name;
-    if (args) ev.arguments = *args;
+    ev.desc.str_param1 = std::move(name);
+    ev.arguments = std::move(args);
     event_fire(parser, ev);
 }
 
@@ -508,10 +514,18 @@ event_description_t event_description_t::generic(wcstring str) {
 }
 
 // static
-event_t event_t::variable(wcstring name, wcstring_list_t args) {
+event_t event_t::variable_erase(wcstring name) {
     event_t evt{event_type_t::variable};
+    evt.arguments = {L"VARIABLE", L"ERASE", name};
     evt.desc.str_param1 = std::move(name);
-    evt.arguments = std::move(args);
+    return evt;
+}
+
+// static
+event_t event_t::variable_set(wcstring name) {
+    event_t evt{event_type_t::variable};
+    evt.arguments = {L"VARIABLE", L"SET", name};
+    evt.desc.str_param1 = std::move(name);
     return evt;
 }
 
@@ -527,20 +541,20 @@ event_t event_t::process_exit(pid_t pid, int status) {
 }
 
 // static
-event_t event_t::job_exit(pid_t pid, internal_job_id_t jid) {
+event_t event_t::job_exit(pid_t pgid, internal_job_id_t jid) {
     event_t evt{event_type_t::job_exit};
-    evt.desc.param1.jobspec = {pid, jid};
+    evt.desc.param1.jobspec = {pgid, jid};
     evt.arguments.reserve(3);
     evt.arguments.push_back(L"JOB_EXIT");
-    evt.arguments.push_back(to_string(pid));
+    evt.arguments.push_back(to_string(pgid));
     evt.arguments.push_back(L"0");  // historical
     return evt;
 }
 
 // static
-event_t event_t::caller_exit(uint64_t caller_id, int job_id) {
+event_t event_t::caller_exit(uint64_t internal_job_id, int job_id) {
     event_t evt{event_type_t::caller_exit};
-    evt.desc.param1.caller_id = caller_id;
+    evt.desc.param1.caller_id = internal_job_id;
     evt.arguments.reserve(3);
     evt.arguments.push_back(L"JOB_EXIT");
     evt.arguments.push_back(to_string(job_id));

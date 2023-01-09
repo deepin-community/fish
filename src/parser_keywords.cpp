@@ -3,6 +3,8 @@
 
 #include "parser_keywords.h"
 
+#include <cstddef>
+#include <iterator>
 #include <string>
 #include <unordered_set>
 
@@ -22,9 +24,10 @@ static const wcstring subcommand_keywords[]{L"command", L"builtin", L"while", L"
 static const string_set_t block_keywords = {L"for",      L"while",  L"if",
                                             L"function", L"switch", L"begin"};
 
+// Don't forget to add any new reserved keywords to the documentation
 static const wcstring reserved_keywords[] = {
-    L"end",  L"case",   L"else", L"return", L"continue", L"break", L"argparse",
-    L"read", L"string", L"set",  L"status", L"test",     L"["};
+    L"end",    L"case", L"else",   L"return", L"continue", L"break", L"argparse", L"read",
+    L"string", L"set",  L"status", L"test",   L"[",        L"_",     L"eval"};
 
 // The lists above are purposely implemented separately from the logic below, so that future
 // maintainers may assume the contents of the list based off their names, and not off what the
@@ -40,10 +43,6 @@ static size_t list_max_length(const string_set_t &list) {
     return result;
 }
 
-bool parser_keywords_skip_arguments(const wcstring &cmd) {
-    return cmd == skip_keywords[0] || cmd == skip_keywords[1];
-}
-
 bool parser_keywords_is_subcommand(const wcstring &cmd) {
     const static string_set_t search_list = ([] {
         string_set_t results;
@@ -57,14 +56,6 @@ bool parser_keywords_is_subcommand(const wcstring &cmd) {
 
     // Everything above is executed only at startup, this is the actual optimized search routine:
     return cmd.length() <= max_len && search_list.find(cmd) != not_found;
-}
-
-bool parser_keywords_is_block(const wcstring &word) {
-    const static auto max_len = list_max_length(block_keywords);
-    const static auto not_found = block_keywords.end();
-
-    // Everything above is executed only at startup, this is the actual optimized search routine:
-    return word.length() <= max_len && block_keywords.find(word) != not_found;
 }
 
 bool parser_keywords_is_reserved(const wcstring &word) {

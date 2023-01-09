@@ -7,7 +7,7 @@ echo $status
 # CHECK: 123
 # CHECKERR: {{.*}} The expanded command was empty.
 # CHECKERR: $empty_var
-# CHECKERR: ^
+# CHECKERR: ^~~~~~~~~^
 
 # Failed expansions
 echo "$abc["
@@ -15,7 +15,7 @@ echo $status
 # CHECK: 121
 # CHECKERR: {{.*}} Invalid index value
 # CHECKERR: echo "$abc["
-# CHECKERR:             ^
+# CHECKERR:            ^
 
 # Failed wildcards
 echo *gibberishgibberishgibberish*
@@ -23,4 +23,4 @@ echo $status
 # CHECK: 124
 # CHECKERR: {{.*}} No matches for wildcard '*gibberishgibberishgibberish*'. {{.*}}
 # CHECKERR: echo *gibberishgibberishgibberish*
-# CHECKERR:      ^
+# CHECKERR:      ^~~~~~~~~~~~~~~~~~~~~~~~~~~~^

@@ -1,4 +1,3 @@
-
 complete -xc man -a "(__fish_complete_man)"
 
 complete -xc man -n 'not __fish_complete_man' -a 1 -d 'Program section'
@@ -34,3 +33,12 @@ complete -xc man -s p -d Preprocessors
 complete -c man -s t -d "Format for printing"
 complete -c man -s w -l path -d "Only print locations"
 complete -c man -s W -d "Only print locations"
+
+complete -c man -n 'string match -q -- "*/*" (commandline -t | string collect)' --force-files
+if command -q man
+    # We have a conditionally-defined man function,
+    # so we need to check for existence here.
+    if echo | MANPAGER=cat command man -l - &>/dev/null
+        complete -c man -s l -l local-file -d "Local file" -r
+    end
+end

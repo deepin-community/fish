@@ -10,7 +10,7 @@ set -l npm_install "npm install --global"
 function __fish_npm_needs_command
     set -l cmd (commandline -opc)
 
-    if [ (count $cmd) -eq 1 ]
+    if test (count $cmd) -eq 1
         return 0
     end
 
@@ -20,8 +20,8 @@ end
 function __fish_npm_using_command
     set -l cmd (commandline -opc)
 
-    if [ (count $cmd) -gt 1 ]
-        if [ $argv[1] = $cmd[2] ]
+    if test (count $cmd) -gt 1
+        if test $argv[1] = $cmd[2]
             return 0
         end
     end
@@ -58,7 +58,7 @@ function __fish_complete_npm -d "Complete the commandline using npm's 'completio
         set -lx COMP_POINT (commandline -C)
         # If the cursor is after the last word, the empty token will disappear in the expansion
         # Readd it
-        if test (commandline -ct) = ""
+        if test -z (commandline -ct)
             set COMP_CWORD (math $COMP_CWORD + 1)
             set COMP_LINE $COMP_LINE ""
         end
@@ -204,4 +204,4 @@ complete -f -c npm -n __fish_npm_needs_command -a unpublish -d 'Remove a package
 complete -f -c npm -n __fish_npm_needs_command -a unstar -d 'Remove star from a package'
 complete -f -c npm -n __fish_npm_needs_command -a version -d 'Bump a package version'
 complete -f -c npm -n __fish_npm_needs_command -a whoami -d 'Display npm username'
-complete -f -c npm -n '__fish_seen_subcommand_from install; and not __fish_is_switch' -a "(__yarn_filtered_list_packages \"$npm_install\")"
+complete -f -c npm -n '__fish_seen_subcommand_from add i install; and not __fish_is_switch' -a "(__yarn_filtered_list_packages \"$npm_install\")"

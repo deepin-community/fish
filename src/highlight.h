@@ -3,14 +3,19 @@
 #define FISH_HIGHLIGHT_H
 
 #include <stddef.h>
-#include <stdint.h>
 
+#include <cstddef>
+#include <cstdint>
+#include <memory>
+#include <string>
 #include <unordered_map>
 #include <vector>
 
 #include "color.h"
-#include "common.h"
-#include "env.h"
+#include "flog.h"
+#include "maybe.h"
+
+class environment_t;
 
 /// Describes the role of a span of text.
 enum class highlight_role_t : uint8_t {
@@ -20,6 +25,7 @@ enum class highlight_role_t : uint8_t {
     keyword,
     statement_terminator,  // process separator
     param,                 // command parameter (argument)
+    option,                // argument starting with "-", up to a "--"
     comment,               // comment
     search_match,          // search match
     operat,                // operator
@@ -75,8 +81,9 @@ namespace std {
 template <>
 struct hash<highlight_spec_t> {
     std::size_t operator()(const highlight_spec_t &v) const {
-        size_t vals[4] = {static_cast<uint32_t>(v.foreground), static_cast<uint32_t>(v.background),
-                          v.valid_path, v.force_underline};
+        const size_t vals[4] = {static_cast<uint32_t>(v.foreground),
+                                static_cast<uint32_t>(v.background), v.valid_path,
+                                v.force_underline};
         return (vals[0] << 0) + (vals[1] << 6) + (vals[2] << 12) + (vals[3] << 18);
     }
 };
@@ -99,8 +106,10 @@ std::string colorize(const wcstring &text, const std::vector<highlight_spec_t> &
 /// \param ctx The variables and cancellation check for this operation.
 /// \param io_ok If set, allow IO which may block. This means that e.g. invalid commands may be
 /// detected.
+/// \param cursor The position of the cursor in the commandline.
 void highlight_shell(const wcstring &buffstr, std::vector<highlight_spec_t> &color,
-                     const operation_context_t &ctx, bool io_ok = false);
+                     const operation_context_t &ctx, bool io_ok = false,
+                     maybe_t<size_t> cursor = {});
 
 /// highlight_color_resolver_t resolves highlight specs (like "a command") to actual RGB colors.
 /// It maintains a cache with no invalidation mechanism. The lifetime of these should typically be
@@ -138,7 +147,8 @@ enum {
     PATH_FOR_CD = 1 << 2,
 };
 typedef unsigned int path_flags_t;
-bool is_potential_path(const wcstring &potential_path_fragment, const wcstring_list_t &directories,
-                       const operation_context_t &ctx, path_flags_t flags);
+bool is_potential_path(const wcstring &potential_path_fragment, bool at_cursor,
+                       const wcstring_list_t &directories, const operation_context_t &ctx,
+                       path_flags_t flags);
 
 #endif

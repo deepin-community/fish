@@ -2,33 +2,25 @@
 
 #include "iothread.h"
 
-#include <limits.h>
 #include <pthread.h>
 #include <signal.h>
 #include <stdio.h>
-#include <string.h>
-#include <sys/select.h>
-#include <sys/time.h>
-#include <sys/types.h>
-#include <unistd.h>
 
 #include <atomic>
-#include <condition_variable>
+#include <chrono>
+#include <condition_variable>  // IWYU pragma: keep
 #include <functional>
-#include <future>
+#include <mutex>
 #include <queue>
-#include <thread>
+#include <vector>
 
 #include "common.h"
+#include "fallback.h"
 #include "fds.h"
 #include "flog.h"
-#include "global_safety.h"
-#include "wutil.h"
+#include "maybe.h"
 
-// We just define a thread limit of 1024.
-// On all systems I've seen the limit is higher,
-// but on some (like linux with glibc) the setting for _POSIX_THREAD_THREADS_MAX is 64,
-// which is too low, even tho the system can handle more than 64 threads.
+/// We just define a thread limit of 1024.
 #define IO_MAX_THREADS 1024
 
 // iothread has a thread pool. Sometimes there's no work to do, but extant threads wait around for a
@@ -44,19 +36,13 @@
 
 using void_function_t = std::function<void()>;
 
-struct work_request_t {
+namespace {
+struct work_request_t : noncopyable_t {
     void_function_t handler;
-
     explicit work_request_t(void_function_t &&f) : handler(std::move(f)) {}
-
-    // Move-only
-    work_request_t &operator=(const work_request_t &) = delete;
-    work_request_t &operator=(work_request_t &&) = default;
-    work_request_t(const work_request_t &) = delete;
-    work_request_t(work_request_t &&) = default;
 };
 
-struct thread_pool_t {
+struct thread_pool_t : noncopyable_t, nonmovable_t {
     struct data_t {
         /// The queue of outstanding, unclaimed requests.
         std::queue<work_request_t> request_queue{};
@@ -66,9 +52,6 @@ struct thread_pool_t {
 
         /// The number of threads which are waiting for more work.
         size_t waiting_threads{0};
-
-        /// A flag indicating we should not process new requests.
-        bool drain{false};
     };
 
     /// Data which needs to be atomically accessed.
@@ -108,12 +91,6 @@ struct thread_pool_t {
 
     /// Attempt to spawn a new pthread.
     bool spawn() const;
-
-    /// No copying or moving.
-    thread_pool_t(const thread_pool_t &) = delete;
-    thread_pool_t(thread_pool_t &&) = delete;
-    void operator=(const thread_pool_t &) = delete;
-    void operator=(thread_pool_t &&) = delete;
 };
 
 /// The thread pool for "iothreads" which are used to lift I/O off of the main thread.
@@ -122,36 +99,13 @@ struct thread_pool_t {
 static thread_pool_t &s_io_thread_pool = *(new thread_pool_t(1, IO_MAX_THREADS));
 
 /// A queue of "things to do on the main thread."
-struct main_thread_queue_t {
-    // Functions to invoke as the completion callback from debounce.
-    std::vector<void_function_t> completions;
-
-    // iothread_perform_on_main requests.
-    // Note this contains pointers to structs that are stack-allocated on the requesting thread.
-    std::vector<void_function_t> requests;
-
-    /// Transfer ownership of ourselves to a new queue and return it.
-    /// 'this' is left empty.
-    main_thread_queue_t take() {
-        main_thread_queue_t result;
-        std::swap(result.completions, this->completions);
-        std::swap(result.requests, this->requests);
-        return result;
-    }
-
-    // Moving is allowed, but not copying.
-    main_thread_queue_t() = default;
-    main_thread_queue_t(main_thread_queue_t &&) = default;
-    main_thread_queue_t &operator=(main_thread_queue_t &&) = default;
-    main_thread_queue_t(const main_thread_queue_t &) = delete;
-    void operator=(const main_thread_queue_t &) = delete;
-};
+using main_thread_queue_t = std::vector<void_function_t>;
 static owning_lock<main_thread_queue_t> s_main_thread_queue;
 
 /// \return the signaller for completions and main thread requests.
 static fd_event_signaller_t &get_notify_signaller() {
     // Leaked to avoid shutdown dtors.
-    static fd_event_signaller_t *s_signaller = new fd_event_signaller_t();
+    static auto s_signaller = new fd_event_signaller_t();
     return *s_signaller;
 }
 
@@ -185,7 +139,7 @@ maybe_t<work_request_t> thread_pool_t::dequeue_work_or_commit_to_exit() {
     return result;
 }
 
-static void *this_thread() { return (void *)(intptr_t)pthread_self(); }
+static intptr_t this_thread() { return (intptr_t)pthread_self(); }
 
 void *thread_pool_t::run() {
     while (auto req = dequeue_work_or_commit_to_exit()) {
@@ -220,9 +174,7 @@ int thread_pool_t::perform(void_function_t &&func, bool cant_wait) {
         auto data = pool.req_data.acquire();
         data->request_queue.push(std::move(req));
         FLOGF(iothread, L"enqueuing work item (count is %lu)", data->request_queue.size());
-        if (data->drain) {
-            // Do nothing here.
-        } else if (data->waiting_threads >= data->request_queue.size()) {
+        if (data->waiting_threads >= data->request_queue.size()) {
             // There's enough waiting threads, wake one up.
             wakeup_thread = true;
         } else if (cant_wait || data->total_threads < pool.max_threads) {
@@ -235,7 +187,7 @@ int thread_pool_t::perform(void_function_t &&func, bool cant_wait) {
 
     // Kick off the thread if we decided to do so.
     if (wakeup_thread) {
-        FLOGF(iothread, L"notifying a thread", this_thread());
+        FLOGF(iothread, L"notifying thread: %p", this_thread());
         pool.queue_cond.notify_one();
     }
     if (spawn_new_thread) {
@@ -251,9 +203,9 @@ int thread_pool_t::perform(void_function_t &&func, bool cant_wait) {
     }
     return local_thread_count;
 }
+}  // namespace
 
 void iothread_perform_impl(void_function_t &&func, bool cant_wait) {
-    ASSERT_IS_MAIN_THREAD();
     ASSERT_IS_NOT_FORKED_CHILD();
     s_io_thread_pool.perform(std::move(func), cant_wait);
 }
@@ -261,51 +213,17 @@ void iothread_perform_impl(void_function_t &&func, bool cant_wait) {
 int iothread_port() { return get_notify_signaller().read_fd(); }
 
 void iothread_service_main_with_timeout(uint64_t timeout_usec) {
-    if (select_wrapper_t::is_fd_readable(iothread_port(), timeout_usec)) {
+    if (fd_readable_set_t::is_fd_readable(iothread_port(), timeout_usec)) {
         iothread_service_main();
     }
 }
 
-/// At the moment, this function is only used in the test suite and in a
-/// drain-all-threads-before-fork compatibility mode that no architecture requires, so it's OK that
-/// it's terrible.
-int iothread_drain_all() {
-    ASSERT_IS_MAIN_THREAD();
-    ASSERT_IS_NOT_FORKED_CHILD();
-
-    int thread_count;
-    auto &pool = s_io_thread_pool;
-    // Set the drain flag.
-    {
-        auto data = pool.req_data.acquire();
-        assert(!data->drain && "Should not be draining already");
-        data->drain = true;
-        thread_count = data->total_threads;
-    }
-
-    // Wake everyone up.
-    pool.queue_cond.notify_all();
-
-    double now = timef();
-
+/// At the moment, this function is only used in the test suite.
+void iothread_drain_all() {
     // Nasty polling via select().
-    while (pool.req_data.acquire()->total_threads > 0) {
+    while (s_io_thread_pool.req_data.acquire()->total_threads > 0) {
         iothread_service_main_with_timeout(1000);
     }
-
-    // Clear the drain flag.
-    // Even though we released the lock, nobody should have added a new thread while the drain flag
-    // is set.
-    {
-        auto data = pool.req_data.acquire();
-        assert(data->total_threads == 0 && "Should be no threads");
-        assert(data->drain && "Should be draining");
-        data->drain = false;
-    }
-
-    double after = timef();
-    FLOGF(iothread, "Drained %d thread(s) in %.02f msec", thread_count, 1000 * (after - now));
-    return thread_count;
 }
 
 // Service the main thread queue, by invoking any functions enqueued for the main thread.
@@ -317,39 +235,14 @@ void iothread_service_main() {
 
     // Move the queue to a local variable.
     // Note the s_main_thread_queue lock is not held after this.
-    main_thread_queue_t queue = s_main_thread_queue.acquire()->take();
+    main_thread_queue_t queue;
+    s_main_thread_queue.acquire()->swap(queue);
 
     // Perform each completion in order.
-    for (const void_function_t &func : queue.completions) {
+    for (const void_function_t &func : queue) {
         // ensure we don't invoke empty functions, that raises an exception
         if (func) func();
     }
-
-    // Perform each main thread request.
-    for (const void_function_t &func : queue.requests) {
-        if (func) func();
-    }
-}
-
-void iothread_perform_on_main(const void_function_t &func) {
-    if (is_main_thread()) {
-        func();
-        return;
-    }
-
-    // Make a new request. Note we are synchronous, so our closure can use references instead of
-    // copying.
-    std::promise<void> wait_until_done;
-    auto handler = [&] {
-        func();
-        wait_until_done.set_value();
-    };
-    // Append it. Ensure we don't hold the lock after.
-    s_main_thread_queue.acquire()->requests.push_back(std::move(handler));
-
-    // Tell the signaller and then wait until our future is set.
-    get_notify_signaller().post();
-    wait_until_done.get_future().wait();
 }
 
 bool make_detached_pthread(void *(*func)(void *), void *param) {
@@ -370,14 +263,25 @@ bool make_detached_pthread(void *(*func)(void *), void *param) {
     // Spawn a thread. If this fails, it means there's already a bunch of threads; it is very
     // unlikely that they are all on the verge of exiting, so one is likely to be ready to handle
     // extant requests. So we can ignore failure with some confidence.
-    pthread_t thread = 0;
-    int err = pthread_create(&thread, nullptr, func, param);
+    pthread_t thread;
+    pthread_attr_t thread_attr;
+    DIE_ON_FAILURE(pthread_attr_init(&thread_attr));
+
+    int err = pthread_attr_setdetachstate(&thread_attr, PTHREAD_CREATE_DETACHED);
     if (err == 0) {
-        // Success, return the thread.
-        FLOGF(iothread, "pthread %p spawned", (void *)(intptr_t)thread);
-        DIE_ON_FAILURE(pthread_detach(thread));
+        err = pthread_create(&thread, &thread_attr, func, param);
+        if (err == 0) {
+            FLOGF(iothread, "pthread %d spawned", thread);
+        } else {
+            perror("pthread_create");
+        }
+        int err2 = pthread_attr_destroy(&thread_attr);
+        if (err2 != 0) {
+            perror("pthread_attr_destroy");
+            err = err2;
+        }
     } else {
-        perror("pthread_create");
+        perror("pthread_attr_setdetachstate");
     }
     // Restore our sigmask.
     DIE_ON_FAILURE(pthread_sigmask(SIG_SETMASK, &saved_set, nullptr));
@@ -507,7 +411,7 @@ uint64_t debounce_t::perform(std::function<void()> handler) {
 
 // static
 void debounce_t::enqueue_main_thread_result(std::function<void()> func) {
-    s_main_thread_queue.acquire()->completions.push_back(std::move(func));
+    s_main_thread_queue.acquire()->push_back(std::move(func));
     get_notify_signaller().post();
 }
 

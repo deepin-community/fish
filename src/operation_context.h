@@ -1,6 +1,8 @@
 #ifndef FISH_OPERATION_CONTEXT_H
 #define FISH_OPERATION_CONTEXT_H
 
+#include <cstddef>
+#include <functional>
 #include <memory>
 
 #include "common.h"
@@ -38,7 +40,7 @@ class operation_context_t {
 
     /// The job group of the parental job.
     /// This is used only when expanding command substitutions. If this is set, any jobs created by
-    /// the command substitions should use this tree.
+    /// the command substitutions should use this tree.
     std::shared_ptr<job_group_t> job_group{};
 
     // A function which may be used to poll for cancellation.

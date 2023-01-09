@@ -40,6 +40,7 @@ echo \'{ hello , world }\'
 for phrase in {good\,,   beautiful ,morning}
     echo -n "$phrase "
 end | string trim
+echo
 for phrase in {goodbye\,,\ cruel\ ,world\n}
     echo -n $phrase
 end
@@ -222,6 +223,19 @@ expansion $foo[4..-2]
 set -l foo a
 expansion $foo[2..-1]
 #CHECK: 0
+expansion $foo[0]
+#CHECKERR: {{.*}}expansion.fish (line {{\d+}}): array indices start at 1, not 0.
+#CHECKERR: expansion $foo[0]
+#CHECKERR: ^
+# see https://github.com/fish-shell/fish-shell/issues/8213
+expansion $foo[1..0]
+#CHECKERR: {{.*}}expansion.fish (line {{\d+}}): array indices start at 1, not 0.
+#CHECKERR: expansion $foo[1..0]
+#CHECKERR: ^
+expansion $foo[-0]
+#CHECKERR: {{.*}}expansion.fish (line {{\d+}}): array indices start at 1, not 0.
+#CHECKERR: expansion $foo[-0]
+#CHECKERR: ^
 
 echo "$foo[d]"
 #CHECKERR: {{.*}}expansion.fish (line {{\d+}}): Invalid index value
@@ -299,21 +313,24 @@ echo "Back to normal variable: $testvar" (count $testvar)
 
 # Test fatal syntax errors
 $fish -c 'echo $,foo'
-#CHECKERR: fish: $, is not a valid variable in fish.
+#CHECKERR: fish: Expected a variable name after this $.
 #CHECKERR: echo $,foo
 #CHECKERR: ^
 $fish -c 'echo {'
 #CHECKERR: fish: Unexpected end of string, incomplete parameter expansion
 #CHECKERR: echo {
 #CHECKERR: ^
-#CHECKERR: 
 $fish -c 'echo {}}'
 #CHECKERR: fish: Unexpected '}' for unopened brace expansion
 #CHECKERR: echo {}}
 #CHECKERR: ^
-#CHECKERR: 
-$fish -c 'command (asd)'
-#CHECKERR: fish: Command substitutions not allowed
-#CHECKERR: command (asd)
-#CHECKERR: ^
+printf '<%s>\n' ($fish -c 'command (asd)' 2>&1)
+#CHECK: <fish: command substitutions not allowed here>
+#CHECK: <command (asd)>
+#CHECK: <        ^~~~^>
 true
+
+printf '<%s>\n' ($fish -c 'echo "$abc["' 2>&1)
+#CHECK: <fish: Invalid index value>
+#CHECK: <echo "$abc[">
+#CHECK: <           ^>

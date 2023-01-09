@@ -12,7 +12,7 @@ if test -r /etc/os-release
 end
 
 function __fish_default_command_not_found_handler
-    printf "fish: Unknown command: %s\n" (string escape -- $argv[1]) >&2
+    printf (_ "fish: Unknown command: %s\n") (string escape -- $argv[1]) >&2
 end
 
 # If an old handler already exists, defer to that.
@@ -32,7 +32,7 @@ else if contains -- suse $os || contains -- sles $os && type -q command-not-foun
     # Check for Fedora's handler
 else if test -f /usr/libexec/pk-command-not-found
     function fish_command_not_found
-        /usr/libexec/pk-command-not-found $argv[1]
+        /usr/libexec/pk-command-not-found $argv
     end
     # Check in /usr/lib, where Ubuntu places this command
 else if test -f /usr/lib/command-not-found
@@ -61,18 +61,18 @@ else if type -q pkgfile
             __fish_default_command_not_found_handler $argv[1]
         end
     end
-# pacman is too slow, see #7841.
-# else if type -q pacman
-#     function fish_command_not_found
-#         set -l paths $argv[1]
-#         # If we've not been given an absolute path, try $PATH as the starting point,
-#         # otherwise pacman will try *every path*, and e.g. bash-completion
-#         # isn't helpful.
-#         string match -q '/*' -- $argv[1]; or set paths $PATH/$argv[1]
-#         # Pacman only prints the path, so we still need to print the error.
-#         __fish_default_command_not_found_handler $argv[1]
-#         pacman -F $paths
-#     end
+    # pacman is too slow, see #7841.
+    # else if type -q pacman
+    #     function fish_command_not_found
+    #         set -l paths $argv[1]
+    #         # If we've not been given an absolute path, try $PATH as the starting point,
+    #         # otherwise pacman will try *every path*, and e.g. bash-completion
+    #         # isn't helpful.
+    #         string match -q '/*' -- $argv[1]; or set paths $PATH/$argv[1]
+    #         # Pacman only prints the path, so we still need to print the error.
+    #         __fish_default_command_not_found_handler $argv[1]
+    #         pacman -F $paths
+    #     end
 else
     # Use standard fish command not found handler otherwise
     function fish_command_not_found --on-event fish_command_not_found

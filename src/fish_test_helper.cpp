@@ -2,6 +2,7 @@
 // programs, allowing fish to test its behavior.
 
 #include <fcntl.h>
+#include <sys/wait.h>
 #include <unistd.h>
 
 #include <algorithm>
@@ -10,6 +11,31 @@
 #include <cstdlib>
 #include <cstring>
 #include <iterator>  // for std::begin/end
+
+static void abandon_tty() {
+    // The parent may get SIGSTOPed when it tries to call tcsetpgrp if the child has already done
+    // it. Prevent this by ignoring signals.
+    signal(SIGTTIN, SIG_IGN);
+    signal(SIGTTOU, SIG_IGN);
+    pid_t pid = fork();
+    if (pid < 0) {
+        perror("fork");
+        exit(EXIT_FAILURE);
+    }
+    // Both parent and child do the same thing.
+    pid_t child = pid ? pid : getpid();
+    if (setpgid(child, child)) {
+        perror("setpgid");
+        exit(EXIT_FAILURE);
+    }
+    // tcsetpgrp may fail in the parent if the child has already exited.
+    // This is the benign race.
+    (void)tcsetpgrp(STDIN_FILENO, child);
+    // Parent waits for child to exit.
+    if (pid > 0) {
+        waitpid(child, nullptr, 0);
+    }
+}
 
 static void become_foreground_then_print_stderr() {
     if (tcsetpgrp(STDOUT_FILENO, getpgrp()) < 0) {
@@ -113,9 +139,10 @@ static void print_blocked_signals() {
         exit(EXIT_FAILURE);
     }
     // There is no obviously portable way to get the maximum number of signals.
+    // POSIX says sigqueue(2) can be used with signo 0 to validate the pid and signo parameters,
+    // but it is missing from OpenBSD and returns ENOSYS (not implemented) under WSL.
     // Here we limit it to 32 because strsignal on OpenBSD returns "Unknown signal" for anything
-    // above.
-    // NetBSD taps out at 63, Linux at 64.
+    // above, while NetBSD taps out at 63, and Linux at 64.
     for (int sig = 1; sig < 33; sig++) {
         if (sigismember(&sigs, sig)) {
             print_signal(sig);
@@ -135,8 +162,8 @@ static void print_ignored_signals() {
 
 static void print_stop_cont() {
     signal(SIGTSTP, [](int) {
-        // C++ compilers are awful and this is the dance we need to do to silence the "Unused result" warning.
-        // No, casting to (void) does *not* work. Please leave this.
+        // C++ compilers are awful and this is the dance we need to do to silence the "Unused
+        // result" warning. No, casting to (void) does *not* work. Please leave this.
         auto __attribute__((unused)) _ = write(STDOUT_FILENO, "SIGTSTP\n", strlen("SIGTSTP\n"));
         kill(getpid(), SIGSTOP);
     });
@@ -156,6 +183,27 @@ static void sigkill_self() {
     abort();
 }
 
+static void sigint_self() {
+    kill(getpid(), SIGINT);
+    abort();
+}
+
+static void stdin_make_nonblocking() {
+    const int fd = STDIN_FILENO;
+    // Catch SIGCONT so pause() wakes us up.
+    signal(SIGCONT, [](int) {});
+
+    for (;;) {
+        int flags = fcntl(fd, F_GETFL, 0);
+        fprintf(stdout, "stdin was %sblocking\n", (flags & O_NONBLOCK) ? "non" : "");
+        if (fcntl(fd, F_SETFL, flags | O_NONBLOCK)) {
+            perror("fcntl");
+            exit(EXIT_FAILURE);
+        }
+        pause();
+    }
+}
+
 static void show_help();
 
 /// A thing that fish_test_helper can do.
@@ -171,6 +219,7 @@ struct fth_command_t {
 };
 
 static fth_command_t s_commands[] = {
+    {"abandon_tty", abandon_tty, "Create a new pgroup and transfer tty ownership to it"},
     {"become_foreground_then_print_stderr", become_foreground_then_print_stderr,
      "Claim the terminal (tcsetpgrp) and then print to stderr"},
     {"nohup_wait", nohup_wait, "Ignore SIGHUP and just wait"},
@@ -187,7 +236,10 @@ static fth_command_t s_commands[] = {
     {"print_ignored_signals", print_ignored_signals,
      "Print to stdout the name(s) of ignored signals"},
     {"print_stop_cont", print_stop_cont, "Print when we get SIGTSTP and SIGCONT, exiting on input"},
+    {"sigint_self", sigint_self, "Send SIGINT to self"},
     {"sigkill_self", sigkill_self, "Send SIGKILL to self"},
+    {"stdin_make_nonblocking", stdin_make_nonblocking,
+     "Print if stdin is blocking and then make it nonblocking"},
     {"help", show_help, "Print list of fish_test_helper commands"},
 };
 

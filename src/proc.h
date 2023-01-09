@@ -5,26 +5,30 @@
 #define FISH_PROC_H
 #include "config.h"  // IWYU pragma: keep
 
-#include <signal.h>
-#include <stddef.h>
 #include <sys/time.h>  // IWYU pragma: keep
 #include <sys/wait.h>  // IWYU pragma: keep
-#include <unistd.h>
 
+#include <atomic>
+#include <cstdint>
+#include <cstdlib>
 #include <deque>
 #include <memory>
+#include <string>
+#include <utility>
 #include <vector>
 
 #include "common.h"
-#include "event.h"
-#include "global_safety.h"
-#include "io.h"
+#include "job_group.h"
+#include "maybe.h"
 #include "parse_tree.h"
+#include "redirection.h"
 #include "topic_monitor.h"
 #include "wait_handle.h"
 
+struct statuses_t;
+
 /// Types of processes.
-enum class process_type_t {
+enum class process_type_t : uint8_t {
     /// A regular external command.
     external,
     /// A builtin command.
@@ -37,17 +41,23 @@ enum class process_type_t {
     exec,
 };
 
-enum class job_control_t {
+enum class job_control_t : uint8_t {
     all,
     interactive,
     none,
 };
 
+/// A number of clock ticks.
+using clock_ticks_t = uint64_t;
+
+/// \return clock ticks in seconds, or 0 on failure.
+/// This uses sysconf(_SC_CLK_TCK) to convert to seconds.
+double clock_ticks_to_seconds(clock_ticks_t ticks);
+
 namespace ast {
 struct statement_t;
 }
 
-class job_group_t;
 using job_group_ref_t = std::shared_ptr<job_group_t>;
 
 /// A proc_status_t is a value type that encapsulates logic around exited vs stopped vs signaled,
@@ -66,7 +76,12 @@ class proc_status_t {
     static constexpr int w_exitcode(int ret, int sig) {
 #ifdef W_EXITCODE
         return W_EXITCODE(ret, sig);
+#elif HAVE_WAITSTATUS_SIGNAL_RET
+        // It's encoded signal and then status
+        // The return status is in the lower byte.
+        return ((sig) << 8 | (ret));
 #else
+        // The status is encoded in the upper byte.
         return ((ret) << 8 | (sig));
 #endif
     }
@@ -79,6 +94,9 @@ class proc_status_t {
 
     /// Construct directly from an exit code.
     static proc_status_t from_exit_code(int ret) {
+        assert(ret >= 0 && "trying to create proc_status_t from failed wait{,id,pid}() call"
+                " or invalid builtin exit code!");
+
         // Some paranoia.
         constexpr int zerocode = w_exitcode(0, 0);
         static_assert(WIFEXITED(zerocode), "Synthetic exit status not reported as exited");
@@ -176,6 +194,32 @@ class internal_proc_t {
 ///   function
 enum { INVALID_PID = -2 };
 
+// Allows transferring the tty to a job group, while it runs.
+class tty_transfer_t : nonmovable_t, noncopyable_t {
+   public:
+    tty_transfer_t() = default;
+
+    /// Transfer to the given job group, if it wants to own the terminal.
+    void to_job_group(const job_group_ref_t &jg);
+
+    /// Reclaim the tty if we transferred it.
+    void reclaim();
+
+    /// Save the current tty modes into the owning job group, if we are transferred.
+    void save_tty_modes();
+
+    /// The destructor will assert if reclaim() has not been called.
+    ~tty_transfer_t();
+
+   private:
+    // Try transferring the tty to the given job group.
+    // \return true if we should reclaim it.
+    static bool try_transfer(const job_group_ref_t &jg);
+
+    // The job group which owns the tty, or empty if none.
+    job_group_ref_t owner_;
+};
+
 /// A structure representing a single fish process. Contains variables for tracking process state
 /// and the process argument list. Actually, a fish process can be either a regular external
 /// process, an internal builtin which may or may not spawn a fake IO process during execution, a
@@ -197,8 +241,7 @@ enum { INVALID_PID = -2 };
 ///
 /// If the process is of type process_type_t::function, argv is the argument vector, and argv[0] is
 /// the name of the shellscript function.
-class parser_t;
-class process_t {
+class process_t : noncopyable_t {
    public:
     process_t();
 
@@ -249,9 +292,13 @@ class process_t {
     /// \return whether this process type is internal (block, function, or builtin).
     bool is_internal() const;
 
-    /// \return the wait handle for the process, creating it if \p create is set.
-    /// This will return nullptr if the process does not have a pid (i.e. is not external).
-    wait_handle_ref_t get_wait_handle(bool create = true);
+    /// \return the wait handle for the process, if it exists.
+    wait_handle_ref_t get_wait_handle() { return wait_handle_; }
+
+    /// Create a wait handle for the process.
+    /// As a process does not know its job id, we pass it in.
+    /// Note this will return null if the process is not waitable (has no pid).
+    wait_handle_ref_t make_wait_handle(internal_job_id_t jid);
 
     /// Actual command to pass to exec in case of process_type_t::external or process_type_t::exec.
     wcstring actual_cmd;
@@ -274,18 +321,21 @@ class process_t {
     /// True if process has stopped.
     bool stopped{false};
 
+    /// If set, this process is (or will become) the pgroup leader.
+    /// This is only meaningful for external processes.
+    bool leads_pgrp{false};
+
+    /// Whether we have generated a proc_exit event.
+    bool posted_proc_exit{false};
+
     /// Reported status value.
     proc_status_t status{};
 
-    /// Last time of cpu time check.
-    struct timeval last_time {};
+    /// Last time of cpu time check, in seconds (per timef).
+    timepoint_t last_time{0};
 
     /// Number of jiffies spent in process at last cpu time check.
-    unsigned long last_jiffies{0};
-
-    // No copying.
-    process_t(const process_t &rhs) = delete;
-    void operator=(const process_t &rhs) = delete;
+    clock_ticks_t last_jiffies{0};
 
    private:
     wcstring_list_t argv_;
@@ -297,9 +347,10 @@ class process_t {
 
 using process_ptr_t = std::unique_ptr<process_t>;
 using process_list_t = std::vector<process_ptr_t>;
+class parser_t;
 
 /// A struct representing a job. A job is a pipeline of one or more processes.
-class job_t {
+class job_t : noncopyable_t {
    public:
     /// A set of jobs properties. These are immutable: they do not change for the lifetime of the
     /// job.
@@ -318,9 +369,6 @@ class job_t {
 
         /// Whether this job was created as part of an event handler.
         bool from_event_handler{};
-
-        /// Whether the job is under job control, i.e. has its own pgrp.
-        bool job_control{};
     };
 
    private:
@@ -330,10 +378,6 @@ class job_t {
     /// The original command which led to the creation of this job. It is used for displaying
     /// messages about job status on the terminal.
     const wcstring command_str;
-
-    // No copying.
-    job_t(const job_t &rhs) = delete;
-    void operator=(const job_t &) = delete;
 
    public:
     job_t(const properties_t &props, wcstring command_str);
@@ -380,9 +424,8 @@ class job_t {
     // This is never null and not changed after construction.
     job_group_ref_t group{};
 
-    /// \return the pgid for the job, based on the job group.
-    /// This may be none if the job consists of just internal fish functions or builtins.
-    /// This may also be fish itself.
+    /// \return our pgid, or none if we don't have one, or are internal to fish
+    /// This never returns fish's own pgroup.
     maybe_t<pid_t> get_pgid() const;
 
     /// \return the pid of the last external process in the job.
@@ -403,10 +446,11 @@ class job_t {
         /// forked, etc.
         bool constructed{false};
 
-        /// Whether the user has been told about stopped job.
-        bool notified{false};
+        /// Whether the user has been notified that this job is stopped (if it is).
+        bool notified_of_stop{false};
 
         /// Whether the exit status should be negated. This flag can only be set by the not builtin.
+        /// Two "not" prefixes on a single job cancel each other out.
         bool negate{false};
 
         /// This job is disowned, and should be removed from the active jobs list.
@@ -427,7 +471,7 @@ class job_t {
     bool wants_timing() const { return properties.wants_timing; }
 
     /// \return if we want job control.
-    bool wants_job_control() const { return properties.job_control; }
+    bool wants_job_control() const;
 
     /// \return whether this job is initially going to run in the background, because & was
     /// specified.
@@ -439,8 +483,11 @@ class job_t {
     /// \return whether we have internal or external procs, respectively.
     /// Internal procs are builtins, blocks, and functions.
     /// External procs include exec and external.
-    bool has_internal_proc() const;
     bool has_external_proc() const;
+
+    /// \return whether this job, when run, will want a job ID.
+    /// Jobs that are only a single internal block do not get a job ID.
+    bool wants_job_id() const;
 
     // Helper functions to check presence of flags on instances of jobs
     /// The job has been fully constructed, i.e. all its member processes have been launched
@@ -459,18 +506,18 @@ class job_t {
     /// \return whether this job's group is in the foreground.
     bool is_foreground() const;
 
-    /// \return whether we should report process exit events.
-    /// This implements some historical behavior which has not been justified.
-    bool should_report_process_exits() const;
+    /// \return whether we should post job_exit events.
+    bool posts_job_exit_events() const;
 
     /// \return whether this job and its parent chain are fully constructed.
     bool job_chain_is_fully_constructed() const;
 
-    /// Continues running a job, which may be stopped, or may just have started.
-    /// This will send SIGCONT if the job is stopped.
-    /// If \p in_foreground is set, then wait for the job to stop or complete;
-    /// otherwise do not wait for the job.
-    void continue_job(parser_t &parser, bool in_foreground = true);
+    /// Run ourselves. Returning once we complete or stop.
+    void continue_job(parser_t &parser);
+
+    /// Prepare to resume a stopped job by sending SIGCONT and clearing the stopped flag.
+    /// \return true on success, false if we failed to send the signal.
+    bool resume();
 
     /// Send the specified signal to all processes in this job.
     /// \return true on success, false on failure.
@@ -479,6 +526,7 @@ class job_t {
     /// \returns the statuses for this job.
     maybe_t<statuses_t> get_statuses() const;
 };
+using job_ref_t = std::shared_ptr<job_t>;
 
 /// Whether this shell is attached to a tty.
 bool is_interactive_session();
@@ -495,7 +543,7 @@ bool no_exec();
 void mark_no_exec();
 
 // List of jobs.
-typedef std::deque<shared_ptr<job_t>> job_list_t;
+using job_list_t = std::deque<job_ref_t>;
 
 /// The current job control mode.
 ///
@@ -506,7 +554,6 @@ void set_job_control_mode(job_control_t mode);
 /// Notify the user about stopped or terminated jobs, and delete completed jobs from the job list.
 /// If \p interactive is set, allow removing interactive jobs; otherwise skip them.
 /// \return whether text was printed to stdout.
-class parser_t;
 bool job_reap(parser_t &parser, bool interactive);
 
 /// \return the list of background jobs which we should warn the user about, if the user attempts to
@@ -517,9 +564,9 @@ job_list_t jobs_requiring_warning_on_exit(const parser_t &parser);
 /// jobs_requiring_warning_on_exit().
 void print_exit_warning_for_jobs(const job_list_t &jobs);
 
-/// Use the procfs filesystem to look up how many jiffies of cpu time was used by this process. This
+/// Use the procfs filesystem to look up how many jiffies of cpu time was used by a given pid. This
 /// function is only available on systems with the procfs file entry 'stat', i.e. Linux.
-unsigned long proc_get_jiffies(process_t *p);
+clock_ticks_t proc_get_jiffies(pid_t inpid);
 
 /// Update process time usage for all processes by calling the proc_get_jiffies function for every
 /// process of every job.
@@ -535,23 +582,8 @@ void proc_init();
 /// Wait for any process finishing, or receipt of a signal.
 void proc_wait_any(parser_t &parser);
 
-/// Set and get whether we are in initialization.
-// Hackish. In order to correctly report the origin of code with no associated file, we need to
-// know whether it's run during initialization or not.
-void set_is_within_fish_initialization(bool flag);
-bool is_within_fish_initialization();
-
 /// Send SIGHUP to the list \p jobs, excepting those which are in fish's pgroup.
 void hup_jobs(const job_list_t &jobs);
-
-/// Give ownership of the terminal to the specified job group, if it wants it.
-///
-/// \param jg The job group to give the terminal to.
-/// \param continuing_from_stopped If this variable is set, we are giving back control to a job that
-/// was previously stopped. In that case, we need to set the terminal attributes to those saved in
-/// the job.
-/// \return 1 if transferred, 0 if no transfer was necessary, -1 on error.
-int terminal_maybe_give_to_job_group(const job_group_t *jg, bool continuing_from_stopped);
 
 /// Add a job to the list of PIDs/PGIDs we wait on even though they are not associated with any
 /// jobs. Used to avoid zombie processes after disown.

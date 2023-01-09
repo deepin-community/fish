@@ -10,31 +10,25 @@
 // Least-recently-used cache class.
 //
 // This a map from wcstring to Contents, that will evict entries when the count exceeds the maximum.
-// It uses CRTP to inform clients when entries are evicted. This uses the classic LRU cache
-// structure: a dictionary mapping keys to nodes, where the nodes also form a linked list. Our
-// linked list is circular and has a sentinel node (the "mouth" - picture a snake swallowing its
-// tail). This simplifies the logic: no pointer is ever NULL! It also works well with C++'s iterator
-// since the sentinel node is a natural value for end(). Our nodes also have the unusual property of
-// having a "back pointer": they store an iterator to the entry in the map containing the node. This
-// allows us, given a node, to immediately locate the node and its key in the dictionary. This
-// allows us to avoid duplicating the key in the node.
-template <class Derived, class Contents>
+// This uses the classic LRU cache structure: a dictionary mapping keys to nodes, where the nodes
+// also form a linked list. Our linked list is circular and has a sentinel node (the "mouth" -
+// picture a snake swallowing its tail). This simplifies the logic: no pointer is ever NULL! It also
+// works well with C++'s iterator since the sentinel node is a natural value for end(). Our nodes
+// also have the unusual property of having a "back pointer": they store an iterator to the entry in
+// the map containing the node. This allows us, given a node, to immediately locate the node and its
+// key in the dictionary. This allows us to avoid duplicating the key in the node.
+template <class Contents>
 class lru_cache_t {
     struct lru_node_t;
-    struct lru_link_t {
-        // Our doubly linked list
-        // The base class is used for the mouth only
+    struct lru_link_t : noncopyable_t {
+        // Our doubly linked list.
+        // The base class is used for the mouth only.
         lru_link_t *prev = nullptr;
         lru_link_t *next = nullptr;
     };
 
     // The node type in our LRU cache
     struct lru_node_t : public lru_link_t {
-        // No copying
-        lru_node_t(const lru_node_t &) = delete;
-        lru_node_t &operator=(const lru_node_t &) = delete;
-        lru_node_t(lru_node_t &&) = default;
-
         // Our key in the map. This is owned by the map itself.
         const wcstring *key = nullptr;
 
@@ -85,30 +79,14 @@ class lru_cache_t {
         node->prev->next = node->next;
         node->next->prev = node->prev;
 
-        // Pull out our key and value
-        // Note we copy the key in case the map needs it to erase the node
-        wcstring key = *node->key;
-        Contents value(std::move(node->value));
-
         // Remove us from the map. This deallocates node!
         node_map.erase(iter);
-
-        // Tell ourselves what we did
-        Derived *dthis = static_cast<Derived *>(this);
-        dthis->entry_was_evicted(std::move(key), std::move(value));
     }
 
     // Evicts the last node
     void evict_last_node() {
         assert(mouth.prev != &mouth);
         evict_node(static_cast<lru_node_t *>(mouth.prev));
-    }
-
-    // CRTP callback for when a node is evicted.
-    // Clients can implement this
-    void entry_was_evicted(wcstring key, Contents value) {
-        UNUSED(key);
-        UNUSED(value);
     }
 
     // Implementation of merge step for mergesort.
@@ -189,6 +167,11 @@ class lru_cache_t {
         }
         promote_node(&where->second);
         return &where->second.value;
+    }
+
+    /// \return true if we contain a value for a key.
+    bool contains(const wcstring &key) const {
+        return this->node_map.find(key) != this->node_map.end();
     }
 
     // Evicts the node for a given key, returning true if a node was evicted.
@@ -275,7 +258,7 @@ class lru_cache_t {
         const lru_link_t *node;
 
        public:
-        typedef std::pair<const wcstring &, const Contents &> value_type;
+        using value_type = std::pair<const wcstring &, const Contents &>;
 
         explicit iterator(const lru_link_t *val) : node(val) {}
         void operator++() { node = node->prev; }

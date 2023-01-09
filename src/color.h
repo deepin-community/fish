@@ -2,6 +2,7 @@
 #ifndef FISH_COLOR_H
 #define FISH_COLOR_H
 
+#include <cstdint>
 #include <cstring>
 #include <string>
 

@@ -6,6 +6,10 @@ fish_breakpoint_prompt - define the prompt when stopped at a breakpoint
 Synopsis
 --------
 
+.. synopsis::
+
+    fish_breakpoint_prompt
+
 ::
 
     function fish_breakpoint_prompt
@@ -16,7 +20,7 @@ Synopsis
 Description
 -----------
 
-``fish_breakpoint_prompt`` is the prompt function when asking for input in response to a :ref:`breakpoint <cmd-breakpoint>` command.
+``fish_breakpoint_prompt`` is the prompt function when asking for input in response to a :doc:`breakpoint <breakpoint>` command.
 
 The exit status of commands within ``fish_breakpoint_prompt`` will not modify the value of :ref:`$status <variables-status>` outside of the ``fish_breakpoint_prompt`` function.
 

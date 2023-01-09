@@ -9,12 +9,12 @@ Group:                  System/Shells
 URL:                    https://fishshell.com/
 
 Source0:                %{name}_@VERSION@.orig.tar.xz
-BuildRequires:          ncurses-devel gettext gcc-c++ xz
+BuildRequires:          ncurses-devel gettext gcc-c++ xz pcre2-devel
 
 %if 0%{?rhel} && 0%{?rhel} < 8
 BuildRequires: cmake3
 %else
-BuildRequires: cmake pcre2-devel
+BuildRequires: cmake
 %endif
 
 %if 0%{?suse_version}
@@ -53,9 +53,6 @@ is simple but incompatible with other shell languages.
 %setup -q -n %{name}-@VERSION@
 
 %build
-# CMake macros define -DBUILD_SHARED_LIBS:BOOL=ON, which breaks the
-# bundled PCRE2 static library.
-EXTRA_CMAKE_FLAGS="$EXTRA_CMAKE_FLAGS -DBUILD_SHARED_LIBS:BOOL=OFF"
 # CMake macros define the wrong sysconfdir arguments
 EXTRA_CMAKE_FLAGS="$EXTRA_CMAKE_FLAGS -DCMAKE_INSTALL_SYSCONFDIR=%{_sysconfdir}"
 %if 0%{?rhel} && 0%{?rhel} < 8
@@ -88,7 +85,11 @@ cp -a CONTRIBUTING.rst %{buildroot}%{_datadir}/doc/fish/
 %if 0%{?__builddir:1}
 cd %__builddir
 %endif
-make test SHOW_INTERACTIVE_LOG=1
+# Fedora uses __cmake_builddir
+%if 0%{?__cmake_builddir:1}
+cd %__cmake_builddir
+%endif
+make fish_run_tests
 
 %clean
 rm -rf $RPM_BUILD_ROOT

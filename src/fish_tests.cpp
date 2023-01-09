@@ -1,59 +1,68 @@
 // Various bug and feature tests. Compiled and run by make test.
 #include "config.h"  // IWYU pragma: keep
 
-// IWYU pragma: no_include <cstring>
-// IWYU pragma: no_include <cstddef>
-#include <errno.h>
 #include <fcntl.h>
 #include <libgen.h>
 #include <limits.h>
-#include <math.h>
 #include <pthread.h>
 #include <signal.h>
 #include <stdarg.h>
-#include <stddef.h>
-#include <stdint.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <sys/select.h>
+#include <sys/resource.h>
 #include <sys/stat.h>
-#include <sys/time.h>
-#include <sys/types.h>
 #include <sys/utsname.h>
-#include <sys/wait.h>
 #include <time.h>
 #include <unistd.h>
-#include <wctype.h>
 
 #include <algorithm>
 #include <array>
 #include <atomic>
+#include <cerrno>
 #include <chrono>
+#include <clocale>
 #include <cmath>
+#include <cstdint>
+#include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <cwchar>
 #include <functional>
+#include <future>
+#include <initializer_list>
+#include <iterator>
+#include <limits>
+#include <list>
+#include <map>
 #include <memory>
+#include <mutex>
 #include <set>
 #include <string>
 #include <thread>
+#include <type_traits>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
+#ifdef FISH_CI_SAN
+#include <sanitizer/lsan_interface.h>
+#endif
+
+#include "abbrs.h"
 #include "ast.h"
 #include "autoload.h"
 #include "builtin.h"
 #include "color.h"
 #include "common.h"
 #include "complete.h"
+#include "enum_set.h"
 #include "env.h"
 #include "env_universal_common.h"
-#include "event.h"
 #include "expand.h"
 #include "fallback.h"  // IWYU pragma: keep
 #include "fd_monitor.h"
+#include "fds.h"
 #include "function.h"
 #include "future_feature_flags.h"
+#include "global_safety.h"
 #include "highlight.h"
 #include "history.h"
 #include "input.h"
@@ -63,6 +72,7 @@
 #include "kill.h"
 #include "lru.h"
 #include "maybe.h"
+#include "null_terminated_array.h"
 #include "operation_context.h"
 #include "pager.h"
 #include "parse_constants.h"
@@ -71,6 +81,7 @@
 #include "parser.h"
 #include "path.h"
 #include "proc.h"
+#include "re.h"
 #include "reader.h"
 #include "redirection.h"
 #include "screen.h"
@@ -81,7 +92,9 @@
 #include "topic_monitor.h"
 #include "utf8.h"
 #include "util.h"
+#include "wait_handle.h"
 #include "wcstringutil.h"
+#include "wgetopt.h"
 #include "wildcard.h"
 #include "wutil.h"  // IWYU pragma: keep
 
@@ -102,9 +115,8 @@ static bool should_test_function(const char *func_name, bool default_on = true) 
         // No args, test if defaulted on.
         result = default_on;
     } else {
-        for (size_t i = 0; s_arguments[i] != NULL; i++) {
-            if (!std::strncmp(func_name, s_arguments[i], std::strlen(s_arguments[i]))) {
-                // Prefix match.
+        for (size_t i = 0; s_arguments[i] != nullptr; i++) {
+            if (!std::strcmp(func_name, s_arguments[i])) {
                 result = true;
                 break;
             }
@@ -167,11 +179,11 @@ static std::vector<std::string> pushed_dirs;
 /// Helper to chdir and then update $PWD.
 static bool pushd(const char *path) {
     char cwd[PATH_MAX] = {};
-    if (getcwd(cwd, sizeof cwd) == NULL) {
+    if (getcwd(cwd, sizeof cwd) == nullptr) {
         err(L"getcwd() from pushd() failed: errno = %d", errno);
         return false;
     }
-    pushed_dirs.push_back(cwd);
+    pushed_dirs.emplace_back(cwd);
 
     // We might need to create the directory. We don't care if this fails due to the directory
     // already being present.
@@ -405,7 +417,7 @@ static void test_escape_crazy() {
             random_string.push_back((random() % ESCAPE_TEST_CHAR) + 1);
         }
 
-        escaped_string = escape_string(random_string, ESCAPE_ALL);
+        escaped_string = escape_string(random_string);
         unescaped_success = unescape_string(escaped_string, &unescaped_string, UNESCAPE_DEFAULT);
 
         if (!unescaped_success) {
@@ -418,10 +430,9 @@ static void test_escape_crazy() {
         }
     }
 
-    // Verify that not using `ESCAPE_ALL` also escapes backslashes so we don't regress on issue
-    // #3892.
+    // Verify that ESCAPE_NO_PRINTABLES also escapes backslashes so we don't regress on issue #3892.
     random_string = L"line 1\\n\nline 2";
-    escaped_string = escape_string(random_string, ESCAPE_NO_QUOTED);
+    escaped_string = escape_string(random_string, ESCAPE_NO_PRINTABLES | ESCAPE_NO_QUOTED);
     unescaped_success = unescape_string(escaped_string, &unescaped_string, UNESCAPE_DEFAULT);
     if (!unescaped_success) {
         err(L"Failed to unescape string <%ls>", escaped_string.c_str());
@@ -479,7 +490,7 @@ static void test_format() {
     for (int j = -129; j <= 129; j++) {
         char buff1[128], buff2[128];
         format_long_safe(buff1, j);
-        sprintf(buff2, "%d", j);
+        snprintf(buff2, 128, "%d", j);
         do_test(!std::strcmp(buff1, buff2));
 
         wchar_t wbuf1[128], wbuf2[128];
@@ -491,19 +502,18 @@ static void test_format() {
     long q = LONG_MIN;
     char buff1[128], buff2[128];
     format_long_safe(buff1, q);
-    sprintf(buff2, "%ld", q);
+    snprintf(buff2, 128, "%ld", q);
     do_test(!std::strcmp(buff1, buff2));
 }
 
 /// Helper to convert a narrow string to a sequence of hex digits.
-static char *str2hex(const char *input) {
-    char *output = (char *)malloc(5 * std::strlen(input) + 1);
-    char *p = output;
-    for (; *input; input++) {
-        sprintf(p, "0x%02X ", (int)*input & 0xFF);
-        p += 5;
+static std::string str2hex(const std::string &input) {
+    std::string output;
+    for (char c : input) {
+        char buff[16];
+        size_t amt = snprintf(buff, sizeof buff, "0x%02X ", (int)(c & 0xFF));
+        output.append(buff, amt);
     }
-    *p = '\0';
     return output;
 }
 
@@ -521,13 +531,9 @@ static void test_convert() {
         const wcstring w = str2wcstring(orig);
         std::string n = wcs2string(w);
         if (orig != n) {
-            char *o2 = str2hex(orig.c_str());
-            char *n2 = str2hex(n.c_str());
             err(L"Line %d - %d: Conversion cycle of string:\n%4d chars: %s\n"
                 L"produced different string:\n%4d chars: %s",
-                __LINE__, i, orig.size(), o2, n.size(), n2);
-            free(o2);
-            free(n2);
+                __LINE__, i, orig.size(), str2hex(orig).c_str(), n.size(), str2hex(n).c_str());
         }
     }
 }
@@ -792,36 +798,13 @@ static void test_tokenizer() {
         err(L"redirection_type_for_string failed on line %ld", (long)__LINE__);
     if (get_redir_mode(L"3</tmp/filetxt") != redirection_mode_t::input)
         err(L"redirection_type_for_string failed on line %ld", (long)__LINE__);
-
-    // Test ^ with our feature flag on and off.
-    auto saved_flags = fish_features();
-    mutable_fish_features().set(features_t::stderr_nocaret, false);
-    if (get_redir_mode(L"^") != redirection_mode_t::overwrite)
-        err(L"redirection_type_for_string failed on line %ld", (long)__LINE__);
-    mutable_fish_features().set(features_t::stderr_nocaret, true);
-    if (get_redir_mode(L"^") != none())
-        err(L"redirection_type_for_string failed on line %ld", (long)__LINE__);
-    mutable_fish_features() = saved_flags;
-}
-
-// Little function that runs in a background thread, bouncing to the main.
-static int test_iothread_thread_call(std::atomic<int> *addr) {
-    int before = *addr;
-    iothread_perform_on_main([=]() { *addr += 1; });
-    int after = *addr;
-
-    // Must have incremented it at least once.
-    if (before >= after) {
-        err(L"Failed to increment from background thread");
-    }
-    return after;
 }
 
 static void test_fd_monitor() {
     say(L"Testing fd_monitor");
 
     // Helper to make an item which counts how many times its callback is invoked.
-    struct item_maker_t {
+    struct item_maker_t : public noncopyable_t {
         std::atomic<bool> did_timeout{false};
         std::atomic<size_t> length_read{0};
         std::atomic<size_t> pokes{0};
@@ -857,8 +840,6 @@ static void test_fd_monitor() {
             };
             item = fd_monitor_item_t(std::move(pipes.read), std::move(callback), timeout_usec);
         }
-
-        item_maker_t(const item_maker_t &) = delete;
 
         // Write 42 bytes to our write end.
         void write42() const {
@@ -953,17 +934,24 @@ static void test_fd_monitor() {
 
 static void test_iothread() {
     say(L"Testing iothreads");
-    std::unique_ptr<std::atomic<int>> int_ptr = make_unique<std::atomic<int>>(0);
-    int iterations = 64;
+    std::atomic<int> shared_int{0};
+    const int iterations = 64;
+    std::promise<void> prom;
     for (int i = 0; i < iterations; i++) {
-        iothread_perform([&]() { test_iothread_thread_call(int_ptr.get()); });
+        iothread_perform([&] {
+            int newv = 1 + shared_int.fetch_add(1, std::memory_order_relaxed);
+            if (newv == iterations) {
+                prom.set_value();
+            }
+        });
     }
-    iothread_drain_all();
+    auto status = prom.get_future().wait_for(std::chrono::seconds(64));
 
     // Should have incremented it once per thread.
-    do_test(*int_ptr == iterations);
-    if (*int_ptr != iterations) {
-        say(L"Expected int to be %d, but instead it was %d", iterations, int_ptr->load());
+    do_test(status == std::future_status::ready);
+    do_test(shared_int == iterations);
+    if (shared_int != iterations) {
+        say(L"Expected int to be %d, but instead it was %d", iterations, shared_int.load());
     }
 }
 
@@ -1040,7 +1028,7 @@ static void test_debounce_timeout() {
 
     // Verify that debounce doesn't wait forever.
     // Use a shared_ptr so we don't have to join our threads.
-    const long timeout_ms = 50;
+    const long timeout_ms = 500;
     struct data_t {
         debounce_t db{timeout_ms};
         bool exit_ok = false;
@@ -1231,18 +1219,6 @@ static void test_parser() {
         err(L"Bad command substitution not reported as error");
     }
 
-    if (!(detect_argument_errors(L"foo\\xFF9") & PARSER_TEST_ERROR)) {
-        err(L"Bad escape not reported as error");
-    }
-
-    if (!(detect_argument_errors(L"foo(echo \\xFF9)") & PARSER_TEST_ERROR)) {
-        err(L"Bad escape in command substitution not reported as error");
-    }
-
-    if (!(detect_argument_errors(L"foo(echo (echo (echo \\xFF9)))") & PARSER_TEST_ERROR)) {
-        err(L"Bad escape in nested command substitution not reported as error");
-    }
-
     if (!detect_errors(L"false & ; and cat")) {
         err(L"'and' command after background not reported as error");
     }
@@ -1392,12 +1368,12 @@ struct segment_t {
     /* implicit */ segment_t(const char *text) : text(text) {}
 };
 
-using test_t = std::vector<segment_t>;
-using test_list_t = std::vector<test_t>;
+using indent_test_t = std::vector<segment_t>;
+using indent_test_list_t = std::vector<indent_test_t>;
 
 // Add a new test to a test list based on a series of ints and texts.
 template <typename... Types>
-void add_test(test_list_t *v, const Types &...types) {
+void add_test(indent_test_list_t *v, const Types &...types) {
     segment_t segments[] = {types...};
     v->emplace_back(std::begin(segments), std::end(segments));
 }
@@ -1407,7 +1383,7 @@ static void test_indents() {
     say(L"Testing indents");
     using namespace indent_tests;
 
-    test_list_t tests;
+    indent_test_list_t tests;
     add_test(&tests,              //
              0, "if", 1, " foo",  //
              0, "\nend");
@@ -1547,7 +1523,7 @@ static void test_indents() {
     );
 
     int test_idx = 0;
-    for (const test_t &test : tests) {
+    for (const indent_test_t &test : tests) {
         // Construct the input text and expected indents.
         wcstring text;
         std::vector<int> expected_indents;
@@ -1585,7 +1561,7 @@ static void test_indents() {
 
 static void test_parse_util_cmdsubst_extent() {
     const wchar_t *a = L"echo (echo (echo hi";
-    const wchar_t *begin = NULL, *end = NULL;
+    const wchar_t *begin = nullptr, *end = nullptr;
 
     parse_util_cmdsubst_extent(a, 0, &begin, &end);
     if (begin != a || end != begin + std::wcslen(begin)) {
@@ -1657,7 +1633,7 @@ static struct wcsfilecmp_test {
                         {L"a00b", L"a0b", -1},
                         {L"a0b", L"a00b", 1},
                         {L"a-b", L"azb", 1},
-                        {NULL, NULL, 0}};
+                        {nullptr, nullptr, 0}};
 
 /// Verify the behavior of the `wcsfilecmp()` function.
 static void test_wcsfilecmp() {
@@ -1671,17 +1647,161 @@ static void test_wcsfilecmp() {
     }
 }
 
+static void test_const_strlen() {
+    do_test(const_strlen("") == 0);
+    do_test(const_strlen(L"") == 0);
+    do_test(const_strlen("\0") == 0);
+    do_test(const_strlen(L"\0") == 0);
+    do_test(const_strlen("\0abc") == 0);
+    do_test(const_strlen(L"\0abc") == 0);
+    do_test(const_strlen("x") == 1);
+    do_test(const_strlen(L"x") == 1);
+    do_test(const_strlen("abc") == 3);
+    do_test(const_strlen(L"abc") == 3);
+    do_test(const_strlen("abc\0def") == 3);
+    do_test(const_strlen(L"abc\0def") == 3);
+    do_test(const_strlen("abcdef\0") == 6);
+    do_test(const_strlen(L"abcdef\0") == 6);
+    static_assert(const_strlen("hello") == 5, "const_strlen failure");
+}
+
+static void test_const_strcmp() {
+    static_assert(const_strcmp("", "a") < 0, "const_strcmp failure");
+    static_assert(const_strcmp("a", "a") == 0, "const_strcmp failure");
+    static_assert(const_strcmp("a", "") > 0, "const_strcmp failure");
+    static_assert(const_strcmp("aa", "a") > 0, "const_strcmp failure");
+    static_assert(const_strcmp("a", "aa") < 0, "const_strcmp failure");
+    static_assert(const_strcmp("b", "aa") > 0, "const_strcmp failure");
+}
+
+static void test_is_sorted_by_name() {
+    struct named_t {
+        const wchar_t *name;
+    };
+
+    static constexpr named_t sorted[] = {
+        {L"a"}, {L"aa"}, {L"aaa"}, {L"aaa"}, {L"aaa"}, {L"aazz"}, {L"aazzzz"},
+    };
+    static_assert(is_sorted_by_name(sorted), "is_sorted_by_name failure");
+    do_test(get_by_sorted_name(L"", sorted) == nullptr);
+    do_test(get_by_sorted_name(L"nope", sorted) == nullptr);
+    do_test(get_by_sorted_name(L"aaaaaaaaaaa", sorted) == nullptr);
+    wcstring last;
+    for (const auto &v : sorted) {
+        // We have multiple items with the same name; only test the first.
+        if (last != v.name) {
+            last = v.name;
+            do_test(get_by_sorted_name(last, sorted) == &v);
+        }
+    }
+
+    static constexpr named_t not_sorted[] = {
+        {L"a"}, {L"aa"}, {L"aaa"}, {L"q"}, {L"aazz"}, {L"aazz"}, {L"aazz"}, {L"aazzzz"},
+    };
+    static_assert(!is_sorted_by_name(not_sorted), "is_sorted_by_name failure");
+}
+
+void test_dir_iter() {
+    dir_iter_t baditer(L"/definitely/not/a/valid/directory/for/sure");
+    do_test(!baditer.valid());
+    do_test(baditer.error() == ENOENT || baditer.error() == EACCES);
+    do_test(baditer.next() == nullptr);
+
+    char t1[] = "/tmp/fish_test_dir_iter.XXXXXX";
+    const std::string basepathn = mkdtemp(t1);
+    const wcstring basepath = str2wcstring(basepathn);
+    auto makepath = [&](const wcstring &s) { return wcs2string(basepath + L"/" + s); };
+
+    const wcstring dirname = L"dir";
+    const wcstring regname = L"reg";
+    const wcstring reglinkname = L"reglink";    // link to regular file
+    const wcstring dirlinkname = L"dirlink";    // link to directory
+    const wcstring badlinkname = L"badlink";    // link to nowhere
+    const wcstring selflinkname = L"selflink";  // link to self
+    const wcstring fifoname = L"fifo";
+    const wcstring_list_t names = {dirname,     regname,      reglinkname, dirlinkname,
+                                   badlinkname, selflinkname, fifoname};
+
+    const auto is_link_name = [&](const wcstring &name) -> bool {
+        return contains({reglinkname, dirlinkname, badlinkname, selflinkname}, name);
+    };
+
+    // Make our different file types
+    int ret = mkdir(makepath(dirname).c_str(), 0700);
+    do_test(ret == 0);
+    ret = open(makepath(regname).c_str(), O_CREAT | O_WRONLY, 0600);
+    do_test(ret >= 0);
+    close(ret);
+    ret = symlink(makepath(regname).c_str(), makepath(reglinkname).c_str());
+    do_test(ret == 0);
+    ret = symlink(makepath(dirname).c_str(), makepath(dirlinkname).c_str());
+    do_test(ret == 0);
+    ret = symlink("/this/is/an/invalid/path", makepath(badlinkname).c_str());
+    do_test(ret == 0);
+    ret = symlink(makepath(selflinkname).c_str(), makepath(selflinkname).c_str());
+    do_test(ret == 0);
+    ret = mkfifo(makepath(fifoname).c_str(), 0600);
+    do_test(ret == 0);
+
+    dir_iter_t iter1(basepath);
+    do_test(iter1.valid());
+    do_test(iter1.error() == 0);
+    size_t seen = 0;
+    while (const auto *entry = iter1.next()) {
+        seen += 1;
+        do_test(entry->name != L"." && entry->name != L"..");
+        do_test(contains(names, entry->name));
+        maybe_t<dir_entry_type_t> expected{};
+        if (entry->name == dirname) {
+            expected = dir_entry_type_t::dir;
+        } else if (entry->name == regname) {
+            expected = dir_entry_type_t::reg;
+        } else if (entry->name == reglinkname) {
+            expected = dir_entry_type_t::reg;
+        } else if (entry->name == dirlinkname) {
+            expected = dir_entry_type_t::dir;
+        } else if (entry->name == badlinkname) {
+            expected = none();
+        } else if (entry->name == selflinkname) {
+            expected = dir_entry_type_t::lnk;
+        } else if (entry->name == fifoname) {
+            expected = dir_entry_type_t::fifo;
+        } else {
+            err(L"Unexpected file type");
+            continue;
+        }
+        // Links should never have a fast type if we are resolving them, since we cannot resolve a
+        // symlink from readdir.
+        if (is_link_name(entry->name)) {
+            do_test(entry->fast_type() == none());
+        }
+        // If we have a fast type, it should be correct.
+        do_test(entry->fast_type() == none() || entry->fast_type() == expected);
+        do_test(entry->check_type() == expected);
+    }
+    do_test(seen == names.size());
+
+    // Clean up.
+    for (const auto &name : names) {
+        (void)unlink(makepath(name).c_str());
+    }
+    (void)rmdir(basepathn.c_str());
+}
+
 static void test_utility_functions() {
     say(L"Testing utility functions");
     test_wcsfilecmp();
     test_parse_util_cmdsubst_extent();
+    test_const_strlen();
+    test_const_strcmp();
+    test_is_sorted_by_name();
 }
 
 // UTF8 tests taken from Alexey Vatchenko's utf8 library. See http://www.bsdua.org/libbsdua.html.
 static void test_utf82wchar(const char *src, size_t slen, const wchar_t *dst, size_t dlen,
                             int flags, size_t res, const char *descr) {
     size_t size;
-    wchar_t *mem = NULL;
+    wchar_t *mem = nullptr;
 
 #if WCHAR_MAX == 0xffff
     // Hack: if wchar is only UCS-2, and the UTF-8 input string contains astral characters, then
@@ -1700,7 +1820,7 @@ static void test_utf82wchar(const char *src, size_t slen, const wchar_t *dst, si
 #endif
 
     if (!dst) {
-        size = utf8_to_wchar(src, slen, NULL, flags);
+        size = utf8_to_wchar(src, slen, nullptr, flags);
     } else {
         mem = (wchar_t *)malloc(dlen * sizeof(*mem));
         if (!mem) {
@@ -1732,7 +1852,7 @@ static void test_utf82wchar(const unsigned char *usrc, size_t slen, const wchar_
 static void test_wchar2utf8(const wchar_t *src, size_t slen, const char *dst, size_t dlen,
                             int flags, size_t res, const char *descr) {
     size_t size;
-    char *mem = NULL;
+    char *mem = nullptr;
 
 #if WCHAR_MAX == 0xffff
     // Hack: if wchar is simulating UCS-2, and the wchar_t input string contains astral characters,
@@ -1808,8 +1928,8 @@ static void test_utf8() {
                     sizeof(wbom2) / sizeof(*wbom2), "ubom2 skip BOM");
     test_utf82wchar(ubom2, sizeof(ubom2), wbom22, sizeof(wbom22) / sizeof(*wbom22), 0,
                     sizeof(wbom22) / sizeof(*wbom22), "ubom2 BOM");
-    test_utf82wchar(uc080, sizeof(uc080), NULL, 0, 0, 0, "uc080 c0 80 - forbitten by rfc3629");
-    test_utf82wchar(ub2, sizeof(ub2), NULL, 0, 0, 3, "ub2 resulted in forbitten wchars (len)");
+    test_utf82wchar(uc080, sizeof(uc080), nullptr, 0, 0, 0, "uc080 c0 80 - forbitten by rfc3629");
+    test_utf82wchar(ub2, sizeof(ub2), nullptr, 0, 0, 3, "ub2 resulted in forbitten wchars (len)");
     test_utf82wchar(ub2, sizeof(ub2), wb2, sizeof(wb2) / sizeof(*wb2), 0, 0,
                     "ub2 resulted in forbitten wchars");
     test_utf82wchar(ub2, sizeof(ub2), L"\x0a", 1, UTF8_IGNORE_ERROR, 1,
@@ -1820,15 +1940,16 @@ static void test_utf8() {
                     "u2/w2 2 octets chars");
     test_utf82wchar(u3, sizeof(u3), w3, sizeof(w3) / sizeof(*w3), 0, sizeof(w3) / sizeof(*w3),
                     "u3/w3 3 octets chars");
-    test_utf82wchar("\xff", 1, NULL, 0, 0, 0, "broken utf-8 0xff symbol");
-    test_utf82wchar("\xfe", 1, NULL, 0, 0, 0, "broken utf-8 0xfe symbol");
-    test_utf82wchar("\x8f", 1, NULL, 0, 0, 0, "broken utf-8, start from 10 higher bits");
-    test_utf82wchar((const char *)NULL, 0, NULL, 0, 0, 0, "invalid params, all 0");
-    test_utf82wchar(u1, 0, NULL, 0, 0, 0, "invalid params, src buf not NULL");
-    test_utf82wchar((const char *)NULL, 10, NULL, 0, 0, 0, "invalid params, src length is not 0");
+    test_utf82wchar("\xff", 1, nullptr, 0, 0, 0, "broken utf-8 0xff symbol");
+    test_utf82wchar("\xfe", 1, nullptr, 0, 0, 0, "broken utf-8 0xfe symbol");
+    test_utf82wchar("\x8f", 1, nullptr, 0, 0, 0, "broken utf-8, start from 10 higher bits");
+    test_utf82wchar((const char *)nullptr, 0, nullptr, 0, 0, 0, "invalid params, all 0");
+    test_utf82wchar(u1, 0, nullptr, 0, 0, 0, "invalid params, src buf not NULL");
+    test_utf82wchar((const char *)nullptr, 10, nullptr, 0, 0, 0,
+                    "invalid params, src length is not 0");
 
     // UCS-4 -> UTF-8 string.
-    const char *const nullc = NULL;
+    const char *const nullc = nullptr;
     test_wchar2utf8(wbom, sizeof(wbom) / sizeof(*wbom), ubom, sizeof(ubom), UTF8_SKIP_BOM,
                     sizeof(ubom), "BOM");
     test_wchar2utf8(wb2, sizeof(wb2) / sizeof(*wb2), nullc, 0, 0, 0, "prohibited wchars");
@@ -1840,10 +1961,10 @@ static void test_utf8() {
                     "w2/u2 2 octets chars");
     test_wchar2utf8(w3, sizeof(w3) / sizeof(*w3), u3, sizeof(u3), 0, sizeof(u3),
                     "w3/u3 3 octets chars");
-    test_wchar2utf8(NULL, 0, nullc, 0, 0, 0, "invalid params, all 0");
+    test_wchar2utf8(nullptr, 0, nullc, 0, 0, 0, "invalid params, all 0");
     test_wchar2utf8(w1, 0, nullc, 0, 0, 0, "invalid params, src buf not NULL");
     test_wchar2utf8(w1, sizeof(w1) / sizeof(*w1), u1, 0, 0, 0, "invalid params, dst is not NULL");
-    test_wchar2utf8(NULL, 10, nullc, 0, 0, 0, "invalid params, src length is not 0");
+    test_wchar2utf8(nullptr, 10, nullc, 0, 0, 0, "invalid params, src length is not 0");
 
     test_wchar2utf8(wm, sizeof(wm) / sizeof(*wm), um, sizeof(um), 0, sizeof(um),
                     "wm/um mixed languages");
@@ -1856,7 +1977,8 @@ static void test_utf8() {
                     "um/wm mixed languages");
     test_utf82wchar(um, sizeof(um), wm, sizeof(wm) / sizeof(*wm) + 1, 0, sizeof(wm) / sizeof(*wm),
                     "um/wm boundaries +1");
-    test_utf82wchar(um, sizeof(um), NULL, 0, 0, sizeof(wm) / sizeof(*wm), "um/wm calculate length");
+    test_utf82wchar(um, sizeof(um), nullptr, 0, 0, sizeof(wm) / sizeof(*wm),
+                    "um/wm calculate length");
 
 // The following tests won't pass on systems (e.g., Cygwin) where sizeof wchar_t is 2. That's
 // due to several reasons but the primary one is that narrowing conversions of literals assigned
@@ -1876,8 +1998,8 @@ static void test_utf8() {
                     "calculate length, ignore bad chars");
     test_utf82wchar(ub1, sizeof(ub1), wb1, sizeof(wb1) / sizeof(*wb1), UTF8_IGNORE_ERROR,
                     sizeof(wb1) / sizeof(*wb1), "ub1/wb1 ignore bad chars");
-    test_utf82wchar(ub1, sizeof(ub1), NULL, 0, 0, 0, "ub1 calculate length of bad chars");
-    test_utf82wchar(ub1, sizeof(ub1), NULL, 0, UTF8_IGNORE_ERROR, sizeof(wb1) / sizeof(*wb1),
+    test_utf82wchar(ub1, sizeof(ub1), nullptr, 0, 0, 0, "ub1 calculate length of bad chars");
+    test_utf82wchar(ub1, sizeof(ub1), nullptr, 0, UTF8_IGNORE_ERROR, sizeof(wb1) / sizeof(*wb1),
                     "ub1 calculate length, ignore bad chars");
 #endif
 }
@@ -1886,16 +2008,10 @@ static void test_feature_flags() {
     say(L"Testing future feature flags");
     using ft = features_t;
     ft f;
-    do_test(f.test(ft::stderr_nocaret));
-    f.set(ft::stderr_nocaret, true);
-    do_test(f.test(ft::stderr_nocaret));
-    f.set(ft::stderr_nocaret, false);
-    do_test(!f.test(ft::stderr_nocaret));
-
     f.set_from_string(L"stderr-nocaret,nonsense");
     do_test(f.test(ft::stderr_nocaret));
     f.set_from_string(L"stderr-nocaret,no-stderr-nocaret,nonsense");
-    do_test(!f.test(ft::stderr_nocaret));
+    do_test(f.test(ft::stderr_nocaret));
 
     // Ensure every metadata is represented once.
     size_t counts[ft::flag_count] = {};
@@ -1939,16 +2055,12 @@ static void test_escape_sequences() {
         err(L"test_escape_sequences failed on line %d\n", __LINE__);
 }
 
-class test_lru_t : public lru_cache_t<test_lru_t, int> {
+class test_lru_t : public lru_cache_t<int> {
    public:
     static constexpr size_t test_capacity = 16;
     using value_type = std::pair<wcstring, int>;
 
-    test_lru_t() : lru_cache_t<test_lru_t, int>(test_capacity) {}
-
-    std::vector<value_type> evicted;
-
-    void entry_was_evicted(const wcstring &key, int val) { evicted.push_back({key, val}); }
+    test_lru_t() : lru_cache_t<int>(test_capacity) {}
 
     std::vector<value_type> values() const {
         std::vector<value_type> result;
@@ -1977,18 +2089,17 @@ static void test_lru() {
     for (int i = 0; i < total_nodes; i++) {
         do_test(cache.size() == size_t(std::min(i, 16)));
         do_test(cache.values() == expected_values);
-        if (i < 4) expected_evicted.push_back({to_string(i), i});
+        if (i < 4) expected_evicted.emplace_back(to_string(i), i);
         // Adding the node the first time should work, and subsequent times should fail.
         do_test(cache.insert(to_string(i), i));
         do_test(!cache.insert(to_string(i), i + 1));
 
-        expected_values.push_back({to_string(i), i});
+        expected_values.emplace_back(to_string(i), i);
         while (expected_values.size() > test_lru_t::test_capacity) {
             expected_values.erase(expected_values.begin());
         }
         cache.check_sanity();
     }
-    do_test(cache.evicted == expected_evicted);
     do_test(cache.values() == expected_values);
     cache.check_sanity();
 
@@ -2015,15 +2126,15 @@ static void test_lru() {
     }
 
     cache.evict_all_nodes();
-    do_test(cache.evicted.size() == size_t(total_nodes));
+    do_test(cache.size() == 0);
 }
 
 /// An environment built around an std::map.
 struct test_environment_t : public environment_t {
     std::map<wcstring, wcstring> vars;
 
-    virtual maybe_t<env_var_t> get(const wcstring &key,
-                                   env_mode_flags_t mode = ENV_DEFAULT) const override {
+    maybe_t<env_var_t> get(const wcstring &key,
+                           env_mode_flags_t mode = ENV_DEFAULT) const override {
         UNUSED(mode);
         auto iter = vars.find(key);
         if (iter != vars.end()) {
@@ -2032,7 +2143,7 @@ struct test_environment_t : public environment_t {
         return none();
     }
 
-    wcstring_list_t get_names(int flags) const override {
+    wcstring_list_t get_names(env_mode_flags_t flags) const override {
         UNUSED(flags);
         wcstring_list_t result;
         for (const auto &kv : vars) {
@@ -2044,19 +2155,19 @@ struct test_environment_t : public environment_t {
 
 /// A test environment that knows about PWD.
 struct pwd_environment_t : public test_environment_t {
-    virtual maybe_t<env_var_t> get(const wcstring &key,
-                                   env_mode_flags_t mode = ENV_DEFAULT) const override {
+    maybe_t<env_var_t> get(const wcstring &key,
+                           env_mode_flags_t mode = ENV_DEFAULT) const override {
         if (key == L"PWD") {
             return env_var_t{wgetcwd(), 0};
         }
         return test_environment_t::get(key, mode);
     }
 
-    wcstring_list_t get_names(int flags) const override {
+    wcstring_list_t get_names(env_mode_flags_t flags) const override {
         auto res = test_environment_t::get_names(flags);
         res.clear();
         if (std::count(res.begin(), res.end(), L"PWD") == 0) {
-            res.push_back(L"PWD");
+            res.emplace_back(L"PWD");
         }
         return res;
     }
@@ -2091,8 +2202,8 @@ static bool expand_test(const wchar_t *in, expand_flags_t flags, ...) {
     wcstring_list_t expected;
 
     va_start(va, flags);
-    while ((arg = va_arg(va, wchar_t *)) != NULL) {
-        expected.push_back(wcstring(arg));
+    while ((arg = va_arg(va, wchar_t *)) != nullptr) {
+        expected.emplace_back(arg);
     }
     va_end(va);
 
@@ -2143,13 +2254,16 @@ static bool expand_test(const wchar_t *in, expand_flags_t flags, ...) {
 static void test_expand() {
     say(L"Testing parameter expansion");
     const expand_flags_t noflags{};
+    const wchar_t *const wnull = nullptr;
 
-    expand_test(L"foo", noflags, L"foo", 0, L"Strings do not expand to themselves");
-    expand_test(L"a{b,c,d}e", noflags, L"abe", L"ace", L"ade", 0, L"Bracket expansion is broken");
-    expand_test(L"a*", expand_flag::skip_wildcards, L"a*", 0, L"Cannot skip wildcard expansion");
-    expand_test(L"/bin/l\\0", expand_flag::for_completions, 0,
+    expand_test(L"foo", noflags, L"foo", wnull, L"Strings do not expand to themselves");
+    expand_test(L"a{b,c,d}e", noflags, L"abe", L"ace", L"ade", wnull,
+                L"Bracket expansion is broken");
+    expand_test(L"a*", expand_flag::skip_wildcards, L"a*", wnull,
+                L"Cannot skip wildcard expansion");
+    expand_test(L"/bin/l\\0", expand_flag::for_completions, wnull,
                 L"Failed to handle null escape in expansion");
-    expand_test(L"foo\\$bar", expand_flag::skip_variables, L"foo$bar", 0,
+    expand_test(L"foo\\$bar", expand_flag::skip_variables, L"foo$bar", wnull,
                 L"Failed to handle dollar sign in variable-skipping expansion");
 
     // bb
@@ -2186,7 +2300,6 @@ static void test_expand() {
     // This is checking that .* does NOT match . and ..
     // (https://github.com/fish-shell/fish-shell/issues/270). But it does have to match literal
     // components (e.g. "./*" has to match the same as "*".
-    const wchar_t *const wnull = NULL;
     expand_test(L"test/fish_expand_test/.*", noflags, L"test/fish_expand_test/.foo", wnull,
                 L"Expansion not correctly handling dotfiles");
 
@@ -2354,83 +2467,116 @@ static void test_ifind_fuzzy() {
 
 static void test_abbreviations() {
     say(L"Testing abbreviations");
-    auto &vars = parser_t::principal_parser().vars();
-    vars.push(true);
-
-    const std::vector<std::pair<const wcstring, const wcstring>> abbreviations = {
-        {L"gc", L"git checkout"},
-        {L"foo", L"bar"},
-        {L"gx", L"git checkout"},
-    };
-    for (const auto &kv : abbreviations) {
-        int ret = vars.set_one(L"_fish_abbr_" + kv.first, ENV_LOCAL, kv.second);
-        if (ret != 0) err(L"Unable to set abbreviation variable");
+    {
+        auto literal_abbr = [](const wchar_t *name, const wchar_t *repl,
+                               abbrs_position_t pos = abbrs_position_t::command) {
+            return abbreviation_t(name, name /* key */, repl, pos);
+        };
+        auto abbrs = abbrs_get_set();
+        abbrs->add(literal_abbr(L"gc", L"git checkout"));
+        abbrs->add(literal_abbr(L"foo", L"bar"));
+        abbrs->add(literal_abbr(L"gx", L"git checkout"));
+        abbrs->add(literal_abbr(L"yin", L"yang", abbrs_position_t::anywhere));
     }
 
-    if (expand_abbreviation(L"", vars)) err(L"Unexpected success with empty abbreviation");
-    if (expand_abbreviation(L"nothing", vars)) err(L"Unexpected success with missing abbreviation");
+    // Helper to expand an abbreviation, enforcing we have no more than one result.
+    auto abbr_expand_1 = [](const wcstring &token, abbrs_position_t pos) -> maybe_t<wcstring> {
+        auto result = abbrs_match(token, pos);
+        if (result.size() > 1) {
+            err(L"abbreviation expansion for %ls returned more than 1 result", token.c_str());
+        }
+        if (result.empty()) {
+            return none();
+        }
+        return result.front().replacement;
+    };
 
-    auto mresult = expand_abbreviation(L"gc", vars);
+    auto cmd = abbrs_position_t::command;
+    if (abbr_expand_1(L"", cmd)) err(L"Unexpected success with empty abbreviation");
+    if (abbr_expand_1(L"nothing", cmd)) err(L"Unexpected success with missing abbreviation");
+
+    auto mresult = abbr_expand_1(L"gc", cmd);
     if (!mresult) err(L"Unexpected failure with gc abbreviation");
     if (*mresult != L"git checkout") err(L"Wrong abbreviation result for gc");
 
-    mresult = expand_abbreviation(L"foo", vars);
+    mresult = abbr_expand_1(L"foo", cmd);
     if (!mresult) err(L"Unexpected failure with foo abbreviation");
     if (*mresult != L"bar") err(L"Wrong abbreviation result for foo");
 
     maybe_t<wcstring> result;
-    auto expand_abbreviation_in_command = [](const wcstring &cmdline, size_t cursor_pos,
-                                             const environment_t &vars) -> maybe_t<wcstring> {
-        if (auto edit = reader_expand_abbreviation_in_command(cmdline, cursor_pos, vars)) {
+    auto expand_abbreviation_in_command = [](const wcstring &cmdline,
+                                             maybe_t<size_t> cursor_pos = {}) -> maybe_t<wcstring> {
+        if (auto replacement = reader_expand_abbreviation_at_cursor(
+                cmdline, cursor_pos.value_or(cmdline.size()), parser_t::principal_parser())) {
             wcstring cmdline_expanded = cmdline;
-            apply_edit(&cmdline_expanded, *edit);
+            std::vector<highlight_spec_t> colors{cmdline_expanded.size()};
+            apply_edit(&cmdline_expanded, &colors, edit_t{replacement->range, replacement->text});
             return cmdline_expanded;
         }
         return none_t();
     };
-    result = expand_abbreviation_in_command(L"just a command", 3, vars);
+    result = expand_abbreviation_in_command(L"just a command", 3);
     if (result) err(L"Command wrongly expanded on line %ld", (long)__LINE__);
-    result = expand_abbreviation_in_command(L"gc somebranch", 0, vars);
+    result = expand_abbreviation_in_command(L"gc somebranch", 0);
     if (!result) err(L"Command not expanded on line %ld", (long)__LINE__);
 
-    result = expand_abbreviation_in_command(L"gc somebranch", const_strlen(L"gc"), vars);
+    result = expand_abbreviation_in_command(L"gc somebranch", const_strlen(L"gc"));
     if (!result) err(L"gc not expanded");
     if (result != L"git checkout somebranch")
         err(L"gc incorrectly expanded on line %ld to '%ls'", (long)__LINE__, result->c_str());
 
     // Space separation.
-    result = expand_abbreviation_in_command(L"gx somebranch", const_strlen(L"gc"), vars);
+    result = expand_abbreviation_in_command(L"gx somebranch", const_strlen(L"gc"));
     if (!result) err(L"gx not expanded");
     if (result != L"git checkout somebranch")
         err(L"gc incorrectly expanded on line %ld to '%ls'", (long)__LINE__, result->c_str());
 
-    result = expand_abbreviation_in_command(L"echo hi ; gc somebranch",
-                                            const_strlen(L"echo hi ; g"), vars);
+    result =
+        expand_abbreviation_in_command(L"echo hi ; gc somebranch", const_strlen(L"echo hi ; g"));
     if (!result) err(L"gc not expanded on line %ld", (long)__LINE__);
     if (result != L"echo hi ; git checkout somebranch")
         err(L"gc incorrectly expanded on line %ld", (long)__LINE__);
 
     result = expand_abbreviation_in_command(L"echo (echo (echo (echo (gc ",
-                                            const_strlen(L"echo (echo (echo (echo (gc"), vars);
+                                            const_strlen(L"echo (echo (echo (echo (gc"));
     if (!result) err(L"gc not expanded on line %ld", (long)__LINE__);
     if (result != L"echo (echo (echo (echo (git checkout ")
         err(L"gc incorrectly expanded on line %ld to '%ls'", (long)__LINE__, result->c_str());
 
     // If commands should be expanded.
-    result = expand_abbreviation_in_command(L"if gc", const_strlen(L"if gc"), vars);
+    result = expand_abbreviation_in_command(L"if gc");
     if (!result) err(L"gc not expanded on line %ld", (long)__LINE__);
     if (result != L"if git checkout")
         err(L"gc incorrectly expanded on line %ld to '%ls'", (long)__LINE__, result->c_str());
 
     // Others should not be.
-    result = expand_abbreviation_in_command(L"of gc", const_strlen(L"of gc"), vars);
+    result = expand_abbreviation_in_command(L"of gc");
     if (result) err(L"gc incorrectly expanded on line %ld", (long)__LINE__);
 
     // Others should not be.
-    result = expand_abbreviation_in_command(L"command gc", const_strlen(L"command gc"), vars);
+    result = expand_abbreviation_in_command(L"command gc");
     if (result) err(L"gc incorrectly expanded on line %ld", (long)__LINE__);
 
-    vars.pop();
+    // yin/yang expands everywhere.
+    result = expand_abbreviation_in_command(L"command yin");
+    if (!result) err(L"gc not expanded on line %ld", (long)__LINE__);
+    if (result != L"command yang") {
+        err(L"command yin incorrectly expanded on line %ld to '%ls'", (long)__LINE__,
+            result->c_str());
+    }
+
+    // Renaming works.
+    {
+        auto abbrs = abbrs_get_set();
+        do_test(!abbrs->has_name(L"gcc"));
+        do_test(abbrs->has_name(L"gc"));
+        abbrs->rename(L"gc", L"gcc");
+        do_test(abbrs->has_name(L"gcc"));
+        do_test(!abbrs->has_name(L"gc"));
+        do_test(!abbrs->erase(L"gc"));
+        do_test(abbrs->erase(L"gcc"));
+        do_test(!abbrs->erase(L"gcc"));
+    }
 }
 
 /// Test path functions.
@@ -2462,7 +2608,7 @@ static void test_path() {
     do_test(path_apply_working_directory(L"abc/", L"/def/") == L"/def/abc/");
     do_test(path_apply_working_directory(L"/abc/", L"/def/") == L"/abc/");
     do_test(path_apply_working_directory(L"/abc", L"/def/") == L"/abc");
-    do_test(path_apply_working_directory(L"", L"/def/") == L"");
+    do_test(path_apply_working_directory(L"", L"/def/").empty());
     do_test(path_apply_working_directory(L"abc", L"") == L"abc");
 }
 
@@ -2510,6 +2656,11 @@ static void test_pager_navigation() {
         // Westward motion in upper left goes to the last filled column in the last row.
         {selection_motion_t::west, 15},
         // East goes back.
+        {selection_motion_t::east, 0},
+
+        {selection_motion_t::west, 15},
+        {selection_motion_t::west, 11},
+        {selection_motion_t::east, 15},
         {selection_motion_t::east, 0},
 
         // "Next" motion goes down the column.
@@ -2608,9 +2759,9 @@ static void test_pager_layout() {
         {22, L"abcdefghij  (1234567…)"},   {21, L"abcdefghij  (123456…)"},
         {20, L"abcdefghij  (12345…)"},     {19, L"abcdefghij  (1234…)"},
         {18, L"abcdefgh…  (1234…)"},       {17, L"abcdefg…  (1234…)"},
-        {16, L"abcdefg…  (123…)"},         {0, NULL}  // sentinel terminator
+        {16, L"abcdefg…  (123…)"},         {0, nullptr}  // sentinel terminator
     };
-    for (size_t i = 0; testcases1[i].expected != NULL; i++) {
+    for (size_t i = 0; testcases1[i].expected != nullptr; i++) {
         testcases1[i].run(pager);
     }
 
@@ -2623,9 +2774,9 @@ static void test_pager_layout() {
         {22, L"abcdefghijklmnop…  (1)"},   {21, L"abcdefghijklmno…  (1)"},
         {20, L"abcdefghijklmn…  (1)"},     {19, L"abcdefghijklm…  (1)"},
         {18, L"abcdefghijkl…  (1)"},       {17, L"abcdefghijk…  (1)"},
-        {16, L"abcdefghij…  (1)"},         {0, NULL}  // sentinel terminator
+        {16, L"abcdefghij…  (1)"},         {0, nullptr}  // sentinel terminator
     };
-    for (size_t i = 0; testcases2[i].expected != NULL; i++) {
+    for (size_t i = 0; testcases2[i].expected != nullptr; i++) {
         testcases2[i].run(pager);
     }
 
@@ -2638,9 +2789,9 @@ static void test_pager_layout() {
         {22, L"abcdefghijklmnopqrst"}, {21, L"abcdefghijklmnopqrst"},
         {20, L"abcdefghijklmnopqrst"}, {19, L"abcdefghijklmnopqr…"},
         {18, L"abcdefghijklmnopq…"},   {17, L"abcdefghijklmnop…"},
-        {16, L"abcdefghijklmno…"},     {0, NULL}  // sentinel terminator
+        {16, L"abcdefghijklmno…"},     {0, nullptr}  // sentinel terminator
     };
-    for (size_t i = 0; testcases3[i].expected != NULL; i++) {
+    for (size_t i = 0; testcases3[i].expected != nullptr; i++) {
         testcases3[i].run(pager);
     }
 }
@@ -2730,6 +2881,7 @@ static void test_word_motion() {
     test_1_word_motion(word_motion_right, move_word_style_punctuation, L"^a^ bcd^");
     test_1_word_motion(word_motion_right, move_word_style_punctuation, L"a^b^ cde^");
     test_1_word_motion(word_motion_right, move_word_style_punctuation, L"^ab^ cde^");
+    test_1_word_motion(word_motion_right, move_word_style_punctuation, L"^ab^&cd^ ^& ^e^ f^&");
 
     test_1_word_motion(word_motion_right, move_word_style_whitespace, L"^^a-b-c^ d-e-f");
     test_1_word_motion(word_motion_right, move_word_style_whitespace, L"^a-b-c^\n d-e-f^ ");
@@ -2752,25 +2904,27 @@ static void test_is_potential_path() {
     const wcstring_list_t wds({L".", wd});
 
     operation_context_t ctx{env_stack_t::principal()};
-    do_test(is_potential_path(L"al", wds, ctx, PATH_REQUIRE_DIR));
-    do_test(is_potential_path(L"alpha/", wds, ctx, PATH_REQUIRE_DIR));
-    do_test(is_potential_path(L"aard", wds, ctx, 0));
+    do_test(is_potential_path(L"al", true, wds, ctx, PATH_REQUIRE_DIR));
+    do_test(is_potential_path(L"alpha/", true, wds, ctx, PATH_REQUIRE_DIR));
+    do_test(is_potential_path(L"aard", true, wds, ctx, 0));
+    do_test(!is_potential_path(L"aard", false, wds, ctx, 0));
+    do_test(!is_potential_path(L"alp/", true, wds, ctx, PATH_REQUIRE_DIR | PATH_FOR_CD));
 
-    do_test(!is_potential_path(L"balpha/", wds, ctx, PATH_REQUIRE_DIR));
-    do_test(!is_potential_path(L"aard", wds, ctx, PATH_REQUIRE_DIR));
-    do_test(!is_potential_path(L"aarde", wds, ctx, PATH_REQUIRE_DIR));
-    do_test(!is_potential_path(L"aarde", wds, ctx, 0));
+    do_test(!is_potential_path(L"balpha/", true, wds, ctx, PATH_REQUIRE_DIR));
+    do_test(!is_potential_path(L"aard", true, wds, ctx, PATH_REQUIRE_DIR));
+    do_test(!is_potential_path(L"aarde", true, wds, ctx, PATH_REQUIRE_DIR));
+    do_test(!is_potential_path(L"aarde", true, wds, ctx, 0));
 
-    do_test(is_potential_path(L"test/is_potential_path_test/aardvark", wds, ctx, 0));
-    do_test(is_potential_path(L"test/is_potential_path_test/al", wds, ctx, PATH_REQUIRE_DIR));
-    do_test(is_potential_path(L"test/is_potential_path_test/aardv", wds, ctx, 0));
+    do_test(is_potential_path(L"test/is_potential_path_test/aardvark", true, wds, ctx, 0));
+    do_test(is_potential_path(L"test/is_potential_path_test/al", true, wds, ctx, PATH_REQUIRE_DIR));
+    do_test(is_potential_path(L"test/is_potential_path_test/aardv", true, wds, ctx, 0));
 
-    do_test(
-        !is_potential_path(L"test/is_potential_path_test/aardvark", wds, ctx, PATH_REQUIRE_DIR));
-    do_test(!is_potential_path(L"test/is_potential_path_test/al/", wds, ctx, 0));
-    do_test(!is_potential_path(L"test/is_potential_path_test/ar", wds, ctx, 0));
+    do_test(!is_potential_path(L"test/is_potential_path_test/aardvark", true, wds, ctx,
+                               PATH_REQUIRE_DIR));
+    do_test(!is_potential_path(L"test/is_potential_path_test/al/", true, wds, ctx, 0));
+    do_test(!is_potential_path(L"test/is_potential_path_test/ar", true, wds, ctx, 0));
 
-    do_test(is_potential_path(L"/usr", wds, ctx, PATH_REQUIRE_DIR));
+    do_test(is_potential_path(L"/usr", true, wds, ctx, PATH_REQUIRE_DIR));
 }
 
 /// Test the 'test' builtin.
@@ -2789,7 +2943,7 @@ static bool run_one_test_test(int expected, const wcstring_list_t &lst, bool bra
     maybe_t<int> result = builtin_test(parser, streams, cargv.get());
 
     if (result != expected) {
-        std::wstring got = result ? std::to_wstring(result.value()) : L"nothing";
+        std::wstring got = result.has_value() ? std::to_wstring(result.value()) : L"nothing";
         err(L"expected builtin_test() to return %d, got %s", expected, got.c_str());
     }
     return result == expected;
@@ -2819,8 +2973,6 @@ static void test_test_brackets() {
     parser_t &parser = parser_t::principal_parser();
     null_output_stream_t null{};
     io_streams_t streams(null, null);
-
-    wcstring_list_t args;
 
     const wchar_t *args1[] = {L"[", L"foo", nullptr};
     do_test(builtin_test(parser, streams, args1) != 0);
@@ -2933,7 +3085,7 @@ static void test_wcstod() {
     auto tod_test = [](const wchar_t *a, const char *b) {
         char *narrow_end = nullptr;
         wchar_t *wide_end = nullptr;
-        double val1 = std::wcstod(a, &wide_end);
+        double val1 = fish_wcstod(a, &wide_end);
         double val2 = strtod(b, &narrow_end);
         do_test((std::isnan(val1) && std::isnan(val2)) || fabs(val1 - val2) <= __DBL_EPSILON__);
         do_test(wide_end - a == narrow_end - b);
@@ -2944,6 +3096,49 @@ static void test_wcstod() {
     tod_test(L"-1000", "-1000");
     tod_test(L"0.12345", "0.12345");
     tod_test(L"nope", "nope");
+}
+
+static void test_fish_wcstod_underscores() {
+    say(L"Testing fish_wcstod_underscores");
+
+    auto test_case = [](const wchar_t *s, size_t expected_num_consumed) {
+        wchar_t *endptr = nullptr;
+        fish_wcstod_underscores(s, &endptr);
+        size_t num_consumed = (size_t)(endptr - (wchar_t *)s);
+        do_test(expected_num_consumed == num_consumed);
+    };
+
+    test_case(L"123", 3);
+    test_case(L"1_2.3_4.5_6", 7);
+    test_case(L"1_2", 3);
+    test_case(L"1_._2", 5);
+    test_case(L"1__2", 4);
+    test_case(L" 1__2 3__4 ", 5);
+    test_case(L"1_2 3_4", 3);
+    test_case(L" 1", 2);
+    test_case(L" 1_", 3);
+    test_case(L" 1__", 4);
+    test_case(L" 1___", 5);
+    test_case(L" 1___ 2___", 5);
+    test_case(L" _1", 3);
+    test_case(L"1 ", 1);
+    test_case(L"infinity_", 8);
+    test_case(L" -INFINITY", 10);
+    test_case(L"_infinity", 0);
+    test_case(L"nan(0)", 6);
+    test_case(L"nan(0)_", 6);
+    test_case(L"_nan(0)", 0);
+    // We don't strip the underscores in this commented-out test case, and the behavior is
+    // implementation-defined, so we don't actually know how many characters will get consumed. On
+    // macOS the strtod man page only says what happens with an alphanumeric string passed to nan(),
+    // but the strtod consumes all of the characters even if there are underscores.
+    // test_case(L"nan(0_1_2)", 3);
+    test_case(L" _ 1", 0);
+    test_case(L"0x_dead_beef", 12);
+    test_case(L"None", 0);
+    test_case(L" None", 0);
+    test_case(L"Also none", 0);
+    test_case(L" Also none", 0);
 }
 
 static void test_dup2s() {
@@ -3080,11 +3275,50 @@ static void test_autoload() {
     autoload_tester_t::run_test();
 }
 
+// Construct function properties for testing.
+static std::shared_ptr<function_properties_t> make_test_func_props() {
+    auto ret = std::make_shared<function_properties_t>();
+    ret->parsed_source = parse_source(L"function stuff; end", parse_flag_none, nullptr);
+    assert(ret->parsed_source && "Failed to parse");
+    for (const auto &node : ret->parsed_source->ast) {
+        if (const auto *s = node.try_as<ast::block_statement_t>()) {
+            ret->func_node = s;
+            break;
+        }
+    }
+    assert(ret->func_node && "Unable to find block statement");
+    return ret;
+}
+
+static void test_wildcards() {
+    say(L"Testing wildcards");
+    do_test(!wildcard_has(L""));
+    do_test(wildcard_has(L"*"));
+    do_test(!wildcard_has(L"\\*"));
+    do_test(!wildcard_has(L"\"*\""));
+
+    wcstring wc = L"foo*bar";
+    do_test(wildcard_has(wc) && !wildcard_has_internal(wc));
+    unescape_string_in_place(&wc, UNESCAPE_SPECIAL);
+    do_test(!wildcard_has(wc) && wildcard_has_internal(wc));
+
+    auto &feat = mutable_fish_features();
+    auto saved = feat.test(features_t::flag_t::qmark_noglob);
+    feat.set(features_t::flag_t::qmark_noglob, false);
+    do_test(wildcard_has(L"?"));
+    do_test(!wildcard_has(L"\\?"));
+    feat.set(features_t::flag_t::qmark_noglob, true);
+    do_test(!wildcard_has(L"?"));
+    do_test(!wildcard_has(L"\\?"));
+    feat.set(features_t::flag_t::qmark_noglob, saved);
+}
+
 static void test_complete() {
     say(L"Testing complete");
 
+    auto func_props = make_test_func_props();
     struct test_complete_vars_t : environment_t {
-        wcstring_list_t get_names(int flags) const override {
+        wcstring_list_t get_names(env_mode_flags_t flags) const override {
             UNUSED(flags);
             return {L"Foo1", L"Foo2",  L"Foo3",   L"Bar1",   L"Bar2",
                     L"Bar3", L"alpha", L"ALPHA!", L"gamma1", L"GAMMA2"};
@@ -3103,7 +3337,7 @@ static void test_complete() {
 
     auto parser = parser_t::principal_parser().shared();
 
-    auto do_complete = [&](const wcstring &cmd, completion_request_flags_t flags) {
+    auto do_complete = [&](const wcstring &cmd, completion_request_options_t flags) {
         return complete(cmd, flags, operation_context_t{parser, vars, no_cancel});
     };
 
@@ -3141,7 +3375,9 @@ static void test_complete() {
     completions_sort_and_prioritize(&completions);
     do_test(completions.empty());
 
-    completions = do_complete(L"$1", completion_request_t::fuzzy_match);
+    completion_request_options_t fuzzy_options{};
+    fuzzy_options.fuzzy_match = true;
+    completions = do_complete(L"$1", fuzzy_options);
     completions_sort_and_prioritize(&completions);
     do_test(completions.size() == 3);
     do_test(completions.at(0).completion == L"$Bar1");
@@ -3191,6 +3427,13 @@ static void test_complete() {
         completions.front().completion, completions.front().flags, cmdline, &where, false);
     do_test(newcmdline == L"touch test/complete_test/bracket\\[abc\\] ");
 
+    // #8820
+    size_t cursor_pos = 11;
+    newcmdline =
+        completion_apply_to_command_line(L"Debug/", COMPLETE_REPLACES_TOKEN | COMPLETE_NO_SPACE,
+                                         L"mv debug debug", &cursor_pos, true);
+    do_test(newcmdline == L"mv debug Debug/");
+
 #ifndef __CYGWIN__  // Square brackets are not legal path characters on WIN32/CYGWIN
     cmdline = LR"(touch test/complete_test/gnarlybracket\\[)";
     completions = do_complete(cmdline, {});
@@ -3203,9 +3446,7 @@ static void test_complete() {
 #endif
 
     // Add a function and test completing it in various ways.
-    // Note we're depending on function_add not complaining when given missing parsed_source /
-    // body_node.
-    function_add(L"scuttlebutt", {}, nullptr, {});
+    function_add(L"scuttlebutt", func_props);
 
     // Complete a function name.
     completions = do_complete(L"echo (scuttlebut", {});
@@ -3214,21 +3455,21 @@ static void test_complete() {
 
     // But not with the command prefix.
     completions = do_complete(L"echo (command scuttlebut", {});
-    do_test(completions.size() == 0);
+    do_test(completions.empty());
 
     // Not with the builtin prefix.
     completions = do_complete(L"echo (builtin scuttlebut", {});
-    do_test(completions.size() == 0);
+    do_test(completions.empty());
 
     // Not after a redirection.
     completions = do_complete(L"echo hi > scuttlebut", {});
-    do_test(completions.size() == 0);
+    do_test(completions.empty());
 
     // Trailing spaces (#1261).
     completion_mode_t no_files{};
     no_files.no_files = true;
-    complete_add(L"foobarbaz", false, wcstring(), option_type_args_only, no_files, NULL, L"qux",
-                 NULL, COMPLETE_AUTO_SPACE);
+    complete_add(L"foobarbaz", false, wcstring(), option_type_args_only, no_files, {}, L"qux",
+                 nullptr, COMPLETE_AUTO_SPACE);
     completions = do_complete(L"foobarbaz ", {});
     do_test(completions.size() == 1);
     do_test(completions.at(0).completion == L"qux");
@@ -3275,8 +3516,8 @@ static void test_complete() {
     do_test(completions.size() == 1);
     do_test(completions.at(0).completion == L"stfile");
     completions = do_complete(L"something abc=stfile", {});
-    do_test(completions.size() == 0);
-    completions = do_complete(L"something abc=stfile", completion_request_t::fuzzy_match);
+    do_test(completions.empty());
+    completions = do_complete(L"something abc=stfile", fuzzy_options);
     do_test(completions.size() == 1);
     do_test(completions.at(0).completion == L"abc=testfile");
 
@@ -3294,17 +3535,16 @@ static void test_complete() {
     completions.clear();
 
     // Test abbreviations.
-    auto &pvars = parser_t::principal_parser().vars();
-    function_add(L"testabbrsonetwothreefour", {}, nullptr, {});
-    int ret = pvars.set_one(L"_fish_abbr_testabbrsonetwothreezero", ENV_LOCAL, L"expansion");
+    function_add(L"testabbrsonetwothreefour", func_props);
+    abbrs_get_set()->add(abbreviation_t(L"somename", L"testabbrsonetwothreezero", L"expansion"));
     completions = complete(L"testabbrsonetwothree", {}, parser->context());
-    do_test(ret == 0);
     do_test(completions.size() == 2);
     do_test(completions.at(0).completion == L"four");
     do_test((completions.at(0).flags & COMPLETE_NO_SPACE) == 0);
     // Abbreviations should not have a space after them.
     do_test(completions.at(1).completion == L"zero");
     do_test((completions.at(1).flags & COMPLETE_NO_SPACE) != 0);
+    abbrs_get_set()->erase(L"testabbrsonetwothreezero");
 
     // Test wraps.
     do_test(comma_join(complete_get_wrap_targets(L"wrapper1")).empty());
@@ -3387,8 +3627,8 @@ static void test_wait_handles() {
     do_test(whs.get_by_pid(5) == nullptr);
 
     // Duplicate pids drop oldest.
-    whs.add(std::make_shared<wait_handle_t>(5, L"first"));
-    whs.add(std::make_shared<wait_handle_t>(5, L"second"));
+    whs.add(std::make_shared<wait_handle_t>(5, 0, L"first"));
+    whs.add(std::make_shared<wait_handle_t>(5, 0, L"second"));
     do_test(whs.size() == 1);
     do_test(whs.get_by_pid(5)->base_name == L"second");
 
@@ -3398,11 +3638,11 @@ static void test_wait_handles() {
     do_test(whs.size() == 0);
 
     // Test evicting oldest.
-    whs.add(std::make_shared<wait_handle_t>(1, L"1"));
-    whs.add(std::make_shared<wait_handle_t>(2, L"2"));
-    whs.add(std::make_shared<wait_handle_t>(3, L"3"));
-    whs.add(std::make_shared<wait_handle_t>(4, L"4"));
-    whs.add(std::make_shared<wait_handle_t>(5, L"5"));
+    whs.add(std::make_shared<wait_handle_t>(1, 0, L"1"));
+    whs.add(std::make_shared<wait_handle_t>(2, 0, L"2"));
+    whs.add(std::make_shared<wait_handle_t>(3, 0, L"3"));
+    whs.add(std::make_shared<wait_handle_t>(4, 0, L"4"));
+    whs.add(std::make_shared<wait_handle_t>(5, 0, L"5"));
     do_test(whs.size() == 4);
     auto start = whs.get_list().begin();
     do_test(std::next(start, 0)->get()->base_name == L"5");
@@ -3448,7 +3688,7 @@ static void test_completion_insertions() {
 static void perform_one_autosuggestion_cd_test(const wcstring &command, const wcstring &expected,
                                                const environment_t &vars, long line) {
     completion_list_t comps =
-        complete(command, completion_request_t::autosuggestion, operation_context_t{vars});
+        complete(command, completion_request_options_t::autosuggest(), operation_context_t{vars});
 
     bool expects_error = (expected == L"<error>");
 
@@ -3483,7 +3723,8 @@ static void perform_one_autosuggestion_cd_test(const wcstring &command, const wc
 
 static void perform_one_completion_cd_test(const wcstring &command, const wcstring &expected,
                                            const environment_t &vars, long line) {
-    completion_list_t comps = complete(command, {}, operation_context_t{vars});
+    completion_list_t comps = complete(
+        command, {}, operation_context_t{parser_t::principal_parser().shared(), vars, no_cancel});
 
     bool expects_error = (expected == L"<error>");
 
@@ -3519,10 +3760,20 @@ static void perform_one_completion_cd_test(const wcstring &command, const wcstri
 // Testing test_autosuggest_suggest_special, in particular for properly handling quotes and
 // backslashes.
 static void test_autosuggest_suggest_special() {
+    // We execute LSAN with use_tls=0 under CI to avoid a SIGSEGV crash in LSAN itself.
+    // Unfortunately, this causes it to incorrectly flag a memory leak here that doesn't reproduce
+    // locally with use_tls=1.
+#ifdef FISH_CI_SAN
+    __lsan::ScopedDisabler disable_leak_detection{};
+#endif
+
     if (system("mkdir -p 'test/autosuggest_test/0foobar'")) err(L"mkdir failed");
     if (system("mkdir -p 'test/autosuggest_test/1foo bar'")) err(L"mkdir failed");
     if (system("mkdir -p 'test/autosuggest_test/2foo  bar'")) err(L"mkdir failed");
+#ifndef __CYGWIN__
+    // Cygwin disallows backslashes in filenames.
     if (system("mkdir -p 'test/autosuggest_test/3foo\\bar'")) err(L"mkdir failed");
+#endif
     if (system("mkdir -p test/autosuggest_test/4foo\\'bar")) {
         err(L"mkdir failed");  // a path with a single quote
     }
@@ -3546,6 +3797,15 @@ static void test_autosuggest_suggest_special() {
         err(L"mkdir failed");
     }
 
+    // Ensure symlink don't cause us to chase endlessly.
+    if (system("mkdir -p test/autosuggest_test/has_loop/loopy")) {
+        err(L"mkdir failed");
+    }
+    (void)unlink("test/autosuggest_test/has_loop/loopy/loop");
+    if (symlink("../loopy", "test/autosuggest_test/has_loop/loopy/loop")) {
+        err(L"symlink failed");
+    }
+
     const wcstring wd = L"test/autosuggest_test";
 
     pwd_environment_t vars{};
@@ -3563,11 +3823,13 @@ static void test_autosuggest_suggest_special() {
                                        __LINE__);
     perform_one_autosuggestion_cd_test(L"cd 'test/autosuggest_test/2", L"foo  bar/", vars,
                                        __LINE__);
+#ifndef __CYGWIN__
     perform_one_autosuggestion_cd_test(L"cd test/autosuggest_test/3", L"foo\\bar/", vars, __LINE__);
     perform_one_autosuggestion_cd_test(L"cd \"test/autosuggest_test/3", L"foo\\bar/", vars,
                                        __LINE__);
     perform_one_autosuggestion_cd_test(L"cd 'test/autosuggest_test/3", L"foo\\bar/", vars,
                                        __LINE__);
+#endif
     perform_one_autosuggestion_cd_test(L"cd test/autosuggest_test/4", L"foo'bar/", vars, __LINE__);
     perform_one_autosuggestion_cd_test(L"cd \"test/autosuggest_test/4", L"foo'bar/", vars,
                                        __LINE__);
@@ -3586,6 +3848,9 @@ static void test_autosuggest_suggest_special() {
     perform_one_autosuggestion_cd_test(L"cd test/autosuggest_test/start/", L"unique2/unique3/",
                                        vars, __LINE__);
 
+    perform_one_autosuggestion_cd_test(L"cd test/autosuggest_test/has_loop/", L"loopy/loop/", vars,
+                                       __LINE__);
+
     if (!pushd(wcs2string(wd).c_str())) return;
     perform_one_autosuggestion_cd_test(L"cd 0", L"foobar/", vars, __LINE__);
     perform_one_autosuggestion_cd_test(L"cd \"0", L"foobar/", vars, __LINE__);
@@ -3596,9 +3861,11 @@ static void test_autosuggest_suggest_special() {
     perform_one_autosuggestion_cd_test(L"cd 2", L"foo  bar/", vars, __LINE__);
     perform_one_autosuggestion_cd_test(L"cd \"2", L"foo  bar/", vars, __LINE__);
     perform_one_autosuggestion_cd_test(L"cd '2", L"foo  bar/", vars, __LINE__);
+#ifndef __CYGWIN__
     perform_one_autosuggestion_cd_test(L"cd 3", L"foo\\bar/", vars, __LINE__);
     perform_one_autosuggestion_cd_test(L"cd \"3", L"foo\\bar/", vars, __LINE__);
     perform_one_autosuggestion_cd_test(L"cd '3", L"foo\\bar/", vars, __LINE__);
+#endif
     perform_one_autosuggestion_cd_test(L"cd 4", L"foo'bar/", vars, __LINE__);
     perform_one_autosuggestion_cd_test(L"cd \"4", L"foo'bar/", vars, __LINE__);
     perform_one_autosuggestion_cd_test(L"cd '4", L"foo'bar/", vars, __LINE__);
@@ -3624,8 +3891,8 @@ static void test_autosuggest_suggest_special() {
 }
 
 static void perform_one_autosuggestion_should_ignore_test(const wcstring &command, long line) {
-    completion_list_t comps =
-        complete(command, completion_request_t::autosuggestion, operation_context_t::empty());
+    completion_list_t comps = complete(command, completion_request_options_t::autosuggest(),
+                                       operation_context_t::empty());
     do_test(comps.empty());
     if (!comps.empty()) {
         const wcstring &suggestion = comps.front().completion;
@@ -3662,7 +3929,7 @@ static void test_autosuggestion_combining() {
 static void test_history_matches(history_search_t &search, const wcstring_list_t &expected,
                                  unsigned from_line) {
     wcstring_list_t found;
-    while (search.go_backwards()) {
+    while (search.go_to_next_match(history_search_direction_t::backward)) {
         found.push_back(search.current_string());
     }
     do_test_from(expected == found, from_line);
@@ -3741,13 +4008,13 @@ static void test_undo() {
 
     editable_line_t line;
     do_test(!line.undo());  // nothing to undo
-    do_test(line.text() == L"");
+    do_test(line.text().empty());
     do_test(line.position() == 0);
-    line.push_edit(edit_t(0, 0, L"a b c"));
+    line.push_edit(edit_t(0, 0, L"a b c"), true);
     do_test(line.text() == L"a b c");
     do_test(line.position() == 5);
     line.set_position(2);
-    line.push_edit(edit_t(2, 1, L"B"));  // replacement right of cursor
+    line.push_edit(edit_t(2, 1, L"B"), true);  // replacement right of cursor
     do_test(line.text() == L"a B c");
     line.undo();
     do_test(line.text() == L"a b c");
@@ -3758,7 +4025,7 @@ static void test_undo() {
 
     do_test(!line.redo());  // nothing to redo
 
-    line.push_edit(edit_t(0, 2, L""));  // deletion left of cursor
+    line.push_edit(edit_t(0, 2, L""), true);  // deletion left of cursor
     do_test(line.text() == L"B c");
     do_test(line.position() == 1);
     line.undo();
@@ -3768,27 +4035,23 @@ static void test_undo() {
     do_test(line.text() == L"B c");
     do_test(line.position() == 1);
 
-    line.push_edit(edit_t(0, line.size(), L"a b c"));  // replacement left and right of cursor
+    line.push_edit(edit_t(0, line.size(), L"a b c"), true);  // replacement left and right of cursor
     do_test(line.text() == L"a b c");
     do_test(line.position() == 5);
 
     say(L"Testing undoing coalesced edits.");
     line.clear();
-    line.push_edit(edit_t(line.position(), 0, L"a"));
-    line.insert_coalesce(L"b");
-    line.insert_coalesce(L"c");
-    do_test(line.undo_history.edits.size() == 1);
-    line.push_edit(edit_t(line.position(), 0, L" "));
-    do_test(line.undo_history.edits.size() == 2);
+    line.push_edit(edit_t(line.position(), 0, L"a"), true);
+    line.push_edit(edit_t(line.position(), 0, L"b"), true);
+    line.push_edit(edit_t(line.position(), 0, L"c"), true);
+    line.push_edit(edit_t(line.position(), 0, L" "), true);
     line.undo();
     line.undo();
     line.redo();
     do_test(line.text() == L"abc");
-    do_test(line.undo_history.edits.size() == 2);
     // This removes the space insertion from the history, but does not coalesce with the first edit.
-    line.push_edit(edit_t(line.position(), 0, L"d"));
-    do_test(line.undo_history.edits.size() == 2);
-    line.insert_coalesce(L"e");
+    line.push_edit(edit_t(line.position(), 0, L"d"), true);
+    line.push_edit(edit_t(line.position(), 0, L"e"), true);
     do_test(line.text() == L"abcde");
     line.undo();
     do_test(line.text() == L"abc");
@@ -3970,9 +4233,9 @@ static void test_universal_callbacks() {
     // Should see exactly three changes.
     do_test(callbacks.size() == 3);
     do_test(callbacks.at(0).key == L"alpha");
-    do_test(callbacks.at(0).val == wcstring{L"2"});
+    do_test(callbacks.at(0).val->as_string() == L"2");
     do_test(callbacks.at(1).key == L"beta");
-    do_test(callbacks.at(1).val == wcstring{L"1"});
+    do_test(callbacks.at(1).val->as_string() == L"1");
     do_test(callbacks.at(2).key == L"delta");
     do_test(callbacks.at(2).val == none());
     system_assert("rm -Rf test/fish_uvars_test/");
@@ -4033,7 +4296,7 @@ bool poll_notifier(const std::unique_ptr<universal_notifier_t> &note) {
 
     bool result = false;
     int fd = note->notification_fd();
-    if (fd >= 0 && select_wrapper_t::poll_fd_readable(fd)) {
+    if (fd >= 0 && fd_readable_set_t::poll_fd_readable(fd)) {
         result = note->notification_fd_became_readable(fd);
     }
     return result;
@@ -4045,13 +4308,13 @@ static void test_notifiers_with_strategy(universal_notifier_t::notifier_strategy
     std::unique_ptr<universal_notifier_t> notifiers[notifier_count];
 
     // Populate array of notifiers.
-    for (size_t i = 0; i < notifier_count; i++) {
-        notifiers[i] = universal_notifier_t::new_notifier_for_strategy(strategy, UVARS_TEST_PATH);
+    for (auto &notifier : notifiers) {
+        notifier = universal_notifier_t::new_notifier_for_strategy(strategy, UVARS_TEST_PATH);
     }
 
     // Nobody should poll yet.
-    for (size_t i = 0; i < notifier_count; i++) {
-        if (poll_notifier(notifiers[i])) {
+    for (const auto &notifier : notifiers) {
+        if (poll_notifier(notifier)) {
             err(L"Universal variable notifier polled true before any changes, with strategy %d",
                 (int)strategy);
         }
@@ -4095,15 +4358,15 @@ static void test_notifiers_with_strategy(universal_notifier_t::notifier_strategy
             // Have to clean up the posted one first, so that the others see the pipe become no
             // longer readable.
             poll_notifier(notifiers[post_idx]);
-            for (size_t i = 0; i < notifier_count; i++) {
-                poll_notifier(notifiers[i]);
+            for (const auto &notifier : notifiers) {
+                poll_notifier(notifier);
             }
         }
     }
 
     // Nobody should poll now.
-    for (size_t i = 0; i < notifier_count; i++) {
-        if (poll_notifier(notifiers[i])) {
+    for (const auto &notifier : notifiers) {
+        if (poll_notifier(notifier)) {
             err(L"Universal variable notifier polled true after all changes, with strategy %d",
                 (int)strategy);
         }
@@ -4227,7 +4490,7 @@ void history_tests_t::test_history() {
         }
 
         // Record this item.
-        history_item_t item(value, time(NULL));
+        history_item_t item(value, time(nullptr));
         item.required_paths = paths;
         before.push_back(item);
         history->add(std::move(item));
@@ -4257,10 +4520,10 @@ void history_tests_t::test_history() {
 }
 // Wait until the next second.
 static void time_barrier() {
-    time_t start = time(NULL);
+    time_t start = time(nullptr);
     do {
         usleep(1000);
-    } while (time(NULL) == start);
+    } while (time(nullptr) == start);
 }
 
 static wcstring_list_t generate_history_lines(size_t item_count, size_t idx) {
@@ -4283,22 +4546,20 @@ void history_tests_t::test_history_races_pound_on_history(size_t item_count, siz
 }
 
 void history_tests_t::test_history_races() {
-    say(L"Testing history race conditions");
-
-    // It appears TSAN and ASAN's allocators do not release their locks properly in atfork, so
-    // allocating with multiple threads risks deadlock. Drain threads before running under ASAN.
-    // TODO: stop forking with these tests.
-    bool needs_thread_drain = false;
-#if __SANITIZE_ADDRESS__
-    needs_thread_drain |= true;
-#endif
-#if defined(__has_feature)
-    needs_thread_drain |= __has_feature(thread_sanitizer) || __has_feature(address_sanitizer);
-#endif
-
-    if (needs_thread_drain) {
-        iothread_drain_all();
+    // This always fails under WSL
+    if (is_windows_subsystem_for_linux()) {
+        return;
     }
+
+    // This fails too often on Github Actions,
+    // leading to a bunch of spurious test failures on unrelated PRs.
+    // For now it's better to disable it.
+    // TODO: Figure out *why* it does that and fix it.
+    if (getenv("CI")) {
+        return;
+    }
+
+    say(L"Testing history race conditions");
 
     // Test concurrent history writing.
     // How many concurrent writers we have
@@ -4591,7 +4852,7 @@ static bool history_equals(const shared_ptr<history_t> &hist, const wchar_t *con
     for (;;) {
         const wchar_t *expected = strings[array_idx];
         history_item_t item = hist->item_at_index(history_idx);
-        if (expected == NULL) {
+        if (expected == nullptr) {
             if (!item.empty()) {
                 err(L"Expected empty item at history index %lu, instead found: %ls", history_idx,
                     item.str().c_str());
@@ -4621,7 +4882,7 @@ void history_tests_t::test_history_formats() {
     } else {
         // Note: This is backwards from what appears in the file.
         const wchar_t *const expected[] = {
-            L"#def", L"echo #abc", L"function yay\necho hi\nend", L"cd foobar", L"ls /", NULL};
+            L"#def", L"echo #abc", L"function yay\necho hi\nend", L"cd foobar", L"ls /", nullptr};
 
         auto test_history = history_t::with_name(name);
         if (!history_equals(test_history, expected)) {
@@ -4636,7 +4897,7 @@ void history_tests_t::test_history_formats() {
         err(L"Couldn't open file tests/%ls", name);
     } else {
         const wchar_t *const expected[] = {L"echo this has\\\nbackslashes",
-                                           L"function foo\necho bar\nend", L"echo alpha", NULL};
+                                           L"function foo\necho bar\nend", L"echo alpha", nullptr};
 
         auto test_history = history_t::with_name(name);
         if (!history_equals(test_history, expected)) {
@@ -4654,13 +4915,15 @@ void history_tests_t::test_history_formats() {
         // We don't expect whitespace to be elided (#4908: except for leading/trailing whitespace)
         const wchar_t *expected[] = {L"EOF",
                                      L"sleep 123",
+                                     L"posix_cmd_sub $(is supported but only splits on newlines)",
+                                     L"posix_cmd_sub \"$(is supported)\"",
                                      L"a && echo valid construct",
                                      L"final line",
                                      L"echo supsup",
                                      L"export XVAR='exported'",
                                      L"history --help",
                                      L"echo foo",
-                                     NULL};
+                                     nullptr};
         auto test_history = history_t::with_name(L"bash_import");
         test_history->populate_from_bash(f);
         if (!history_equals(test_history, expected)) {
@@ -4678,7 +4941,7 @@ void history_tests_t::test_history_formats() {
         // We simply invoke get_string_representation. If we don't die, the test is a success.
         auto test_history = history_t::with_name(name);
         const wchar_t *expected[] = {L"no_newline_at_end_of_file", L"corrupt_prefix",
-                                     L"this_command_is_ok", NULL};
+                                     L"this_command_is_ok", nullptr};
         if (!history_equals(test_history, expected)) {
             err(L"test_history_formats failed for %ls\n", name);
         }
@@ -4801,7 +5064,7 @@ static void test_new_parser_fuzzing() {
         if (log_it) std::fwprintf(stderr, L"done (%lu)\n", permutation);
     }
     double end = timef();
-    if (log_it) say(L"All fuzzed in %f seconds!", end - start);
+    if (log_it) say(L"All fuzzed in %.2f seconds!", end - start);
 }
 
 // Parse a statement, returning the command, args (joined by spaces), and the decoration. Returns
@@ -5025,14 +5288,14 @@ static wcstring_list_t separate_by_format_specifiers(const wchar_t *format) {
     const wchar_t *end = format + std::wcslen(format);
     while (cursor < end) {
         const wchar_t *next_specifier = std::wcschr(cursor, '%');
-        if (next_specifier == NULL) {
+        if (next_specifier == nullptr) {
             next_specifier = end;
         }
-        assert(next_specifier != NULL);
+        assert(next_specifier != nullptr);
 
         // Don't return empty strings.
         if (next_specifier > cursor) {
-            result.push_back(wcstring(cursor, next_specifier - cursor));
+            result.emplace_back(cursor, next_specifier - cursor);
         }
 
         // Walk over the format specifier (if any).
@@ -5102,9 +5365,7 @@ static void test_error_messages() {
                        {L"echo $", ERROR_NO_VAR_NAME},
                        {L"echo foo\"$\"bar", ERROR_NO_VAR_NAME},
                        {L"echo \"foo\"$\"bar\"", ERROR_NO_VAR_NAME},
-                       {L"echo foo $ bar", ERROR_NO_VAR_NAME},
-                       {L"echo foo$(foo)bar", ERROR_BAD_VAR_SUBCOMMAND1},
-                       {L"echo \"foo$(foo)bar\"", ERROR_BAD_VAR_SUBCOMMAND1}};
+                       {L"echo foo $ bar", ERROR_NO_VAR_NAME}};
 
     parse_error_list_t errors;
     for (const auto &test : error_tests) {
@@ -5122,6 +5383,7 @@ static void test_highlighting() {
     if (!pushd("test/fish_highlight_test/")) return;
     cleanup_t pop{[] { popd(); }};
     if (system("mkdir -p dir")) err(L"mkdir failed");
+    if (system("mkdir -p cdpath-entry/dir-in-cdpath")) err(L"mkdir failed");
     if (system("touch foo")) err(L"touch failed");
     if (system("touch bar")) err(L"touch failed");
 
@@ -5154,6 +5416,15 @@ static void test_highlighting() {
     });
 
     highlight_tests.push_back({
+        {L"echo", highlight_role_t::command},
+        {L"foo&bar", highlight_role_t::param},
+        {L"foo", highlight_role_t::param, /*nospace=*/true},
+        {L"&", highlight_role_t::statement_terminator},
+        {L"echo", highlight_role_t::command},
+        {L"&>", highlight_role_t::redirection},
+    });
+
+    highlight_tests.push_back({
         {L"if command", highlight_role_t::keyword},
         {L"ls", highlight_role_t::command},
         {L"; ", highlight_role_t::statement_terminator},
@@ -5178,21 +5449,56 @@ static void test_highlighting() {
 
     highlight_tests.push_back({
         {L"cd", highlight_role_t::command},
-        {L"--help", highlight_role_t::param},
-        {L"-h", highlight_role_t::param},
+        {L"--help", highlight_role_t::option},
+        {L"-h", highlight_role_t::option},
         {L"definitely_not_a_directory", highlight_role_t::error},
+    });
+
+    highlight_tests.push_back({
+        {L"cd", highlight_role_t::command},
+        {L"dir-in-cdpath", param_valid_path},
     });
 
     // Command substitutions.
     highlight_tests.push_back({
         {L"echo", highlight_role_t::command},
         {L"param1", highlight_role_t::param},
+        {L"-l", highlight_role_t::option},
+        {L"--", highlight_role_t::option},
+        {L"-l", highlight_role_t::param},
         {L"(", highlight_role_t::operat},
         {L"ls", highlight_role_t::command},
+        {L"-l", highlight_role_t::option},
+        {L"--", highlight_role_t::option},
+        {L"-l", highlight_role_t::param},
         {L"param2", highlight_role_t::param},
         {L")", highlight_role_t::operat},
         {L"|", highlight_role_t::statement_terminator},
         {L"cat", highlight_role_t::command},
+    });
+    highlight_tests.push_back({
+        {L"true", highlight_role_t::command},
+        {L"$(", highlight_role_t::operat},
+        {L"true", highlight_role_t::command},
+        {L")", highlight_role_t::operat},
+    });
+    highlight_tests.push_back({
+        {L"true", highlight_role_t::command},
+        {L"\"before", highlight_role_t::quote},
+        {L"$(", highlight_role_t::operat},
+        {L"true", highlight_role_t::command},
+        {L"param1", highlight_role_t::param},
+        {L")", highlight_role_t::operat},
+        {L"after\"", highlight_role_t::quote},
+        {L"param2", highlight_role_t::param},
+    });
+    highlight_tests.push_back({
+        {L"true", highlight_role_t::command},
+        {L"\"", highlight_role_t::error},
+        {L"unclosed quote", highlight_role_t::quote},
+        {L"$(", highlight_role_t::operat},
+        {L"true", highlight_role_t::command},
+        {L")", highlight_role_t::operat},
     });
 
     // Redirections substitutions.
@@ -5339,6 +5645,13 @@ static void test_highlighting() {
         {L"2>", highlight_role_t::redirection},
     });
 
+    // Highlight path-prefixes only at the cursor.
+    highlight_tests.push_back({
+        {L"cat", highlight_role_t::command},
+        {L"/dev/nu", highlight_role_t::param},
+        {L"/dev/nu", param_valid_path},
+    });
+
     highlight_tests.push_back({
         {L"if", highlight_role_t::keyword},
         {L"true", highlight_role_t::command},
@@ -5397,6 +5710,12 @@ static void test_highlighting() {
         {L"# comment", highlight_role_t::comment},
     });
 
+    highlight_tests.push_back({
+        {L"echo", highlight_role_t::command},
+        {L"--", highlight_role_t::option},
+        {L"-s", highlight_role_t::param},
+    });
+
     // Overlong paths don't crash (#7837).
     const wcstring overlong = get_overlong_path();
     highlight_tests.push_back({
@@ -5409,10 +5728,18 @@ static void test_highlighting() {
         {L"=", highlight_role_t::operat, ns},
     });
 
+    // Highlighting works across escaped line breaks (#8444).
+    highlight_tests.push_back({
+        {L"echo", highlight_role_t::command},
+        {L"$FISH_\\\n", highlight_role_t::operat},
+        {L"VERSION", highlight_role_t::operat, ns},
+    });
+
     auto &vars = parser_t::principal_parser().vars();
     // Verify variables and wildcards in commands using /bin/cat.
     vars.set(L"VARIABLE_IN_COMMAND", ENV_LOCAL, {L"a"});
     vars.set(L"VARIABLE_IN_COMMAND2", ENV_LOCAL, {L"at"});
+    vars.set(L"CDPATH", ENV_LOCAL, {L"./cdpath-entry"});
     highlight_tests.push_back(
         {{L"/bin/ca", highlight_role_t::command, ns}, {L"*", highlight_role_t::operat, ns}});
 
@@ -5430,6 +5757,22 @@ static void test_highlighting() {
     highlight_tests.push_back({{L"$EMPTY_VARIABLE", highlight_role_t::error}});
     highlight_tests.push_back({{L"\"$EMPTY_VARIABLE\"", highlight_role_t::error}});
 
+    highlight_tests.push_back({
+        {L"echo", highlight_role_t::command},
+        {L"\\UFDFD", highlight_role_t::escape},
+    });
+#if WCHAR_T_BITS > 16
+    highlight_tests.push_back({
+        {L"echo", highlight_role_t::command},
+        {L"\\U10FFFF", highlight_role_t::escape},
+    });
+    highlight_tests.push_back({
+        {L"echo", highlight_role_t::command},
+        {L"\\U110000", highlight_role_t::error},
+    });
+#endif
+    const auto saved_flags = fish_features();
+    mutable_fish_features().set(features_t::ampersand_nobg_in_token, true);
     for (const highlight_component_list_t &components : highlight_tests) {
         // Generate the text.
         wcstring text;
@@ -5437,7 +5780,7 @@ static void test_highlighting() {
         for (const highlight_component_t &comp : components) {
             if (!text.empty() && !comp.nospace) {
                 text.push_back(L' ');
-                expected_colors.push_back(highlight_spec_t{});
+                expected_colors.emplace_back();
             }
             text.append(comp.txt);
             expected_colors.resize(text.size(), comp.color);
@@ -5445,7 +5788,7 @@ static void test_highlighting() {
         do_test(expected_colors.size() == text.size());
 
         std::vector<highlight_spec_t> colors(text.size());
-        highlight_shell(text, colors, operation_context_t{vars}, true /* io_ok */);
+        highlight_shell(text, colors, operation_context_t{vars}, true /* io_ok */, text.size());
 
         if (expected_colors.size() != colors.size()) {
             err(L"Color vector has wrong size! Expected %lu, actual %lu", expected_colors.size(),
@@ -5457,13 +5800,24 @@ static void test_highlighting() {
             if (text.at(i) == L' ') continue;
 
             if (expected_colors.at(i) != colors.at(i)) {
+                // Make a fancy caret under the token
+                auto e_col = expected_colors.at(i);
+                auto a_col = colors.at(i);
+                auto j = i + 1;
+                while (j < colors.size() && expected_colors.at(j) == e_col && colors.at(j) == a_col)
+                    j++;
+                if (j == colors.size() - 1) j++;
                 const wcstring spaces(i, L' ');
-                err(L"Wrong color in test at index %lu in text (expected %#x, actual "
-                    L"%#x):\n%ls\n%ls^",
-                    i, expected_colors.at(i), colors.at(i), text.c_str(), spaces.c_str());
+                const wcstring carets(j - i, L'^');
+                err(L"Wrong color in test at index %lu-%lu in text (expected %#x, actual "
+                    L"%#x):\n%ls\n%ls%ls",
+                    i, j - 1, expected_colors.at(i), colors.at(i), text.c_str(), spaces.c_str(),
+                    carets.c_str());
+                i = j;
             }
         }
     }
+    mutable_fish_features() = saved_flags;
     vars.remove(L"VARIABLE_IN_COMMAND", ENV_DEFAULT);
     vars.remove(L"VARIABLE_IN_COMMAND2", ENV_DEFAULT);
 }
@@ -5475,7 +5829,7 @@ static void test_split_string_tok() {
     do_test((splits == wcstring_list_t{L"hello", L"world"}));
 
     splits = split_string_tok(L" stuff ", wcstring(L" "), 0);
-    do_test((splits == wcstring_list_t{}));
+    do_test((splits.empty()));
 
     splits = split_string_tok(L" stuff ", wcstring(L" "), 1);
     do_test((splits == wcstring_list_t{L" stuff "}));
@@ -5580,18 +5934,19 @@ static void run_one_string_test(const wchar_t *const *argv_raw, int expected_rc,
 
     wcstring args;
     for (const wcstring &arg : argv_list) {
-        args += escape_string(arg, ESCAPE_ALL) + L' ';
+        args += escape_string(arg) + L' ';
     }
     args.resize(args.size() - 1);
 
     if (rc != expected_rc) {
-        std::wstring got = rc ? std::to_wstring(rc.value()) : L"nothing";
+        // The comparison above would have panicked if rc didn't have a value, so it's safe to
+        // assume it has one here:
+        std::wstring got = std::to_wstring(rc.value());
         err(L"Test failed on line %lu: [%ls]: expected return code %d but got %s", __LINE__,
             args.c_str(), expected_rc, got.c_str());
     } else if (outs.contents() != expected_out) {
         err(L"Test failed on line %lu: [%ls]: expected [%ls] but got [%ls]", __LINE__, args.c_str(),
-            escape_string(expected_out, ESCAPE_ALL).c_str(),
-            escape_string(outs.contents(), ESCAPE_ALL).c_str());
+            escape_string(expected_out).c_str(), escape_string(outs.contents()).c_str());
     }
 }
 
@@ -5601,264 +5956,291 @@ static void test_string() {
         const wchar_t *argv[15];
         int expected_rc;
         const wchar_t *expected_out;
-    } string_tests[] = {
-        {{L"string", L"escape", 0}, STATUS_CMD_ERROR, L""},
-        {{L"string", L"escape", L"", 0}, STATUS_CMD_OK, L"''\n"},
-        {{L"string", L"escape", L"-n", L"", 0}, STATUS_CMD_OK, L"\n"},
-        {{L"string", L"escape", L"a", 0}, STATUS_CMD_OK, L"a\n"},
-        {{L"string", L"escape", L"\x07", 0}, STATUS_CMD_OK, L"\\cg\n"},
-        {{L"string", L"escape", L"\"x\"", 0}, STATUS_CMD_OK, L"'\"x\"'\n"},
-        {{L"string", L"escape", L"hello world", 0}, STATUS_CMD_OK, L"'hello world'\n"},
-        {{L"string", L"escape", L"-n", L"hello world", 0}, STATUS_CMD_OK, L"hello\\ world\n"},
-        {{L"string", L"escape", L"hello", L"world", 0}, STATUS_CMD_OK, L"hello\nworld\n"},
-        {{L"string", L"escape", L"-n", L"~", 0}, STATUS_CMD_OK, L"\\~\n"},
+    } string_tests[] = {  //
+        {{L"string", L"escape", nullptr}, STATUS_CMD_ERROR, L""},
+        {{L"string", L"escape", L"", nullptr}, STATUS_CMD_OK, L"''\n"},
+        {{L"string", L"escape", L"-n", L"", nullptr}, STATUS_CMD_OK, L"\n"},
+        {{L"string", L"escape", L"a", nullptr}, STATUS_CMD_OK, L"a\n"},
+        {{L"string", L"escape", L"\x07", nullptr}, STATUS_CMD_OK, L"\\cg\n"},
+        {{L"string", L"escape", L"\"x\"", nullptr}, STATUS_CMD_OK, L"'\"x\"'\n"},
+        {{L"string", L"escape", L"hello world", nullptr}, STATUS_CMD_OK, L"'hello world'\n"},
+        {{L"string", L"escape", L"-n", L"hello world", nullptr}, STATUS_CMD_OK, L"hello\\ world\n"},
+        {{L"string", L"escape", L"hello", L"world", nullptr}, STATUS_CMD_OK, L"hello\nworld\n"},
+        {{L"string", L"escape", L"-n", L"~", nullptr}, STATUS_CMD_OK, L"\\~\n"},
 
-        {{L"string", L"join", 0}, STATUS_INVALID_ARGS, L""},
-        {{L"string", L"join", L"", 0}, STATUS_CMD_ERROR, L""},
-        {{L"string", L"join", L"", L"", L"", L"", 0}, STATUS_CMD_OK, L"\n"},
-        {{L"string", L"join", L"", L"a", L"b", L"c", 0}, STATUS_CMD_OK, L"abc\n"},
-        {{L"string", L"join", L".", L"fishshell", L"com", 0}, STATUS_CMD_OK, L"fishshell.com\n"},
-        {{L"string", L"join", L"/", L"usr", 0}, STATUS_CMD_ERROR, L"usr\n"},
-        {{L"string", L"join", L"/", L"usr", L"local", L"bin", 0},
+        {{L"string", L"join", nullptr}, STATUS_INVALID_ARGS, L""},
+        {{L"string", L"join", L"", nullptr}, STATUS_CMD_ERROR, L""},
+        {{L"string", L"join", L"", L"", L"", L"", nullptr}, STATUS_CMD_OK, L"\n"},
+        {{L"string", L"join", L"", L"a", L"b", L"c", nullptr}, STATUS_CMD_OK, L"abc\n"},
+        {{L"string", L"join", L".", L"fishshell", L"com", nullptr},
+         STATUS_CMD_OK,
+         L"fishshell.com\n"},
+        {{L"string", L"join", L"/", L"usr", nullptr}, STATUS_CMD_ERROR, L"usr\n"},
+        {{L"string", L"join", L"/", L"usr", L"local", L"bin", nullptr},
          STATUS_CMD_OK,
          L"usr/local/bin\n"},
-        {{L"string", L"join", L"...", L"3", L"2", L"1", 0}, STATUS_CMD_OK, L"3...2...1\n"},
-        {{L"string", L"join", L"-q", 0}, STATUS_INVALID_ARGS, L""},
-        {{L"string", L"join", L"-q", L".", 0}, STATUS_CMD_ERROR, L""},
-        {{L"string", L"join", L"-q", L".", L".", 0}, STATUS_CMD_ERROR, L""},
+        {{L"string", L"join", L"...", L"3", L"2", L"1", nullptr}, STATUS_CMD_OK, L"3...2...1\n"},
+        {{L"string", L"join", L"-q", nullptr}, STATUS_INVALID_ARGS, L""},
+        {{L"string", L"join", L"-q", L".", nullptr}, STATUS_CMD_ERROR, L""},
+        {{L"string", L"join", L"-q", L".", L".", nullptr}, STATUS_CMD_ERROR, L""},
 
-        {{L"string", L"length", 0}, STATUS_CMD_ERROR, L""},
-        {{L"string", L"length", L"", 0}, STATUS_CMD_ERROR, L"0\n"},
-        {{L"string", L"length", L"", L"", L"", 0}, STATUS_CMD_ERROR, L"0\n0\n0\n"},
-        {{L"string", L"length", L"a", 0}, STATUS_CMD_OK, L"1\n"},
-        {{L"string", L"length", L"\U0002008A", 0}, STATUS_CMD_OK, L"1\n"},
-        {{L"string", L"length", L"um", L"dois", L"três", 0}, STATUS_CMD_OK, L"2\n4\n4\n"},
-        {{L"string", L"length", L"um", L"dois", L"três", 0}, STATUS_CMD_OK, L"2\n4\n4\n"},
-        {{L"string", L"length", L"-q", 0}, STATUS_CMD_ERROR, L""},
-        {{L"string", L"length", L"-q", L"", 0}, STATUS_CMD_ERROR, L""},
-        {{L"string", L"length", L"-q", L"a", 0}, STATUS_CMD_OK, L""},
+        {{L"string", L"length", nullptr}, STATUS_CMD_ERROR, L""},
+        {{L"string", L"length", L"", nullptr}, STATUS_CMD_ERROR, L"0\n"},
+        {{L"string", L"length", L"", L"", L"", nullptr}, STATUS_CMD_ERROR, L"0\n0\n0\n"},
+        {{L"string", L"length", L"a", nullptr}, STATUS_CMD_OK, L"1\n"},
+#if WCHAR_T_BITS > 16
+        {{L"string", L"length", L"\U0002008A", nullptr}, STATUS_CMD_OK, L"1\n"},
+#endif
+        {{L"string", L"length", L"um", L"dois", L"três", nullptr}, STATUS_CMD_OK, L"2\n4\n4\n"},
+        {{L"string", L"length", L"um", L"dois", L"três", nullptr}, STATUS_CMD_OK, L"2\n4\n4\n"},
+        {{L"string", L"length", L"-q", nullptr}, STATUS_CMD_ERROR, L""},
+        {{L"string", L"length", L"-q", L"", nullptr}, STATUS_CMD_ERROR, L""},
+        {{L"string", L"length", L"-q", L"a", nullptr}, STATUS_CMD_OK, L""},
 
-        {{L"string", L"match", 0}, STATUS_INVALID_ARGS, L""},
-        {{L"string", L"match", L"", 0}, STATUS_CMD_ERROR, L""},
-        {{L"string", L"match", L"", L"", 0}, STATUS_CMD_OK, L"\n"},
-        {{L"string", L"match", L"?", L"a", 0}, STATUS_CMD_OK, L"a\n"},
-        {{L"string", L"match", L"*", L"", 0}, STATUS_CMD_OK, L"\n"},
-        {{L"string", L"match", L"**", L"", 0}, STATUS_CMD_OK, L"\n"},
-        {{L"string", L"match", L"*", L"xyzzy", 0}, STATUS_CMD_OK, L"xyzzy\n"},
-        {{L"string", L"match", L"**", L"plugh", 0}, STATUS_CMD_OK, L"plugh\n"},
-        {{L"string", L"match", L"a*b", L"axxb", 0}, STATUS_CMD_OK, L"axxb\n"},
-        {{L"string", L"match", L"a??b", L"axxb", 0}, STATUS_CMD_OK, L"axxb\n"},
-        {{L"string", L"match", L"-i", L"a??B", L"axxb", 0}, STATUS_CMD_OK, L"axxb\n"},
-        {{L"string", L"match", L"-i", L"a??b", L"Axxb", 0}, STATUS_CMD_OK, L"Axxb\n"},
-        {{L"string", L"match", L"a*", L"axxb", 0}, STATUS_CMD_OK, L"axxb\n"},
-        {{L"string", L"match", L"*a", L"xxa", 0}, STATUS_CMD_OK, L"xxa\n"},
-        {{L"string", L"match", L"*a*", L"axa", 0}, STATUS_CMD_OK, L"axa\n"},
-        {{L"string", L"match", L"*a*", L"xax", 0}, STATUS_CMD_OK, L"xax\n"},
-        {{L"string", L"match", L"*a*", L"bxa", 0}, STATUS_CMD_OK, L"bxa\n"},
-        {{L"string", L"match", L"*a", L"a", 0}, STATUS_CMD_OK, L"a\n"},
-        {{L"string", L"match", L"a*", L"a", 0}, STATUS_CMD_OK, L"a\n"},
-        {{L"string", L"match", L"a*b*c", L"axxbyyc", 0}, STATUS_CMD_OK, L"axxbyyc\n"},
-        {{L"string", L"match", L"\\*", L"*", 0}, STATUS_CMD_OK, L"*\n"},
-        {{L"string", L"match", L"a*\\", L"abc\\", 0}, STATUS_CMD_OK, L"abc\\\n"},
-        {{L"string", L"match", L"a*\\?", L"abc?", 0}, STATUS_CMD_OK, L"abc?\n"},
+        {{L"string", L"match", nullptr}, STATUS_INVALID_ARGS, L""},
+        {{L"string", L"match", L"", nullptr}, STATUS_CMD_ERROR, L""},
+        {{L"string", L"match", L"", L"", nullptr}, STATUS_CMD_OK, L"\n"},
+        {{L"string", L"match", L"?", L"a", nullptr}, STATUS_CMD_OK, L"a\n"},
+        {{L"string", L"match", L"*", L"", nullptr}, STATUS_CMD_OK, L"\n"},
+        {{L"string", L"match", L"**", L"", nullptr}, STATUS_CMD_OK, L"\n"},
+        {{L"string", L"match", L"*", L"xyzzy", nullptr}, STATUS_CMD_OK, L"xyzzy\n"},
+        {{L"string", L"match", L"**", L"plugh", nullptr}, STATUS_CMD_OK, L"plugh\n"},
+        {{L"string", L"match", L"a*b", L"axxb", nullptr}, STATUS_CMD_OK, L"axxb\n"},
+        {{L"string", L"match", L"a??b", L"axxb", nullptr}, STATUS_CMD_OK, L"axxb\n"},
+        {{L"string", L"match", L"-i", L"a??B", L"axxb", nullptr}, STATUS_CMD_OK, L"axxb\n"},
+        {{L"string", L"match", L"-i", L"a??b", L"Axxb", nullptr}, STATUS_CMD_OK, L"Axxb\n"},
+        {{L"string", L"match", L"a*", L"axxb", nullptr}, STATUS_CMD_OK, L"axxb\n"},
+        {{L"string", L"match", L"*a", L"xxa", nullptr}, STATUS_CMD_OK, L"xxa\n"},
+        {{L"string", L"match", L"*a*", L"axa", nullptr}, STATUS_CMD_OK, L"axa\n"},
+        {{L"string", L"match", L"*a*", L"xax", nullptr}, STATUS_CMD_OK, L"xax\n"},
+        {{L"string", L"match", L"*a*", L"bxa", nullptr}, STATUS_CMD_OK, L"bxa\n"},
+        {{L"string", L"match", L"*a", L"a", nullptr}, STATUS_CMD_OK, L"a\n"},
+        {{L"string", L"match", L"a*", L"a", nullptr}, STATUS_CMD_OK, L"a\n"},
+        {{L"string", L"match", L"a*b*c", L"axxbyyc", nullptr}, STATUS_CMD_OK, L"axxbyyc\n"},
+        {{L"string", L"match", L"\\*", L"*", nullptr}, STATUS_CMD_OK, L"*\n"},
+        {{L"string", L"match", L"a*\\", L"abc\\", nullptr}, STATUS_CMD_OK, L"abc\\\n"},
+        {{L"string", L"match", L"a*\\?", L"abc?", nullptr}, STATUS_CMD_OK, L"abc?\n"},
 
-        {{L"string", L"match", L"?", L"", 0}, STATUS_CMD_ERROR, L""},
-        {{L"string", L"match", L"?", L"ab", 0}, STATUS_CMD_ERROR, L""},
-        {{L"string", L"match", L"??", L"a", 0}, STATUS_CMD_ERROR, L""},
-        {{L"string", L"match", L"?a", L"a", 0}, STATUS_CMD_ERROR, L""},
-        {{L"string", L"match", L"a?", L"a", 0}, STATUS_CMD_ERROR, L""},
-        {{L"string", L"match", L"a??B", L"axxb", 0}, STATUS_CMD_ERROR, L""},
-        {{L"string", L"match", L"a*b", L"axxbc", 0}, STATUS_CMD_ERROR, L""},
-        {{L"string", L"match", L"*b", L"bbba", 0}, STATUS_CMD_ERROR, L""},
-        {{L"string", L"match", L"0x[0-9a-fA-F][0-9a-fA-F]", L"0xbad", 0}, STATUS_CMD_ERROR, L""},
+        {{L"string", L"match", L"?", L"", nullptr}, STATUS_CMD_ERROR, L""},
+        {{L"string", L"match", L"?", L"ab", nullptr}, STATUS_CMD_ERROR, L""},
+        {{L"string", L"match", L"??", L"a", nullptr}, STATUS_CMD_ERROR, L""},
+        {{L"string", L"match", L"?a", L"a", nullptr}, STATUS_CMD_ERROR, L""},
+        {{L"string", L"match", L"a?", L"a", nullptr}, STATUS_CMD_ERROR, L""},
+        {{L"string", L"match", L"a??B", L"axxb", nullptr}, STATUS_CMD_ERROR, L""},
+        {{L"string", L"match", L"a*b", L"axxbc", nullptr}, STATUS_CMD_ERROR, L""},
+        {{L"string", L"match", L"*b", L"bbba", nullptr}, STATUS_CMD_ERROR, L""},
+        {{L"string", L"match", L"0x[0-9a-fA-F][0-9a-fA-F]", L"0xbad", nullptr},
+         STATUS_CMD_ERROR,
+         L""},
 
-        {{L"string", L"match", L"-a", L"*", L"ab", L"cde", 0}, STATUS_CMD_OK, L"ab\ncde\n"},
-        {{L"string", L"match", L"*", L"ab", L"cde", 0}, STATUS_CMD_OK, L"ab\ncde\n"},
-        {{L"string", L"match", L"-n", L"*d*", L"cde", 0}, STATUS_CMD_OK, L"1 3\n"},
-        {{L"string", L"match", L"-n", L"*x*", L"cde", 0}, STATUS_CMD_ERROR, L""},
-        {{L"string", L"match", L"-q", L"a*", L"b", L"c", 0}, STATUS_CMD_ERROR, L""},
-        {{L"string", L"match", L"-q", L"a*", L"b", L"a", 0}, STATUS_CMD_OK, L""},
+        {{L"string", L"match", L"-a", L"*", L"ab", L"cde", nullptr}, STATUS_CMD_OK, L"ab\ncde\n"},
+        {{L"string", L"match", L"*", L"ab", L"cde", nullptr}, STATUS_CMD_OK, L"ab\ncde\n"},
+        {{L"string", L"match", L"-n", L"*d*", L"cde", nullptr}, STATUS_CMD_OK, L"1 3\n"},
+        {{L"string", L"match", L"-n", L"*x*", L"cde", nullptr}, STATUS_CMD_ERROR, L""},
+        {{L"string", L"match", L"-q", L"a*", L"b", L"c", nullptr}, STATUS_CMD_ERROR, L""},
+        {{L"string", L"match", L"-q", L"a*", L"b", L"a", nullptr}, STATUS_CMD_OK, L""},
 
-        {{L"string", L"match", L"-r", 0}, STATUS_INVALID_ARGS, L""},
-        {{L"string", L"match", L"-r", L"", 0}, STATUS_CMD_ERROR, L""},
-        {{L"string", L"match", L"-r", L"", L"", 0}, STATUS_CMD_OK, L"\n"},
-        {{L"string", L"match", L"-r", L".", L"a", 0}, STATUS_CMD_OK, L"a\n"},
-        {{L"string", L"match", L"-r", L".*", L"", 0}, STATUS_CMD_OK, L"\n"},
-        {{L"string", L"match", L"-r", L"a*b", L"b", 0}, STATUS_CMD_OK, L"b\n"},
-        {{L"string", L"match", L"-r", L"a*b", L"aab", 0}, STATUS_CMD_OK, L"aab\n"},
-        {{L"string", L"match", L"-r", L"-i", L"a*b", L"Aab", 0}, STATUS_CMD_OK, L"Aab\n"},
-        {{L"string", L"match", L"-r", L"-a", L"a[bc]", L"abadac", 0}, STATUS_CMD_OK, L"ab\nac\n"},
-        {{L"string", L"match", L"-r", L"a", L"xaxa", L"axax", 0}, STATUS_CMD_OK, L"a\na\n"},
-        {{L"string", L"match", L"-r", L"-a", L"a", L"xaxa", L"axax", 0},
+        {{L"string", L"match", L"-r", nullptr}, STATUS_INVALID_ARGS, L""},
+        {{L"string", L"match", L"-r", L"", nullptr}, STATUS_CMD_ERROR, L""},
+        {{L"string", L"match", L"-r", L"", L"", nullptr}, STATUS_CMD_OK, L"\n"},
+        {{L"string", L"match", L"-r", L".", L"a", nullptr}, STATUS_CMD_OK, L"a\n"},
+        {{L"string", L"match", L"-r", L".*", L"", nullptr}, STATUS_CMD_OK, L"\n"},
+        {{L"string", L"match", L"-r", L"a*b", L"b", nullptr}, STATUS_CMD_OK, L"b\n"},
+        {{L"string", L"match", L"-r", L"a*b", L"aab", nullptr}, STATUS_CMD_OK, L"aab\n"},
+        {{L"string", L"match", L"-r", L"-i", L"a*b", L"Aab", nullptr}, STATUS_CMD_OK, L"Aab\n"},
+        {{L"string", L"match", L"-r", L"-a", L"a[bc]", L"abadac", nullptr},
+         STATUS_CMD_OK,
+         L"ab\nac\n"},
+        {{L"string", L"match", L"-r", L"a", L"xaxa", L"axax", nullptr}, STATUS_CMD_OK, L"a\na\n"},
+        {{L"string", L"match", L"-r", L"-a", L"a", L"xaxa", L"axax", nullptr},
          STATUS_CMD_OK,
          L"a\na\na\na\n"},
-        {{L"string", L"match", L"-r", L"a[bc]", L"abadac", 0}, STATUS_CMD_OK, L"ab\n"},
-        {{L"string", L"match", L"-r", L"-q", L"a[bc]", L"abadac", 0}, STATUS_CMD_OK, L""},
-        {{L"string", L"match", L"-r", L"-q", L"a[bc]", L"ad", 0}, STATUS_CMD_ERROR, L""},
-        {{L"string", L"match", L"-r", L"(a+)b(c)", L"aabc", 0}, STATUS_CMD_OK, L"aabc\naa\nc\n"},
-        {{L"string", L"match", L"-r", L"-a", L"(a)b(c)", L"abcabc", 0},
+        {{L"string", L"match", L"-r", L"a[bc]", L"abadac", nullptr}, STATUS_CMD_OK, L"ab\n"},
+        {{L"string", L"match", L"-r", L"-q", L"a[bc]", L"abadac", nullptr}, STATUS_CMD_OK, L""},
+        {{L"string", L"match", L"-r", L"-q", L"a[bc]", L"ad", nullptr}, STATUS_CMD_ERROR, L""},
+        {{L"string", L"match", L"-r", L"(a+)b(c)", L"aabc", nullptr},
+         STATUS_CMD_OK,
+         L"aabc\naa\nc\n"},
+        {{L"string", L"match", L"-r", L"-a", L"(a)b(c)", L"abcabc", nullptr},
          STATUS_CMD_OK,
          L"abc\na\nc\nabc\na\nc\n"},
-        {{L"string", L"match", L"-r", L"(a)b(c)", L"abcabc", 0}, STATUS_CMD_OK, L"abc\na\nc\n"},
-        {{L"string", L"match", L"-r", L"(a|(z))(bc)", L"abc", 0}, STATUS_CMD_OK, L"abc\na\nbc\n"},
-        {{L"string", L"match", L"-r", L"-n", L"a", L"ada", L"dad", 0},
+        {{L"string", L"match", L"-r", L"(a)b(c)", L"abcabc", nullptr},
+         STATUS_CMD_OK,
+         L"abc\na\nc\n"},
+        {{L"string", L"match", L"-r", L"(a|(z))(bc)", L"abc", nullptr},
+         STATUS_CMD_OK,
+         L"abc\na\nbc\n"},
+        {{L"string", L"match", L"-r", L"-n", L"a", L"ada", L"dad", nullptr},
          STATUS_CMD_OK,
          L"1 1\n2 1\n"},
-        {{L"string", L"match", L"-r", L"-n", L"-a", L"a", L"bacadae", 0},
+        {{L"string", L"match", L"-r", L"-n", L"-a", L"a", L"bacadae", nullptr},
          STATUS_CMD_OK,
          L"2 1\n4 1\n6 1\n"},
-        {{L"string", L"match", L"-r", L"-n", L"(a).*(b)", L"a---b", 0},
+        {{L"string", L"match", L"-r", L"-n", L"(a).*(b)", L"a---b", nullptr},
          STATUS_CMD_OK,
          L"1 5\n1 1\n5 1\n"},
-        {{L"string", L"match", L"-r", L"-n", L"(a)(b)", L"ab", 0},
+        {{L"string", L"match", L"-r", L"-n", L"(a)(b)", L"ab", nullptr},
          STATUS_CMD_OK,
          L"1 2\n1 1\n2 1\n"},
-        {{L"string", L"match", L"-r", L"-n", L"(a)(b)", L"abab", 0},
+        {{L"string", L"match", L"-r", L"-n", L"(a)(b)", L"abab", nullptr},
          STATUS_CMD_OK,
          L"1 2\n1 1\n2 1\n"},
-        {{L"string", L"match", L"-r", L"-n", L"-a", L"(a)(b)", L"abab", 0},
+        {{L"string", L"match", L"-r", L"-n", L"-a", L"(a)(b)", L"abab", nullptr},
          STATUS_CMD_OK,
          L"1 2\n1 1\n2 1\n3 2\n3 1\n4 1\n"},
-        {{L"string", L"match", L"-r", L"*", L"", 0}, STATUS_INVALID_ARGS, L""},
-        {{L"string", L"match", L"-r", L"-a", L"a*", L"b", 0}, STATUS_CMD_OK, L"\n\n"},
-        {{L"string", L"match", L"-r", L"foo\\Kbar", L"foobar", 0}, STATUS_CMD_OK, L"bar\n"},
-        {{L"string", L"match", L"-r", L"(foo)\\Kbar", L"foobar", 0}, STATUS_CMD_OK, L"bar\nfoo\n"},
-        {{L"string", L"match", L"-r", L"(?=ab\\K)", L"ab", 0}, STATUS_CMD_OK, L"\n"},
-        {{L"string", L"match", L"-r", L"(?=ab\\K)..(?=cd\\K)", L"abcd", 0}, STATUS_CMD_OK, L"\n"},
-
-        {{L"string", L"replace", 0}, STATUS_INVALID_ARGS, L""},
-        {{L"string", L"replace", L"", 0}, STATUS_INVALID_ARGS, L""},
-        {{L"string", L"replace", L"", L"", 0}, STATUS_CMD_ERROR, L""},
-        {{L"string", L"replace", L"", L"", L"", 0}, STATUS_CMD_ERROR, L"\n"},
-        {{L"string", L"replace", L"", L"", L" ", 0}, STATUS_CMD_ERROR, L" \n"},
-        {{L"string", L"replace", L"a", L"b", L"", 0}, STATUS_CMD_ERROR, L"\n"},
-        {{L"string", L"replace", L"a", L"b", L"a", 0}, STATUS_CMD_OK, L"b\n"},
-        {{L"string", L"replace", L"a", L"b", L"xax", 0}, STATUS_CMD_OK, L"xbx\n"},
-        {{L"string", L"replace", L"a", L"b", L"xax", L"axa", 0}, STATUS_CMD_OK, L"xbx\nbxa\n"},
-        {{L"string", L"replace", L"bar", L"x", L"red barn", 0}, STATUS_CMD_OK, L"red xn\n"},
-        {{L"string", L"replace", L"x", L"bar", L"red xn", 0}, STATUS_CMD_OK, L"red barn\n"},
-        {{L"string", L"replace", L"--", L"x", L"-", L"xyz", 0}, STATUS_CMD_OK, L"-yz\n"},
-        {{L"string", L"replace", L"--", L"y", L"-", L"xyz", 0}, STATUS_CMD_OK, L"x-z\n"},
-        {{L"string", L"replace", L"--", L"z", L"-", L"xyz", 0}, STATUS_CMD_OK, L"xy-\n"},
-        {{L"string", L"replace", L"-i", L"z", L"X", L"_Z_", 0}, STATUS_CMD_OK, L"_X_\n"},
-        {{L"string", L"replace", L"-a", L"a", L"A", L"aaa", 0}, STATUS_CMD_OK, L"AAA\n"},
-        {{L"string", L"replace", L"-i", L"a", L"z", L"AAA", 0}, STATUS_CMD_OK, L"zAA\n"},
-        {{L"string", L"replace", L"-q", L"x", L">x<", L"x", 0}, STATUS_CMD_OK, L""},
-        {{L"string", L"replace", L"-a", L"x", L"", L"xxx", 0}, STATUS_CMD_OK, L"\n"},
-        {{L"string", L"replace", L"-a", L"***", L"_", L"*****", 0}, STATUS_CMD_OK, L"_**\n"},
-        {{L"string", L"replace", L"-a", L"***", L"***", L"******", 0}, STATUS_CMD_OK, L"******\n"},
-        {{L"string", L"replace", L"-a", L"a", L"b", L"xax", L"axa", 0},
+        {{L"string", L"match", L"-r", L"*", L"", nullptr}, STATUS_INVALID_ARGS, L""},
+        {{L"string", L"match", L"-r", L"-a", L"a*", L"b", nullptr}, STATUS_CMD_OK, L"\n\n"},
+        {{L"string", L"match", L"-r", L"foo\\Kbar", L"foobar", nullptr}, STATUS_CMD_OK, L"bar\n"},
+        {{L"string", L"match", L"-r", L"(foo)\\Kbar", L"foobar", nullptr},
+         STATUS_CMD_OK,
+         L"bar\nfoo\n"},
+        {{L"string", L"replace", nullptr}, STATUS_INVALID_ARGS, L""},
+        {{L"string", L"replace", L"", nullptr}, STATUS_INVALID_ARGS, L""},
+        {{L"string", L"replace", L"", L"", nullptr}, STATUS_CMD_ERROR, L""},
+        {{L"string", L"replace", L"", L"", L"", nullptr}, STATUS_CMD_ERROR, L"\n"},
+        {{L"string", L"replace", L"", L"", L" ", nullptr}, STATUS_CMD_ERROR, L" \n"},
+        {{L"string", L"replace", L"a", L"b", L"", nullptr}, STATUS_CMD_ERROR, L"\n"},
+        {{L"string", L"replace", L"a", L"b", L"a", nullptr}, STATUS_CMD_OK, L"b\n"},
+        {{L"string", L"replace", L"a", L"b", L"xax", nullptr}, STATUS_CMD_OK, L"xbx\n"},
+        {{L"string", L"replace", L"a", L"b", L"xax", L"axa", nullptr},
+         STATUS_CMD_OK,
+         L"xbx\nbxa\n"},
+        {{L"string", L"replace", L"bar", L"x", L"red barn", nullptr}, STATUS_CMD_OK, L"red xn\n"},
+        {{L"string", L"replace", L"x", L"bar", L"red xn", nullptr}, STATUS_CMD_OK, L"red barn\n"},
+        {{L"string", L"replace", L"--", L"x", L"-", L"xyz", nullptr}, STATUS_CMD_OK, L"-yz\n"},
+        {{L"string", L"replace", L"--", L"y", L"-", L"xyz", nullptr}, STATUS_CMD_OK, L"x-z\n"},
+        {{L"string", L"replace", L"--", L"z", L"-", L"xyz", nullptr}, STATUS_CMD_OK, L"xy-\n"},
+        {{L"string", L"replace", L"-i", L"z", L"X", L"_Z_", nullptr}, STATUS_CMD_OK, L"_X_\n"},
+        {{L"string", L"replace", L"-a", L"a", L"A", L"aaa", nullptr}, STATUS_CMD_OK, L"AAA\n"},
+        {{L"string", L"replace", L"-i", L"a", L"z", L"AAA", nullptr}, STATUS_CMD_OK, L"zAA\n"},
+        {{L"string", L"replace", L"-q", L"x", L">x<", L"x", nullptr}, STATUS_CMD_OK, L""},
+        {{L"string", L"replace", L"-a", L"x", L"", L"xxx", nullptr}, STATUS_CMD_OK, L"\n"},
+        {{L"string", L"replace", L"-a", L"***", L"_", L"*****", nullptr}, STATUS_CMD_OK, L"_**\n"},
+        {{L"string", L"replace", L"-a", L"***", L"***", L"******", nullptr},
+         STATUS_CMD_OK,
+         L"******\n"},
+        {{L"string", L"replace", L"-a", L"a", L"b", L"xax", L"axa", nullptr},
          STATUS_CMD_OK,
          L"xbx\nbxb\n"},
 
-        {{L"string", L"replace", L"-r", 0}, STATUS_INVALID_ARGS, L""},
-        {{L"string", L"replace", L"-r", L"", 0}, STATUS_INVALID_ARGS, L""},
-        {{L"string", L"replace", L"-r", L"", L"", 0}, STATUS_CMD_ERROR, L""},
-        {{L"string", L"replace", L"-r", L"", L"", L"", 0}, STATUS_CMD_OK, L"\n"},  // pcre2 behavior
-        {{L"string", L"replace", L"-r", L"", L"", L" ", 0},
+        {{L"string", L"replace", L"-r", nullptr}, STATUS_INVALID_ARGS, L""},
+        {{L"string", L"replace", L"-r", L"", nullptr}, STATUS_INVALID_ARGS, L""},
+        {{L"string", L"replace", L"-r", L"", L"", nullptr}, STATUS_CMD_ERROR, L""},
+        {{L"string", L"replace", L"-r", L"", L"", L"", nullptr},
+         STATUS_CMD_OK,
+         L"\n"},  // pcre2 behavior
+        {{L"string", L"replace", L"-r", L"", L"", L" ", nullptr},
          STATUS_CMD_OK,
          L" \n"},  // pcre2 behavior
-        {{L"string", L"replace", L"-r", L"a", L"b", L"", 0}, STATUS_CMD_ERROR, L"\n"},
-        {{L"string", L"replace", L"-r", L"a", L"b", L"a", 0}, STATUS_CMD_OK, L"b\n"},
-        {{L"string", L"replace", L"-r", L".", L"x", L"abc", 0}, STATUS_CMD_OK, L"xbc\n"},
-        {{L"string", L"replace", L"-r", L".", L"", L"abc", 0}, STATUS_CMD_OK, L"bc\n"},
-        {{L"string", L"replace", L"-r", L"(\\w)(\\w)", L"$2$1", L"ab", 0}, STATUS_CMD_OK, L"ba\n"},
-        {{L"string", L"replace", L"-r", L"(\\w)", L"$1$1", L"ab", 0}, STATUS_CMD_OK, L"aab\n"},
-        {{L"string", L"replace", L"-r", L"-a", L".", L"x", L"abc", 0}, STATUS_CMD_OK, L"xxx\n"},
-        {{L"string", L"replace", L"-r", L"-a", L"(\\w)", L"$1$1", L"ab", 0},
+        {{L"string", L"replace", L"-r", L"a", L"b", L"", nullptr}, STATUS_CMD_ERROR, L"\n"},
+        {{L"string", L"replace", L"-r", L"a", L"b", L"a", nullptr}, STATUS_CMD_OK, L"b\n"},
+        {{L"string", L"replace", L"-r", L".", L"x", L"abc", nullptr}, STATUS_CMD_OK, L"xbc\n"},
+        {{L"string", L"replace", L"-r", L".", L"", L"abc", nullptr}, STATUS_CMD_OK, L"bc\n"},
+        {{L"string", L"replace", L"-r", L"(\\w)(\\w)", L"$2$1", L"ab", nullptr},
+         STATUS_CMD_OK,
+         L"ba\n"},
+        {{L"string", L"replace", L"-r", L"(\\w)", L"$1$1", L"ab", nullptr},
+         STATUS_CMD_OK,
+         L"aab\n"},
+        {{L"string", L"replace", L"-r", L"-a", L".", L"x", L"abc", nullptr},
+         STATUS_CMD_OK,
+         L"xxx\n"},
+        {{L"string", L"replace", L"-r", L"-a", L"(\\w)", L"$1$1", L"ab", nullptr},
          STATUS_CMD_OK,
          L"aabb\n"},
-        {{L"string", L"replace", L"-r", L"-a", L".", L"", L"abc", 0}, STATUS_CMD_OK, L"\n"},
-        {{L"string", L"replace", L"-r", L"a", L"x", L"bc", L"cd", L"de", 0},
+        {{L"string", L"replace", L"-r", L"-a", L".", L"", L"abc", nullptr}, STATUS_CMD_OK, L"\n"},
+        {{L"string", L"replace", L"-r", L"a", L"x", L"bc", L"cd", L"de", nullptr},
          STATUS_CMD_ERROR,
          L"bc\ncd\nde\n"},
-        {{L"string", L"replace", L"-r", L"a", L"x", L"aba", L"caa", 0},
+        {{L"string", L"replace", L"-r", L"a", L"x", L"aba", L"caa", nullptr},
          STATUS_CMD_OK,
          L"xba\ncxa\n"},
-        {{L"string", L"replace", L"-r", L"-a", L"a", L"x", L"aba", L"caa", 0},
+        {{L"string", L"replace", L"-r", L"-a", L"a", L"x", L"aba", L"caa", nullptr},
          STATUS_CMD_OK,
          L"xbx\ncxx\n"},
-        {{L"string", L"replace", L"-r", L"-i", L"A", L"b", L"xax", 0}, STATUS_CMD_OK, L"xbx\n"},
-        {{L"string", L"replace", L"-r", L"-i", L"[a-z]", L".", L"1A2B", 0},
+        {{L"string", L"replace", L"-r", L"-i", L"A", L"b", L"xax", nullptr},
+         STATUS_CMD_OK,
+         L"xbx\n"},
+        {{L"string", L"replace", L"-r", L"-i", L"[a-z]", L".", L"1A2B", nullptr},
          STATUS_CMD_OK,
          L"1.2B\n"},
-        {{L"string", L"replace", L"-r", L"A", L"b", L"xax", 0}, STATUS_CMD_ERROR, L"xax\n"},
-        {{L"string", L"replace", L"-r", L"a", L"$1", L"a", 0}, STATUS_INVALID_ARGS, L""},
-        {{L"string", L"replace", L"-r", L"(a)", L"$2", L"a", 0}, STATUS_INVALID_ARGS, L""},
-        {{L"string", L"replace", L"-r", L"*", L".", L"a", 0}, STATUS_INVALID_ARGS, L""},
-        {{L"string", L"replace", L"-ra", L"x", L"\\c", 0}, STATUS_CMD_ERROR, L""},
-        {{L"string", L"replace", L"-r", L"^(.)", L"\t$1", L"abc", L"x", 0},
+        {{L"string", L"replace", L"-r", L"A", L"b", L"xax", nullptr}, STATUS_CMD_ERROR, L"xax\n"},
+        {{L"string", L"replace", L"-r", L"a", L"$1", L"a", nullptr}, STATUS_INVALID_ARGS, L""},
+        {{L"string", L"replace", L"-r", L"(a)", L"$2", L"a", nullptr}, STATUS_INVALID_ARGS, L""},
+        {{L"string", L"replace", L"-r", L"*", L".", L"a", nullptr}, STATUS_INVALID_ARGS, L""},
+        {{L"string", L"replace", L"-ra", L"x", L"\\c", nullptr}, STATUS_CMD_ERROR, L""},
+        {{L"string", L"replace", L"-r", L"^(.)", L"\t$1", L"abc", L"x", nullptr},
          STATUS_CMD_OK,
          L"\tabc\n\tx\n"},
 
-        {{L"string", L"split", 0}, STATUS_INVALID_ARGS, L""},
-        {{L"string", L"split", L":", 0}, STATUS_CMD_ERROR, L""},
-        {{L"string", L"split", L".", L"www.ch.ic.ac.uk", 0},
+        {{L"string", L"split", nullptr}, STATUS_INVALID_ARGS, L""},
+        {{L"string", L"split", L":", nullptr}, STATUS_CMD_ERROR, L""},
+        {{L"string", L"split", L".", L"www.ch.ic.ac.uk", nullptr},
          STATUS_CMD_OK,
          L"www\nch\nic\nac\nuk\n"},
-        {{L"string", L"split", L"..", L"....", 0}, STATUS_CMD_OK, L"\n\n\n"},
-        {{L"string", L"split", L"-m", L"x", L"..", L"....", 0}, STATUS_INVALID_ARGS, L""},
-        {{L"string", L"split", L"-m1", L"..", L"....", 0}, STATUS_CMD_OK, L"\n..\n"},
-        {{L"string", L"split", L"-m0", L"/", L"/usr/local/bin/fish", 0},
+        {{L"string", L"split", L"..", L"....", nullptr}, STATUS_CMD_OK, L"\n\n\n"},
+        {{L"string", L"split", L"-m", L"x", L"..", L"....", nullptr}, STATUS_INVALID_ARGS, L""},
+        {{L"string", L"split", L"-m1", L"..", L"....", nullptr}, STATUS_CMD_OK, L"\n..\n"},
+        {{L"string", L"split", L"-m0", L"/", L"/usr/local/bin/fish", nullptr},
          STATUS_CMD_ERROR,
          L"/usr/local/bin/fish\n"},
-        {{L"string", L"split", L"-m2", L":", L"a:b:c:d", L"e:f:g:h", 0},
+        {{L"string", L"split", L"-m2", L":", L"a:b:c:d", L"e:f:g:h", nullptr},
          STATUS_CMD_OK,
          L"a\nb\nc:d\ne\nf\ng:h\n"},
-        {{L"string", L"split", L"-m1", L"-r", L"/", L"/usr/local/bin/fish", 0},
+        {{L"string", L"split", L"-m1", L"-r", L"/", L"/usr/local/bin/fish", nullptr},
          STATUS_CMD_OK,
          L"/usr/local/bin\nfish\n"},
-        {{L"string", L"split", L"-r", L".", L"www.ch.ic.ac.uk", 0},
+        {{L"string", L"split", L"-r", L".", L"www.ch.ic.ac.uk", nullptr},
          STATUS_CMD_OK,
          L"www\nch\nic\nac\nuk\n"},
-        {{L"string", L"split", L"--", L"--", L"a--b---c----d", 0},
+        {{L"string", L"split", L"--", L"--", L"a--b---c----d", nullptr},
          STATUS_CMD_OK,
          L"a\nb\n-c\n\nd\n"},
-        {{L"string", L"split", L"-r", L"..", L"....", 0}, STATUS_CMD_OK, L"\n\n\n"},
-        {{L"string", L"split", L"-r", L"--", L"--", L"a--b---c----d", 0},
+        {{L"string", L"split", L"-r", L"..", L"....", nullptr}, STATUS_CMD_OK, L"\n\n\n"},
+        {{L"string", L"split", L"-r", L"--", L"--", L"a--b---c----d", nullptr},
          STATUS_CMD_OK,
          L"a\nb-\nc\n\nd\n"},
-        {{L"string", L"split", L"", L"", 0}, STATUS_CMD_ERROR, L"\n"},
-        {{L"string", L"split", L"", L"a", 0}, STATUS_CMD_ERROR, L"a\n"},
-        {{L"string", L"split", L"", L"ab", 0}, STATUS_CMD_OK, L"a\nb\n"},
-        {{L"string", L"split", L"", L"abc", 0}, STATUS_CMD_OK, L"a\nb\nc\n"},
-        {{L"string", L"split", L"-m1", L"", L"abc", 0}, STATUS_CMD_OK, L"a\nbc\n"},
-        {{L"string", L"split", L"-r", L"", L"", 0}, STATUS_CMD_ERROR, L"\n"},
-        {{L"string", L"split", L"-r", L"", L"a", 0}, STATUS_CMD_ERROR, L"a\n"},
-        {{L"string", L"split", L"-r", L"", L"ab", 0}, STATUS_CMD_OK, L"a\nb\n"},
-        {{L"string", L"split", L"-r", L"", L"abc", 0}, STATUS_CMD_OK, L"a\nb\nc\n"},
-        {{L"string", L"split", L"-r", L"-m1", L"", L"abc", 0}, STATUS_CMD_OK, L"ab\nc\n"},
-        {{L"string", L"split", L"-q", 0}, STATUS_INVALID_ARGS, L""},
-        {{L"string", L"split", L"-q", L":", 0}, STATUS_CMD_ERROR, L""},
-        {{L"string", L"split", L"-q", L"x", L"axbxc", 0}, STATUS_CMD_OK, L""},
+        {{L"string", L"split", L"", L"", nullptr}, STATUS_CMD_ERROR, L"\n"},
+        {{L"string", L"split", L"", L"a", nullptr}, STATUS_CMD_ERROR, L"a\n"},
+        {{L"string", L"split", L"", L"ab", nullptr}, STATUS_CMD_OK, L"a\nb\n"},
+        {{L"string", L"split", L"", L"abc", nullptr}, STATUS_CMD_OK, L"a\nb\nc\n"},
+        {{L"string", L"split", L"-m1", L"", L"abc", nullptr}, STATUS_CMD_OK, L"a\nbc\n"},
+        {{L"string", L"split", L"-r", L"", L"", nullptr}, STATUS_CMD_ERROR, L"\n"},
+        {{L"string", L"split", L"-r", L"", L"a", nullptr}, STATUS_CMD_ERROR, L"a\n"},
+        {{L"string", L"split", L"-r", L"", L"ab", nullptr}, STATUS_CMD_OK, L"a\nb\n"},
+        {{L"string", L"split", L"-r", L"", L"abc", nullptr}, STATUS_CMD_OK, L"a\nb\nc\n"},
+        {{L"string", L"split", L"-r", L"-m1", L"", L"abc", nullptr}, STATUS_CMD_OK, L"ab\nc\n"},
+        {{L"string", L"split", L"-q", nullptr}, STATUS_INVALID_ARGS, L""},
+        {{L"string", L"split", L"-q", L":", nullptr}, STATUS_CMD_ERROR, L""},
+        {{L"string", L"split", L"-q", L"x", L"axbxc", nullptr}, STATUS_CMD_OK, L""},
 
-        {{L"string", L"sub", 0}, STATUS_CMD_ERROR, L""},
-        {{L"string", L"sub", L"abcde", 0}, STATUS_CMD_OK, L"abcde\n"},
-        {{L"string", L"sub", L"-l", L"x", L"abcde", 0}, STATUS_INVALID_ARGS, L""},
-        {{L"string", L"sub", L"-s", L"x", L"abcde", 0}, STATUS_INVALID_ARGS, L""},
-        {{L"string", L"sub", L"-l0", L"abcde", 0}, STATUS_CMD_OK, L"\n"},
-        {{L"string", L"sub", L"-l2", L"abcde", 0}, STATUS_CMD_OK, L"ab\n"},
-        {{L"string", L"sub", L"-l5", L"abcde", 0}, STATUS_CMD_OK, L"abcde\n"},
-        {{L"string", L"sub", L"-l6", L"abcde", 0}, STATUS_CMD_OK, L"abcde\n"},
-        {{L"string", L"sub", L"-l-1", L"abcde", 0}, STATUS_INVALID_ARGS, L""},
-        {{L"string", L"sub", L"-s0", L"abcde", 0}, STATUS_INVALID_ARGS, L""},
-        {{L"string", L"sub", L"-s1", L"abcde", 0}, STATUS_CMD_OK, L"abcde\n"},
-        {{L"string", L"sub", L"-s5", L"abcde", 0}, STATUS_CMD_OK, L"e\n"},
-        {{L"string", L"sub", L"-s6", L"abcde", 0}, STATUS_CMD_OK, L"\n"},
-        {{L"string", L"sub", L"-s-1", L"abcde", 0}, STATUS_CMD_OK, L"e\n"},
-        {{L"string", L"sub", L"-s-5", L"abcde", 0}, STATUS_CMD_OK, L"abcde\n"},
-        {{L"string", L"sub", L"-s-6", L"abcde", 0}, STATUS_CMD_OK, L"abcde\n"},
-        {{L"string", L"sub", L"-s1", L"-l0", L"abcde", 0}, STATUS_CMD_OK, L"\n"},
-        {{L"string", L"sub", L"-s1", L"-l1", L"abcde", 0}, STATUS_CMD_OK, L"a\n"},
-        {{L"string", L"sub", L"-s2", L"-l2", L"abcde", 0}, STATUS_CMD_OK, L"bc\n"},
-        {{L"string", L"sub", L"-s-1", L"-l1", L"abcde", 0}, STATUS_CMD_OK, L"e\n"},
-        {{L"string", L"sub", L"-s-1", L"-l2", L"abcde", 0}, STATUS_CMD_OK, L"e\n"},
-        {{L"string", L"sub", L"-s-3", L"-l2", L"abcde", 0}, STATUS_CMD_OK, L"cd\n"},
-        {{L"string", L"sub", L"-s-3", L"-l4", L"abcde", 0}, STATUS_CMD_OK, L"cde\n"},
-        {{L"string", L"sub", L"-q", 0}, STATUS_CMD_ERROR, L""},
-        {{L"string", L"sub", L"-q", L"abcde", 0}, STATUS_CMD_OK, L""},
+        {{L"string", L"sub", nullptr}, STATUS_CMD_ERROR, L""},
+        {{L"string", L"sub", L"abcde", nullptr}, STATUS_CMD_OK, L"abcde\n"},
+        {{L"string", L"sub", L"-l", L"x", L"abcde", nullptr}, STATUS_INVALID_ARGS, L""},
+        {{L"string", L"sub", L"-s", L"x", L"abcde", nullptr}, STATUS_INVALID_ARGS, L""},
+        {{L"string", L"sub", L"-l0", L"abcde", nullptr}, STATUS_CMD_OK, L"\n"},
+        {{L"string", L"sub", L"-l2", L"abcde", nullptr}, STATUS_CMD_OK, L"ab\n"},
+        {{L"string", L"sub", L"-l5", L"abcde", nullptr}, STATUS_CMD_OK, L"abcde\n"},
+        {{L"string", L"sub", L"-l6", L"abcde", nullptr}, STATUS_CMD_OK, L"abcde\n"},
+        {{L"string", L"sub", L"-l-1", L"abcde", nullptr}, STATUS_INVALID_ARGS, L""},
+        {{L"string", L"sub", L"-s0", L"abcde", nullptr}, STATUS_INVALID_ARGS, L""},
+        {{L"string", L"sub", L"-s1", L"abcde", nullptr}, STATUS_CMD_OK, L"abcde\n"},
+        {{L"string", L"sub", L"-s5", L"abcde", nullptr}, STATUS_CMD_OK, L"e\n"},
+        {{L"string", L"sub", L"-s6", L"abcde", nullptr}, STATUS_CMD_OK, L"\n"},
+        {{L"string", L"sub", L"-s-1", L"abcde", nullptr}, STATUS_CMD_OK, L"e\n"},
+        {{L"string", L"sub", L"-s-5", L"abcde", nullptr}, STATUS_CMD_OK, L"abcde\n"},
+        {{L"string", L"sub", L"-s-6", L"abcde", nullptr}, STATUS_CMD_OK, L"abcde\n"},
+        {{L"string", L"sub", L"-s1", L"-l0", L"abcde", nullptr}, STATUS_CMD_OK, L"\n"},
+        {{L"string", L"sub", L"-s1", L"-l1", L"abcde", nullptr}, STATUS_CMD_OK, L"a\n"},
+        {{L"string", L"sub", L"-s2", L"-l2", L"abcde", nullptr}, STATUS_CMD_OK, L"bc\n"},
+        {{L"string", L"sub", L"-s-1", L"-l1", L"abcde", nullptr}, STATUS_CMD_OK, L"e\n"},
+        {{L"string", L"sub", L"-s-1", L"-l2", L"abcde", nullptr}, STATUS_CMD_OK, L"e\n"},
+        {{L"string", L"sub", L"-s-3", L"-l2", L"abcde", nullptr}, STATUS_CMD_OK, L"cd\n"},
+        {{L"string", L"sub", L"-s-3", L"-l4", L"abcde", nullptr}, STATUS_CMD_OK, L"cde\n"},
+        {{L"string", L"sub", L"-q", nullptr}, STATUS_CMD_ERROR, L""},
+        {{L"string", L"sub", L"-q", L"abcde", nullptr}, STATUS_CMD_OK, L""},
 
-        {{L"string", L"trim", 0}, STATUS_CMD_ERROR, L""},
+        {{L"string", L"trim", nullptr}, STATUS_CMD_ERROR, L""},
         {{L"string", L"trim", L""}, STATUS_CMD_ERROR, L"\n"},
         {{L"string", L"trim", L" "}, STATUS_CMD_OK, L"\n"},
         {{L"string", L"trim", L"  \f\n\r\t"}, STATUS_CMD_OK, L"\n"},
@@ -5880,7 +6262,8 @@ static void test_string() {
         {{L"string", L"trim", L"-c", L"\\/", L"/a\\"}, STATUS_CMD_OK, L"a\n"},
         {{L"string", L"trim", L"-c", L"\\/", L"a/"}, STATUS_CMD_OK, L"a\n"},
         {{L"string", L"trim", L"-c", L"\\/", L"\\a/"}, STATUS_CMD_OK, L"a\n"},
-        {{L"string", L"trim", L"-c", L"", L".a."}, STATUS_CMD_ERROR, L".a.\n"}};
+        {{L"string", L"trim", L"-c", L"", L".a."}, STATUS_CMD_ERROR, L".a.\n"}
+    };
 
     for (const auto &t : string_tests) {
         run_one_string_test(t.argv, t.expected_rc, t.expected_out);
@@ -5888,24 +6271,24 @@ static void test_string() {
 
     const auto saved_flags = fish_features();
     const struct string_test qmark_noglob_tests[] = {
-        {{L"string", L"match", L"a*b?c", L"axxb?c", 0}, STATUS_CMD_OK, L"axxb?c\n"},
-        {{L"string", L"match", L"*?", L"a", 0}, STATUS_CMD_ERROR, L""},
-        {{L"string", L"match", L"*?", L"ab", 0}, STATUS_CMD_ERROR, L""},
-        {{L"string", L"match", L"?*", L"a", 0}, STATUS_CMD_ERROR, L""},
-        {{L"string", L"match", L"?*", L"ab", 0}, STATUS_CMD_ERROR, L""},
-        {{L"string", L"match", L"a*\\?", L"abc?", 0}, STATUS_CMD_ERROR, L""}};
+        {{L"string", L"match", L"a*b?c", L"axxb?c", nullptr}, STATUS_CMD_OK, L"axxb?c\n"},
+        {{L"string", L"match", L"*?", L"a", nullptr}, STATUS_CMD_ERROR, L""},
+        {{L"string", L"match", L"*?", L"ab", nullptr}, STATUS_CMD_ERROR, L""},
+        {{L"string", L"match", L"?*", L"a", nullptr}, STATUS_CMD_ERROR, L""},
+        {{L"string", L"match", L"?*", L"ab", nullptr}, STATUS_CMD_ERROR, L""},
+        {{L"string", L"match", L"a*\\?", L"abc?", nullptr}, STATUS_CMD_ERROR, L""}};
     mutable_fish_features().set(features_t::qmark_noglob, true);
     for (const auto &t : qmark_noglob_tests) {
         run_one_string_test(t.argv, t.expected_rc, t.expected_out);
     }
 
     const struct string_test qmark_glob_tests[] = {
-        {{L"string", L"match", L"a*b?c", L"axxbyc", 0}, STATUS_CMD_OK, L"axxbyc\n"},
-        {{L"string", L"match", L"*?", L"a", 0}, STATUS_CMD_OK, L"a\n"},
-        {{L"string", L"match", L"*?", L"ab", 0}, STATUS_CMD_OK, L"ab\n"},
-        {{L"string", L"match", L"?*", L"a", 0}, STATUS_CMD_OK, L"a\n"},
-        {{L"string", L"match", L"?*", L"ab", 0}, STATUS_CMD_OK, L"ab\n"},
-        {{L"string", L"match", L"a*\\?", L"abc?", 0}, STATUS_CMD_OK, L"abc?\n"}};
+        {{L"string", L"match", L"a*b?c", L"axxbyc", nullptr}, STATUS_CMD_OK, L"axxbyc\n"},
+        {{L"string", L"match", L"*?", L"a", nullptr}, STATUS_CMD_OK, L"a\n"},
+        {{L"string", L"match", L"*?", L"ab", nullptr}, STATUS_CMD_OK, L"ab\n"},
+        {{L"string", L"match", L"?*", L"a", nullptr}, STATUS_CMD_OK, L"a\n"},
+        {{L"string", L"match", L"?*", L"ab", nullptr}, STATUS_CMD_OK, L"ab\n"},
+        {{L"string", L"match", L"a*\\?", L"abc?", nullptr}, STATUS_CMD_OK, L"abc?\n"}};
     mutable_fish_features().set(features_t::qmark_noglob, false);
     for (const auto &t : qmark_glob_tests) {
         run_one_string_test(t.argv, t.expected_rc, t.expected_out);
@@ -5938,7 +6321,7 @@ long return_timezone_hour(time_t tstamp, const wchar_t *timezone) {
 /// Verify that setting special env vars have the expected effect on the current shell process.
 static void test_timezone_env_vars() {
     // Confirm changing the timezone affects fish's idea of the local time.
-    time_t tstamp = time(NULL);
+    time_t tstamp = time(nullptr);
 
     long first_tstamp = return_timezone_hour(tstamp, L"UTC-1");
     long second_tstamp = return_timezone_hour(tstamp, L"UTC-2");
@@ -6034,7 +6417,8 @@ static void test_illegal_command_exit_code() {
 
 void test_maybe() {
     say(L"Testing maybe_t");
-    do_test(!bool(maybe_t<int>()));
+    // maybe_t<T> bool conversion is only enabled for non-bool-convertible T types
+    do_test(!bool(maybe_t<wcstring>()));
     maybe_t<int> m(3);
     do_test(m.has_value());
     do_test(m.value() == 3);
@@ -6052,8 +6436,8 @@ void test_maybe() {
     do_test(m != maybe_t<int>());
     do_test(maybe_t<int>() == none());
     do_test(!maybe_t<int>(none()).has_value());
-    m = none();
-    do_test(!bool(m));
+    maybe_t<wcstring> n = none();
+    do_test(!bool(n));
 
     maybe_t<std::string> m2("abc");
     do_test(!m2.missing_or_empty());
@@ -6083,6 +6467,10 @@ void test_maybe() {
     do_test(std::is_copy_assignable<maybe_t<noncopyable>>::value == false);
     do_test(std::is_copy_constructible<maybe_t<noncopyable>>::value == false);
 
+    // We can construct a maybe_t from noncopyable things.
+    maybe_t<noncopyable> nmt{make_unique<int>(42)};
+    do_test(**nmt == 42);
+
     maybe_t<std::string> c1{"abc"};
     maybe_t<std::string> c2 = c1;
     do_test(c1.value() == "abc");
@@ -6090,6 +6478,11 @@ void test_maybe() {
     c2 = c1;
     do_test(c1.value() == "abc");
     do_test(c2.value() == "abc");
+
+    do_test(c2.value_or("derp") == "abc");
+    do_test(c2.value_or("derp") == "abc");
+    c2.reset();
+    do_test(c2.value_or("derp") == "derp");
 }
 
 void test_layout_cache() {
@@ -6145,7 +6538,7 @@ void test_prompt_truncation() {
 
     /// Helper to return 'layout' formatted as a string for easy comparison.
     auto format_layout = [&] {
-        wcstring line_breaks = L"";
+        wcstring line_breaks;
         bool first = true;
         for (const size_t line_break : layout.line_breaks) {
             if (!first) {
@@ -6408,8 +6801,8 @@ static void test_fd_event_signaller() {
 static void test_timer_format() {
     say(L"Testing timer format");
     // This test uses numeric output, so we need to set the locale.
-    char *saved_locale = strdup(setlocale(LC_NUMERIC, nullptr));
-    setlocale(LC_NUMERIC, "C");
+    char *saved_locale = strdup(std::setlocale(LC_NUMERIC, nullptr));
+    std::setlocale(LC_NUMERIC, "C");
     auto t1 = timer_snapshot_t::take();
     t1.cpu_fish.ru_utime.tv_usec = 0;
     t1.cpu_fish.ru_stime.tv_usec = 0;
@@ -6436,7 +6829,7 @@ Executed in  500.00 micros    fish         external
         err(L"Failed to format timer snapshot\nExpected: %ls\nActual:%ls\n", expected,
             actual.c_str());
     }
-    setlocale(LC_NUMERIC, saved_locale);
+    std::setlocale(LC_NUMERIC, saved_locale);
     free(saved_locale);
 }
 
@@ -6464,6 +6857,181 @@ static void test_killring() {
     do_test(kill_yank_rotate() == L"a");
     do_test((kill_entries() == wcstring_list_t{L"a", L"c", L"b", L"d"}));
 }
+
+namespace {
+using namespace re;
+
+// Basic tests for re, which wraps PCRE2.
+static void test_re_errs() {
+    say(L"Testing re");
+    flags_t flags{};
+    re_error_t error{};
+    maybe_t<regex_t> re;
+    do_test(!regex_t::try_compile(L"abc[", flags, &error));
+    do_test(error.code != 0);
+    do_test(!error.message().empty());
+
+    error = re_error_t{};
+    do_test(!regex_t::try_compile(L"abc(", flags, &error).has_value());
+    do_test(error.code != 0);
+    do_test(!error.message().empty());
+}
+
+static void test_re_basic() {
+    // Match a character twice.
+    using namespace re;
+    wcstring subject = L"AAbCCd11e";
+    auto substr_from_range = [&](maybe_t<match_range_t> r) {
+        do_test(r.has_value());
+        do_test(r->begin <= r->end);
+        do_test(r->end <= subject.size());
+        return subject.substr(r->begin, r->end - r->begin);
+    };
+    auto re = regex_t::try_compile(L"(.)\\1");
+    do_test(re.has_value());
+    auto md = re->prepare();
+    wcstring_list_t matches;
+    wcstring_list_t captures;
+    while (auto r = re->match(md, subject)) {
+        matches.push_back(substr_from_range(r));
+        captures.push_back(substr_from_range(re->group(md, 1)));
+        do_test(!re->group(md, 2));
+    }
+    do_test(join_strings(matches, L',') == L"AA,CC,11");
+    do_test(join_strings(captures, L',') == L"A,C,1");
+
+    // Test make_anchored
+    re = regex_t::try_compile(make_anchored(L"ab(.+?)"));
+    do_test(re.has_value());
+    do_test(!re->match(L""));
+    do_test(!re->match(L"ab"));
+    do_test((re->match(L"abcd") == match_range_t{0, 4}));
+    do_test(!re->match(L"xabcd"));
+    do_test((re->match(L"abcdefghij") == match_range_t{0, 10}));
+
+    re = regex_t::try_compile(make_anchored(L"(a+)|(b+)"));
+    do_test(re.has_value());
+    do_test(!re->match(L""));
+    do_test(!re->match(L"aabb"));
+    do_test((re->match(L"aaaa") == match_range_t{0, 4}));
+    do_test((re->match(L"bbbb") == match_range_t{0, 4}));
+    do_test(!re->match(L"aaaax"));
+}
+
+static void test_re_reset() {
+    using namespace re;
+    auto re = regex_t::try_compile(L"([0-9])");
+    wcstring s = L"012345";
+    auto md = re->prepare();
+    for (size_t idx = 0; idx < s.size(); idx++) {
+        md.reset();
+        for (size_t j = 0; j <= idx; j++) {
+            auto m = re->match(md, s);
+            match_range_t expected{j, j + 1};
+            do_test(m == expected);
+            do_test(re->group(md, 1) == expected);
+        }
+    }
+}
+
+static void test_re_named() {
+    // Named capture groups.
+    using namespace re;
+    auto re = regex_t::try_compile(L"A(?<FOO>x+)?");
+    do_test(re->capture_group_count() == 1);
+
+    wcstring subject = L"AxxAAx";
+    auto md = re->prepare();
+
+    auto r = re->match(md, subject);
+    do_test((r == match_range_t{0, 3}));
+    do_test(re->substring_for_group(md, L"QQQ", subject) == none());
+    do_test(re->substring_for_group(md, L"FOO", subject) == L"xx");
+
+    r = re->match(md, subject);
+    do_test((r == match_range_t{3, 4}));
+    do_test(re->substring_for_group(md, L"QQQ", subject) == none());
+    do_test(re->substring_for_group(md, L"FOO", subject) == none());
+
+    r = re->match(md, subject);
+    do_test((r == match_range_t{4, 6}));
+    do_test(re->substring_for_group(md, L"QQQ", subject) == none());
+    do_test(re->substring_for_group(md, L"FOO", subject) == wcstring(L"x"));
+}
+
+static void test_re_name_extraction() {
+    // Names of capture groups can be extracted.
+    using namespace re;
+    auto re = regex_t::try_compile(L"(?<FOO>dd)ff(?<BAR>cc)aaa(?<alpha>)ff(?<BETA>)");
+    do_test(re.has_value());
+    do_test(re->capture_group_count() == 4);
+    // PCRE2 returns these sorted.
+    do_test(join_strings(re->capture_group_names(), L',') == L"BAR,BETA,FOO,alpha");
+
+    // Mixed named and positional captures.
+    re = regex_t::try_compile(L"(abc)(?<FOO>def)(ghi)(?<BAR>jkl)");
+    do_test(re.has_value());
+    do_test(re->capture_group_count() == 4);
+    do_test(join_strings(re->capture_group_names(), L',') == L"BAR,FOO");
+    auto md = re->prepare();
+    const wcstring subject = L"abcdefghijkl";
+    auto m = re->match(md, subject);
+    do_test((m == match_range_t{0, 12}));
+    do_test((re->group(md, 1) == match_range_t{0, 3}));
+    do_test((re->group(md, 2) == match_range_t{3, 6}));
+    do_test((re->group(md, 3) == match_range_t{6, 9}));
+    do_test((re->group(md, 4) == match_range_t{9, 12}));
+    do_test(re->substring_for_group(md, L"FOO", subject) == wcstring(L"def"));
+    do_test(re->substring_for_group(md, L"BAR", subject) == wcstring(L"jkl"));
+}
+
+static void test_re_substitute() {
+    // Names of capture groups can be extracted.
+    using namespace re;
+    auto re = regex_t::try_compile(L"[a-z]+(\\d+)");
+    do_test(re.has_value());
+    do_test(re->capture_group_count() == 1);
+    maybe_t<wcstring> res{};
+    int repl_count{};
+    sub_flags_t sflags{};
+    const wcstring subj = L"AAabc123ZZ AAabc123ZZ";
+    const wcstring repl = L"$1qqq";
+    res = re->substitute(subj, repl, sflags, 0, nullptr, &repl_count);
+    do_test(res && *res == L"AA123qqqZZ AAabc123ZZ");
+    do_test(repl_count == 1);
+
+    res = re->substitute(subj, repl, sflags, 5, nullptr, &repl_count);
+    do_test(res && *res == L"AAabc123ZZ AA123qqqZZ");
+    do_test(repl_count == 1);
+
+    sflags.global = true;
+    res = re->substitute(subj, repl, sflags, 0, nullptr, &repl_count);
+    do_test(res && *res == L"AA123qqqZZ AA123qqqZZ");
+    do_test(repl_count == 2);
+
+    sflags.extended = true;
+    res = re->substitute(subj, L"\\x21", sflags, 0, nullptr, &repl_count);  // \x21 = !
+    do_test(res && *res == L"AA!ZZ AA!ZZ");
+    do_test(repl_count == 2);
+
+    // Test with a bad escape; \b is unsupported.
+    re_error_t error{};
+    res = re->substitute(subj, L"AAA\\bZZZ", sflags, 0, &error);
+    do_test(!res.has_value());
+    do_test(error.code == -57 /* PCRE2_ERROR_BADREPESCAPE */);
+    do_test(error.message() == L"bad escape sequence in replacement string");
+    do_test(error.offset == 5 /* the b */);
+
+    // Test a very long replacement as we used a fixed-size buffer.
+    sflags = sub_flags_t{};
+    sflags.global = true;
+    re = regex_t::try_compile(L"A");
+    res =
+        re->substitute(wcstring(4096, L'A'), wcstring(4096, L'X'), sflags, 0, nullptr, &repl_count);
+    do_test(res && *res == wcstring(4096 * 4096, L'X'));
+    do_test(repl_count == 4096);
+}
+}  // namespace
 
 struct termsize_tester_t {
     static void test();
@@ -6531,10 +7099,193 @@ void termsize_tester_t::test() {
     do_test(ts2.updating(parser) == *stubby_termsize);
 }
 
+void test_wgetopt() {
+    // Regression test for a crash.
+    const wchar_t *const short_options = L"-a";
+    const struct woption long_options[] = {
+        {L"add", no_argument, 'a'},
+        {},
+    };
+    const wchar_t *argv[] = {L"abbr", L"--add", L"emacsnw", L"emacs", L"-nw", nullptr};
+    int argc = builtin_count_args(argv);
+    wgetopter_t w;
+    int opt;
+    int a_count = 0;
+    wcstring_list_t arguments;
+    while ((opt = w.wgetopt_long(argc, argv, short_options, long_options, nullptr)) != -1) {
+        switch (opt) {
+            case 'a': {
+                a_count += 1;
+                break;
+            }
+            case 1: {
+                // non-option argument
+                do_test(w.woptarg != nullptr);
+                arguments.push_back(w.woptarg);
+                break;
+            }
+            case '?': {
+                // unrecognized option
+                fprintf(stderr, "got arg %d\n", w.woptind - 1);
+                if (argv[w.woptind - 1]) {
+                    do_test(argv[w.woptind - 1] != nullptr);
+                    arguments.push_back(argv[w.woptind - 1]);
+                }
+                break;
+            }
+            default: {
+                err(L"Unexpected option '%d'", opt);
+                break;
+            }
+        }
+    }
+    do_test(a_count == 1);
+    do_test(arguments.size() == 3);
+    do_test(join_strings(arguments, L' ') == L"emacsnw emacs -nw");
+}
+
+// typedef void (test_entry_point_t)();
+using test_entry_point_t = void (*)();
+struct test_t {
+    const char *group;
+    std::function<void()> test;
+    bool opt_in = false;
+
+    test_t(const char *group, test_entry_point_t test, bool opt_in = false)
+        : group(group), test(test), opt_in(opt_in) {}
+};
+
+struct test_comparator_t {
+    // template<typename T=test_t>
+    int operator()(const test_t &lhs, const test_t &rhs) { return strcmp(lhs.group, rhs.group); }
+};
+
+// This magic string is required for CMake to pick up the list of tests
+#define TEST_GROUP(x) x
+static const test_t s_tests[]{
+    {TEST_GROUP("utility_functions"), test_utility_functions},
+    {TEST_GROUP("dir_iter"), test_dir_iter},
+    {TEST_GROUP("string_split"), test_split_string_tok},
+    {TEST_GROUP("wwrite_to_fd"), test_wwrite_to_fd},
+    {TEST_GROUP("env_vars"), test_env_vars},
+    {TEST_GROUP("env"), test_env_snapshot},
+    {TEST_GROUP("str_to_num"), test_str_to_num},
+    {TEST_GROUP("enum"), test_enum_set},
+    {TEST_GROUP("enum"), test_enum_array},
+    {TEST_GROUP("highlighting"), test_highlighting},
+    {TEST_GROUP("new_parser_ll2"), test_new_parser_ll2},
+    {TEST_GROUP("new_parser_fuzzing"), test_new_parser_fuzzing},
+    {TEST_GROUP("new_parser_correctness"), test_new_parser_correctness},
+    {TEST_GROUP("new_parser_ad_hoc"), test_new_parser_ad_hoc},
+    {TEST_GROUP("new_parser_errors"), test_new_parser_errors},
+    {TEST_GROUP("error_messages"), test_error_messages},
+    {TEST_GROUP("escape"), test_unescape_sane},
+    {TEST_GROUP("escape"), test_escape_crazy},
+    {TEST_GROUP("escape"), test_escape_quotes},
+    {TEST_GROUP("format"), test_format},
+    {TEST_GROUP("convert"), test_convert},
+    {TEST_GROUP("convert"), test_convert_private_use},
+    {TEST_GROUP("convert_ascii"), test_convert_ascii},
+    {TEST_GROUP("perf_convert_ascii"), perf_convert_ascii, true},
+    {TEST_GROUP("convert_nulls"), test_convert_nulls},
+    {TEST_GROUP("tokenizer"), test_tokenizer},
+    {TEST_GROUP("fd_monitor"), test_fd_monitor},
+    {TEST_GROUP("iothread"), test_iothread},
+    {TEST_GROUP("pthread"), test_pthread},
+    {TEST_GROUP("debounce"), test_debounce},
+    {TEST_GROUP("debounce"), test_debounce_timeout},
+    {TEST_GROUP("parser"), test_parser},
+    {TEST_GROUP("cancellation"), test_cancellation},
+    {TEST_GROUP("indents"), test_indents},
+    {TEST_GROUP("utf8"), test_utf8},
+    {TEST_GROUP("feature_flags"), test_feature_flags},
+    {TEST_GROUP("escape_sequences"), test_escape_sequences},
+    {TEST_GROUP("pcre2_escape"), test_pcre2_escape},
+    {TEST_GROUP("lru"), test_lru},
+    {TEST_GROUP("expand"), test_expand},
+    {TEST_GROUP("expand"), test_expand_overflow},
+    {TEST_GROUP("fuzzy_match"), test_fuzzy_match},
+    {TEST_GROUP("ifind"), test_ifind},
+    {TEST_GROUP("ifind_fuzzy"), test_ifind_fuzzy},
+    {TEST_GROUP("abbreviations"), test_abbreviations},
+    {TEST_GROUP("builtins/test"), test_test},
+    {TEST_GROUP("wcstod"), test_wcstod},
+    {TEST_GROUP("fish_wcstod_underscores"), test_fish_wcstod_underscores},
+    {TEST_GROUP("dup2s"), test_dup2s},
+    {TEST_GROUP("dup2s"), test_dup2s_fd_for_target_fd},
+    {TEST_GROUP("path"), test_path},
+    {TEST_GROUP("pager_navigation"), test_pager_navigation},
+    {TEST_GROUP("pager_layout"), test_pager_layout},
+    {TEST_GROUP("word_motion"), test_word_motion},
+    {TEST_GROUP("is_potential_path"), test_is_potential_path},
+    {TEST_GROUP("colors"), test_colors},
+    {TEST_GROUP("wildcard"), test_wildcards},
+    {TEST_GROUP("complete"), test_complete},
+    {TEST_GROUP("autoload"), test_autoload},
+    {TEST_GROUP("input"), test_input},
+    {TEST_GROUP("line_iterator"), test_line_iterator},
+    {TEST_GROUP("undo"), test_undo},
+    {TEST_GROUP("universal"), test_universal},
+    {TEST_GROUP("universal"), test_universal_output},
+    {TEST_GROUP("universal"), test_universal_parsing},
+    {TEST_GROUP("universal"), test_universal_parsing_legacy},
+    {TEST_GROUP("universal"), test_universal_callbacks},
+    {TEST_GROUP("universal"), test_universal_formats},
+    {TEST_GROUP("universal"), test_universal_ok_to_save},
+    {TEST_GROUP("universal"), test_universal_notifiers},
+    {TEST_GROUP("wait_handles"), test_wait_handles},
+    {TEST_GROUP("completion_insertions"), test_completion_insertions},
+    {TEST_GROUP("autosuggestion_ignores"), test_autosuggestion_ignores},
+    {TEST_GROUP("autosuggestion_combining"), test_autosuggestion_combining},
+    {TEST_GROUP("autosuggest_suggest_special"), test_autosuggest_suggest_special},
+    {TEST_GROUP("history"), history_tests_t::test_history},
+    {TEST_GROUP("history_merge"), history_tests_t::test_history_merge},
+    {TEST_GROUP("history_paths"), history_tests_t::test_history_path_detection},
+    {TEST_GROUP("history_races"), history_tests_t::test_history_races},
+    {TEST_GROUP("history_formats"), history_tests_t::test_history_formats},
+    {TEST_GROUP("string"), test_string},
+    {TEST_GROUP("illegal_command_exit_code"), test_illegal_command_exit_code},
+    {TEST_GROUP("maybe"), test_maybe},
+    {TEST_GROUP("layout_cache"), test_layout_cache},
+    {TEST_GROUP("prompt"), test_prompt_truncation},
+    {TEST_GROUP("normalize"), test_normalize_path},
+    {TEST_GROUP("dirname"), test_dirname_basename},
+    {TEST_GROUP("topics"), test_topic_monitor},
+    {TEST_GROUP("topics"), test_topic_monitor_torture},
+    {TEST_GROUP("pipes"), test_pipes},
+    {TEST_GROUP("fd_event"), test_fd_event_signaller},
+    {TEST_GROUP("timer_format"), test_timer_format},
+    {TEST_GROUP("termsize"), termsize_tester_t::test},
+    {TEST_GROUP("killring"), test_killring},
+    {TEST_GROUP("re"), test_re_errs},
+    {TEST_GROUP("re"), test_re_basic},
+    {TEST_GROUP("re"), test_re_reset},
+    {TEST_GROUP("re"), test_re_named},
+    {TEST_GROUP("re"), test_re_name_extraction},
+    {TEST_GROUP("re"), test_re_substitute},
+    {TEST_GROUP("re"), test_re_substitute},
+    {TEST_GROUP("wgetopt"), test_wgetopt},
+};
+
+void list_tests() {
+    std::set<std::string> groups;
+    for (const auto &test : s_tests) {
+        groups.insert(test.group);
+    }
+
+    for (const auto &group : groups) {
+        std::fprintf(stdout, "%s\n", group.c_str());
+    }
+}
+
 /// Main test.
 int main(int argc, char **argv) {
-    UNUSED(argc);
-    setlocale(LC_ALL, "");
+    std::setlocale(LC_ALL, "");
+
+    if (argc >= 2 && std::strcmp(argv[1], "--list") == 0) {
+        list_tests();
+        return 0;
+    }
 
     // Look for the file tests/test.fish. We expect to run in a directory containing that file.
     // If we don't find it, walk up the directory hierarchy until we do, or error.
@@ -6554,7 +7305,7 @@ int main(int argc, char **argv) {
         }
     }
 
-    srandom((unsigned int)time(NULL));
+    srandom((unsigned int)time(nullptr));
     configure_thread_assertions_for_testing();
 
     // Set the program name to this sentinel value
@@ -6569,7 +7320,6 @@ int main(int argc, char **argv) {
     set_main_thread();
     setup_fork_guards();
     proc_init();
-    builtin_init();
     env_init();
     misc_init();
     reader_init();
@@ -6580,103 +7330,11 @@ int main(int argc, char **argv) {
     // Set PWD from getcwd - fixes #5599
     env_stack_t::principal().set_pwd_from_getcwd();
 
-    if (should_test_function("utility_functions")) test_utility_functions();
-    if (should_test_function("string_split")) test_split_string_tok();
-    if (should_test_function("wwrite_to_fd")) test_wwrite_to_fd();
-    if (should_test_function("env_vars")) test_env_vars();
-    if (should_test_function("env")) test_env_snapshot();
-    if (should_test_function("str_to_num")) test_str_to_num();
-    if (should_test_function("enum")) test_enum_set();
-    if (should_test_function("enum")) test_enum_array();
-    if (should_test_function("highlighting")) test_highlighting();
-    if (should_test_function("new_parser_ll2")) test_new_parser_ll2();
-    if (should_test_function("new_parser_fuzzing"))
-        test_new_parser_fuzzing();  // fuzzing is expensive
-    if (should_test_function("new_parser_correctness")) test_new_parser_correctness();
-    if (should_test_function("new_parser_ad_hoc")) test_new_parser_ad_hoc();
-    if (should_test_function("new_parser_errors")) test_new_parser_errors();
-    if (should_test_function("error_messages")) test_error_messages();
-    if (should_test_function("escape")) test_unescape_sane();
-    if (should_test_function("escape")) test_escape_crazy();
-    if (should_test_function("escape")) test_escape_quotes();
-    if (should_test_function("format")) test_format();
-    if (should_test_function("convert")) test_convert();
-    if (should_test_function("convert")) test_convert_private_use();
-    if (should_test_function("convert_ascii")) test_convert_ascii();
-    if (should_test_function("perf_convert_ascii", false)) perf_convert_ascii();
-    if (should_test_function("convert_nulls")) test_convert_nulls();
-    if (should_test_function("tokenizer")) test_tokenizer();
-    if (should_test_function("fd_monitor")) test_fd_monitor();
-    if (should_test_function("iothread")) test_iothread();
-    if (should_test_function("pthread")) test_pthread();
-    if (should_test_function("debounce")) test_debounce();
-    if (should_test_function("debounce")) test_debounce_timeout();
-    if (should_test_function("parser")) test_parser();
-    if (should_test_function("cancellation")) test_cancellation();
-    if (should_test_function("indents")) test_indents();
-    if (should_test_function("utf8")) test_utf8();
-    if (should_test_function("feature_flags")) test_feature_flags();
-    if (should_test_function("escape_sequences")) test_escape_sequences();
-    if (should_test_function("pcre2_escape")) test_pcre2_escape();
-    if (should_test_function("lru")) test_lru();
-    if (should_test_function("expand")) test_expand();
-    if (should_test_function("expand")) test_expand_overflow();
-    if (should_test_function("fuzzy_match")) test_fuzzy_match();
-    if (should_test_function("ifind")) test_ifind();
-    if (should_test_function("ifind_fuzzy")) test_ifind_fuzzy();
-    if (should_test_function("abbreviations")) test_abbreviations();
-    if (should_test_function("test")) test_test();
-    if (should_test_function("wcstod")) test_wcstod();
-    if (should_test_function("dup2s")) test_dup2s();
-    if (should_test_function("dup2s")) test_dup2s_fd_for_target_fd();
-    if (should_test_function("path")) test_path();
-    if (should_test_function("pager_navigation")) test_pager_navigation();
-    if (should_test_function("pager_layout")) test_pager_layout();
-    if (should_test_function("word_motion")) test_word_motion();
-    if (should_test_function("is_potential_path")) test_is_potential_path();
-    if (should_test_function("colors")) test_colors();
-    if (should_test_function("complete")) test_complete();
-    if (should_test_function("autoload")) test_autoload();
-    if (should_test_function("input")) test_input();
-    if (should_test_function("line_iterator")) test_line_iterator();
-    if (should_test_function("undo")) test_undo();
-    if (should_test_function("universal")) test_universal();
-    if (should_test_function("universal")) test_universal_output();
-    if (should_test_function("universal")) test_universal_parsing();
-    if (should_test_function("universal")) test_universal_parsing_legacy();
-    if (should_test_function("universal")) test_universal_callbacks();
-    if (should_test_function("universal")) test_universal_formats();
-    if (should_test_function("universal")) test_universal_ok_to_save();
-    if (should_test_function("notifiers")) test_universal_notifiers();
-    if (should_test_function("wait_handles")) test_wait_handles();
-    if (should_test_function("completion_insertions")) test_completion_insertions();
-    if (should_test_function("autosuggestion_ignores")) test_autosuggestion_ignores();
-    if (should_test_function("autosuggestion_combining")) test_autosuggestion_combining();
-    if (should_test_function("autosuggest_suggest_special")) test_autosuggest_suggest_special();
-    if (should_test_function("history")) history_tests_t::test_history();
-    if (should_test_function("history_merge")) history_tests_t::test_history_merge();
-    if (should_test_function("history_paths")) history_tests_t::test_history_path_detection();
-    if (!is_windows_subsystem_for_linux()) {
-        // this test always fails under WSL
-        if (should_test_function("history_races")) history_tests_t::test_history_races();
+    for (const auto &test : s_tests) {
+        if (should_test_function(test.group)) {
+            test.test();
+        }
     }
-    if (should_test_function("history_formats")) history_tests_t::test_history_formats();
-    if (should_test_function("string")) test_string();
-    if (should_test_function("illegal_command_exit_code")) test_illegal_command_exit_code();
-    if (should_test_function("maybe")) test_maybe();
-    if (should_test_function("layout_cache")) test_layout_cache();
-    if (should_test_function("prompt")) test_prompt_truncation();
-    if (should_test_function("normalize")) test_normalize_path();
-    if (should_test_function("dirname")) test_dirname_basename();
-    if (should_test_function("topics")) test_topic_monitor();
-    if (should_test_function("topics")) test_topic_monitor_torture();
-    if (should_test_function("pipes")) test_pipes();
-    if (should_test_function("fd_event")) test_fd_event_signaller();
-    if (should_test_function("timer_format")) test_timer_format();
-    // history_tests_t::test_history_speed();
-
-    if (should_test_function("termsize")) termsize_tester_t::test();
-    if (should_test_function("killring")) test_killring();
 
     say(L"Encountered %d errors in low-level tests", err_count);
     if (s_test_run_count == 0) say(L"*** No Tests Were Actually Run! ***");

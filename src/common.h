@@ -10,13 +10,19 @@
 #ifdef HAVE_SYS_IOCTL_H
 #include <sys/ioctl.h>  // IWYU pragma: keep
 #endif
+#include <sys/types.h>
+#include <termios.h>
 
 #include <algorithm>
-#include <atomic>
+#include <cstdint>
+#include <cwchar>
 #include <functional>
+#include <initializer_list>
+#include <iterator>
 #include <memory>
 #include <mutex>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "fallback.h"  // IWYU pragma: keep
@@ -55,9 +61,6 @@ typedef std::vector<wcstring> wcstring_list_t;
 
 struct termsize_t;
 
-// Maximum number of bytes used by a single utf-8 character.
-#define MAX_UTF8_BYTES 6
-
 // Highest legal ASCII value.
 #define ASCII_MAX 127u
 
@@ -70,21 +73,18 @@ struct termsize_t;
 // Unicode BOM value.
 #define UTF8_BOM_WCHAR 0xFEFFu
 
-// Unicode replacement character.
-#define REPLACEMENT_WCHAR 0xFFFDu
-
-// Use Unicode "noncharacters" for internal characters as much as we can. This
+// Use Unicode "non-characters" for internal characters as much as we can. This
 // gives us 32 "characters" for internal use that we can guarantee should not
 // appear in our input stream. See http://www.unicode.org/faq/private_use.html.
 #define RESERVED_CHAR_BASE static_cast<wchar_t>(0xFDD0)
 #define RESERVED_CHAR_END static_cast<wchar_t>(0xFDF0)
-// Split the available noncharacter values into two ranges to ensure there are
+// Split the available non-character values into two ranges to ensure there are
 // no conflicts among the places we use these special characters.
 #define EXPAND_RESERVED_BASE RESERVED_CHAR_BASE
 #define EXPAND_RESERVED_END (EXPAND_RESERVED_BASE + 16)
 #define WILDCARD_RESERVED_BASE EXPAND_RESERVED_END
 #define WILDCARD_RESERVED_END (WILDCARD_RESERVED_BASE + 16)
-// Make sure the ranges defined above don't exceed the range for noncharacters.
+// Make sure the ranges defined above don't exceed the range for non-characters.
 // This is to make sure we didn't do something stupid in subdividing the
 // Unicode range for our needs.
 //#if WILDCARD_RESERVED_END > RESERVED_CHAR_END
@@ -143,16 +143,19 @@ enum {
 };
 typedef unsigned int unescape_flags_t;
 
-// Flags for the escape_string() and escape_string() functions. These are only applicable when the
-// escape style is "script" (i.e., STRING_STYLE_SCRIPT).
+// Flags for the escape_string() function. These are only applicable when the escape style is
+// "script" (i.e., STRING_STYLE_SCRIPT).
 enum {
-    /// Escape all characters, including magic characters like the semicolon.
-    ESCAPE_ALL = 1 << 0,
+    /// Do not escape special fish syntax characters like the semicolon. Only escape non-printable
+    /// characters and backslashes.
+    ESCAPE_NO_PRINTABLES = 1 << 0,
     /// Do not try to use 'simplified' quoted escapes, and do not use empty quotes as the empty
     /// string.
     ESCAPE_NO_QUOTED = 1 << 1,
     /// Do not escape tildes.
-    ESCAPE_NO_TILDE = 1 << 2
+    ESCAPE_NO_TILDE = 1 << 2,
+    /// Replace non-printable control characters with Unicode symbols.
+    ESCAPE_SYMBOLIC = 1 << 3
 };
 typedef unsigned int escape_flags_t;
 
@@ -162,31 +165,6 @@ using job_id_t = int;
 /// The non user-visible, never-recycled job ID.
 /// Every job has a unique positive value for this.
 using internal_job_id_t = uint64_t;
-
-/// Issue a debug message with printf-style string formating and automatic line breaking. The string
-/// will begin with the string \c program_name, followed by a colon and a whitespace.
-///
-/// Because debug is often called to tell the user about an error, before using wperror to give a
-/// specific error message, debug will never ever modify the value of errno.
-///
-/// \param level the priority of the message. Lower number means higher priority. Messages with a
-/// priority_number higher than \c debug_level will be ignored..
-/// \param msg the message format string.
-///
-/// Example:
-///
-/// <code>debug( 1, L"Pi = %.3f", M_PI );</code>
-///
-/// will print the string 'fish: Pi = 3.141', given that debug_level is 1 or higher, and that
-/// program_name is 'fish'.
-[[gnu::noinline, gnu::format(printf, 2, 3)]] void debug_impl(int level, const char *msg, ...);
-[[gnu::noinline]] void debug_impl(int level, const wchar_t *msg, ...);
-
-/// The verbosity level of fish. If a call to debug has a severity level higher than \c debug_level,
-/// it will not be printed.
-extern std::atomic<int> debug_level;
-
-inline bool should_debug(int level) { return level <= debug_level.load(std::memory_order_relaxed); }
 
 /// Exits without invoking destructors (via _exit), useful for code after fork.
 [[noreturn]] void exit_without_destructors(int code);
@@ -223,14 +201,10 @@ extern const bool has_working_tty_timestamps;
 extern const wcstring g_empty_string;
 
 // Pause for input, then exit the program. If supported, print a backtrace first.
-// The `return` will never be run  but silences oclint warnings. Especially when this is called
-// from within a `switch` block. As of the time I'm writing this oclint doesn't recognize the
-// `__attribute__((noreturn))` on the exit_without_destructors() function.
-// TODO: we use C++11 [[noreturn]] now, does that change things?
 #define FATAL_EXIT()                                \
     do {                                            \
         char exit_read_buff;                        \
-        show_stackframe(L'E');                      \
+        show_stackframe();                          \
         ignore_result(read(0, &exit_read_buff, 1)); \
         exit_without_destructors(1);                \
     } while (0)
@@ -241,8 +215,8 @@ extern const wcstring g_empty_string;
 /// stdio functions and should be writing the message to stderr rather than stdout. Second, if
 /// possible it is useful to provide additional context such as a stack backtrace.
 #undef assert
-#define assert(e) (e) ? ((void)0) : __fish_assert(#e, __FILE__, __LINE__, 0)
-#define assert_with_errno(e) (e) ? ((void)0) : __fish_assert(#e, __FILE__, __LINE__, errno)
+#define assert(e) likely(e) ? ((void)0) : __fish_assert(#e, __FILE__, __LINE__, 0)
+#define assert_with_errno(e) likely(e) ? ((void)0) : __fish_assert(#e, __FILE__, __LINE__, errno)
 #define DIE(msg) __fish_assert(msg, __FILE__, __LINE__, 0)
 #define DIE_WITH_ERRNO(msg) __fish_assert(msg, __FILE__, __LINE__, errno)
 /// This macro is meant to be used with functions that return zero on success otherwise return an
@@ -250,7 +224,7 @@ extern const wcstring g_empty_string;
 #define DIE_ON_FAILURE(e)                                  \
     do {                                                   \
         int status = e;                                    \
-        if (status != 0) {                                 \
+        if (unlikely(status != 0)) {                       \
             __fish_assert(#e, __FILE__, __LINE__, status); \
         }                                                  \
     } while (0)
@@ -267,9 +241,29 @@ extern const wcstring g_empty_string;
 /// See https://developer.gnome.org/glib/stable/glib-I18N.html#N-:CAPS
 #define N_(wstr) wstr
 
+/// An empty struct which may be embedded (or inherited from) to prevent copying.
+struct [[gnu::unused]] noncopyable_t {
+    noncopyable_t() = default;
+    noncopyable_t(noncopyable_t &&) = default;
+    noncopyable_t &operator=(noncopyable_t &&) = default;
+    noncopyable_t(const noncopyable_t &) = delete;
+    noncopyable_t &operator=(const noncopyable_t &) = delete;
+};
+
+struct [[gnu::unused]] nonmovable_t {
+    nonmovable_t() = default;
+    nonmovable_t(nonmovable_t &&) = delete;
+    nonmovable_t &operator=(nonmovable_t &&) = delete;
+};
+
 /// Test if a collection contains a value.
 template <typename Col, typename T2>
 bool contains(const Col &col, const T2 &val) {
+    return std::find(std::begin(col), std::end(col), val) != std::end(col);
+}
+
+template <typename T1, typename T2>
+bool contains(std::initializer_list<T1> col, const T2 &val) {
     return std::find(std::begin(col), std::end(col), val) != std::end(col);
 }
 
@@ -284,18 +278,12 @@ void vec_append(std::vector<T> &receiver, std::vector<T> &&donator) {
     }
 }
 
-/// Move an object into a shared_ptr.
-template <typename T>
-std::shared_ptr<T> move_to_sharedptr(T &&v) {
-    return std::make_shared<T>(std::move(v));
-}
-
 /// A function type to check for cancellation.
 /// \return true if execution should cancel.
 using cancel_checker_t = std::function<bool()>;
 
 /// Print a stack trace to stderr.
-void show_stackframe(const wchar_t msg_level, int frame_count = 100, int skip_levels = 0);
+void show_stackframe(int frame_count = 100, int skip_levels = 0);
 
 /// Returns a  wide character string equivalent of the specified multibyte character string.
 ///
@@ -321,6 +309,10 @@ void wcs2string_appending(const wchar_t *in, size_t len, std::string *receiver);
 #define TESTS_PROGRAM_NAME L"(ignore)"
 bool should_suppress_stderr_for_tests();
 
+/// Branch prediction hints. Idea borrowed from Linux kernel. Just used for asserts.
+#define likely(x) __builtin_expect(bool(x), 1)
+#define unlikely(x) __builtin_expect(bool(x), 0)
+
 void assert_is_main_thread(const char *who);
 #define ASSERT_IS_MAIN_THREAD_TRAMPOLINE(x) assert_is_main_thread(x)
 #define ASSERT_IS_MAIN_THREAD() ASSERT_IS_MAIN_THREAD_TRAMPOLINE(__FUNCTION__)
@@ -340,23 +332,17 @@ wcstring format_size(long long sz);
 /// Version of format_size that does not allocate memory.
 void format_size_safe(char buff[128], unsigned long long sz);
 
-/// Our crappier versions of debug which is guaranteed to not allocate any memory, or do anything
-/// other than call write(). This is useful after a call to fork() with threads.
-void debug_safe(int level, const char *msg, const char *param1 = nullptr,
-                const char *param2 = nullptr, const char *param3 = nullptr,
-                const char *param4 = nullptr, const char *param5 = nullptr,
-                const char *param6 = nullptr, const char *param7 = nullptr,
-                const char *param8 = nullptr, const char *param9 = nullptr,
-                const char *param10 = nullptr, const char *param11 = nullptr,
-                const char *param12 = nullptr);
-
 /// Writes out a long safely.
 void format_long_safe(char buff[64], long val);
 void format_long_safe(wchar_t buff[64], long val);
+void format_llong_safe(wchar_t buff[64], long long val);
 void format_ullong_safe(wchar_t buff[64], unsigned long long val);
 
-/// "Narrows" a wide character string. This just grabs any ASCII characters and trunactes.
+/// "Narrows" a wide character string. This just grabs any ASCII characters and truncates.
 void narrow_string_safe(char buff[64], const wchar_t *s);
+
+/// Stored in blocks to reference the file which created the block.
+using filename_ref_t = std::shared_ptr<const wcstring>;
 
 using scoped_lock = std::lock_guard<std::mutex>;
 
@@ -371,7 +357,7 @@ using scoped_lock = std::lock_guard<std::mutex>;
 //   name.acquire().value = "derp"
 //
 template <typename Data>
-class acquired_lock {
+class acquired_lock : noncopyable_t {
     template <typename T>
     friend class owning_lock;
 
@@ -385,12 +371,6 @@ class acquired_lock {
     Data *value;
 
    public:
-    // No copying, move construction only
-    acquired_lock &operator=(const acquired_lock &) = delete;
-    acquired_lock(const acquired_lock &) = delete;
-    acquired_lock(acquired_lock &&) = default;
-    acquired_lock &operator=(acquired_lock &&) = default;
-
     Data *operator->() { return value; }
     const Data *operator->() const { return value; }
     Data &operator*() { return *value; }
@@ -476,11 +456,16 @@ std::unique_ptr<T> make_unique(Args &&...args) {
 }
 #endif
 
-/// This functions returns the end of the quoted substring beginning at \c in. The type of quoting
-/// character is detemrined by examining \c in. Returns 0 on error.
+/// This functions returns the end of the quoted substring beginning at \c pos. Returns 0 on error.
 ///
-/// \param in the position of the opening quote.
-wchar_t *quote_end(const wchar_t *pos);
+/// \param pos the position of the opening quote.
+/// \param quote the quote to use, usually pointed to by \c pos.
+const wchar_t *quote_end(const wchar_t *pos, wchar_t quote);
+
+/// This functions returns the end of the comment substring beginning at \c pos.
+///
+/// \param pos the position where the comment starts, including the '#' symbol.
+const wchar_t *comment_end(const wchar_t *pos);
 
 /// This function should be called after calling `setlocale()` to perform fish specific locale
 /// initialization.
@@ -503,10 +488,14 @@ ssize_t read_loop(int fd, void *buff, size_t count);
 /// \param in The string to be escaped
 /// \param flags Flags to control the escaping
 /// \return The escaped string
-wcstring escape_string(const wchar_t *in, escape_flags_t flags,
+wcstring escape_string(const wchar_t *in, escape_flags_t flags = 0,
                        escape_string_style_t style = STRING_STYLE_SCRIPT);
-wcstring escape_string(const wcstring &in, escape_flags_t flags,
+wcstring escape_string(const wcstring &in, escape_flags_t flags = 0,
                        escape_string_style_t style = STRING_STYLE_SCRIPT);
+
+/// Escape a string so that it may be inserted into a double-quoted string.
+/// This permits ownership transfer.
+wcstring escape_string_for_double_quotes(wcstring in);
 
 /// \return a string representation suitable for debugging (not for presenting to the user). This
 /// replaces non-ASCII characters with either tokens like <BRACE_SEP> or <\xfdd7>. No other escapes
@@ -531,18 +520,20 @@ bool unescape_string_in_place(wcstring *str, unescape_flags_t escape_special);
 bool unescape_string(const wchar_t *input, wcstring *output, unescape_flags_t escape_special,
                      escape_string_style_t style = STRING_STYLE_SCRIPT);
 
+bool unescape_string(const wchar_t *input, size_t len, wcstring *output,
+                     unescape_flags_t escape_special,
+                     escape_string_style_t style = STRING_STYLE_SCRIPT);
+
 bool unescape_string(const wcstring &input, wcstring *output, unescape_flags_t escape_special,
                      escape_string_style_t style = STRING_STYLE_SCRIPT);
 
 /// Write the given paragraph of output, redoing linebreaks to fit \p termsize.
 wcstring reformat_for_screen(const wcstring &msg, const termsize_t &termsize);
 
-/// Print a short message about how to file a bug report to stderr.
-void bugreport();
-
 /// Return the number of seconds from the UNIX epoch, with subsecond precision. This function uses
 /// the gettimeofday function and will have the same precision as that function.
-double timef();
+using timepoint_t = double;
+timepoint_t timef();
 
 /// Call the following function early in main to set the main thread. This is our replacement for
 /// pthread_main_np().
@@ -570,7 +561,7 @@ void assert_is_not_forked_child(const char *who);
 /// See https://github.com/Microsoft/WSL/issues/423 and Microsoft/WSL#2997
 bool is_windows_subsystem_for_linux();
 
-/// Detect if we are running under Cygwin or Cgywin64
+/// Detect if we are running under Cygwin or Cygwin64
 constexpr bool is_cygwin() {
 #ifdef __CYGWIN__
     return true;
@@ -598,49 +589,6 @@ long convert_digit(wchar_t d, int base);
 
 // Return true if the character is in a range reserved for fish's private use.
 bool fish_reserved_codepoint(wchar_t c);
-
-/// Used for constructing mappings between enums and strings. The resulting array must be sorted
-/// according to the `str` member since str_to_enum() does a binary search. Also the last entry must
-/// have NULL for the `str` member and the default value for `val` to be returned if the string
-/// isn't found.
-template <typename T>
-struct enum_map {
-    T val;
-    const wchar_t *const str;
-};
-
-/// Given a string return the matching enum. Return the sentinel enum if no match is made. The map
-/// must be sorted by the `str` member. A binary search is twice as fast as a linear search with 16
-/// elements in the map.
-template <typename T>
-static T str_to_enum(const wchar_t *name, const enum_map<T> map[], int len) {
-    // Ignore the sentinel value when searching as it is the "not found" value.
-    size_t left = 0, right = len - 1;
-
-    while (left < right) {
-        size_t mid = left + (right - left) / 2;
-        int cmp = std::wcscmp(name, map[mid].str);
-        if (cmp < 0) {
-            right = mid;  // name was smaller than mid
-        } else if (cmp > 0) {
-            left = mid + 1;  // name was larger than mid
-        } else {
-            return map[mid].val;  // found it
-        }
-    }
-    return map[len - 1].val;  // return the sentinel value
-}
-
-/// Given an enum return the matching string.
-template <typename T>
-static const wchar_t *enum_to_str(T enum_val, const enum_map<T> map[]) {
-    for (const enum_map<T> *entry = map; entry->str; entry++) {
-        if (enum_val == entry->val) {
-            return entry->str;
-        }
-    }
-    return nullptr;
-};
 
 void redirect_tty_output();
 
@@ -732,35 +680,47 @@ constexpr ssize_t const_strcmp(const T *lhs, const T *rhs) {
 
 /// Compile-time agnostic-size strlen/wcslen implementation. Unicode-unaware.
 template <typename T, size_t N>
-constexpr size_t const_strlen(const T (&val)[N], ssize_t index = -1) {
-    // N is the length of the character array, but that includes one **or more** trailing nuls.
-    static_assert(N > 0, "Invalid input to const_strlen");
-    return index == -1
-               ?
-               // Assume a minimum of one trailing nul and do a quick check for the usual case
-               // (single trailing nul) before recursing:
-               N - 1 - (N <= 2 || val[N - 2] != static_cast<T>(0) ? 0 : const_strlen(val, N - 2))
-               // Prevent an underflow in case the string is comprised of all \0 bytes
-               : index == 0
-                     ? 0
-                     // Keep back-tracking until a non-nul byte is found
-                     : (val[index] != static_cast<T>(0) ? 0 : 1 + const_strlen(val, index - 1));
+constexpr size_t const_strlen(const T (&val)[N], size_t last_checked_idx = N,
+                              size_t first_nul_idx = N) {
+    // Assume there's a nul char at the end (index N) but there may be one before that that.
+    return last_checked_idx == 0
+               ? first_nul_idx
+               : const_strlen(val, last_checked_idx - 1,
+                              val[last_checked_idx - 1] ? first_nul_idx : last_checked_idx - 1);
 }
 
-/// Compile-time assertion of alphabetical sort of array `array`, by specified
-/// parameter `accessor`. This is only a macro because constexpr lambdas (to
-/// specify the accessor for the sort key) are C++17 and up.
-#define ASSERT_SORT_ORDER(array, accessor)                                                \
-    struct verify_##array##_sort_t {                                                      \
-        template <class T, size_t N>                                                      \
-        constexpr static bool validate(T (&vals)[N], size_t idx = 0) {                    \
-            return (idx == (((sizeof(array) / sizeof(vals[0]))) - 1))                     \
-                       ? true                                                             \
-                       : const_strcmp(vals[idx] accessor, vals[idx + 1] accessor) <= 0 && \
-                             verify_##array##_sort_t::validate<T, N>(vals, idx + 1);      \
-        }                                                                                 \
-    };                                                                                    \
-    static_assert(verify_##array##_sort_t::validate(array),                               \
-                  #array " members not in asciibetical order!");
+/// \return true if the array \p vals is sorted by its name property.
+template <typename T, size_t N>
+constexpr bool is_sorted_by_name(const T (&vals)[N], size_t idx = 1) {
+    return idx >= N ? true
+                    : (const_strcmp(vals[idx - 1].name, vals[idx].name) <= 0 &&
+                       is_sorted_by_name(vals, idx + 1));
+}
+#define ASSERT_SORTED_BY_NAME(x) static_assert(is_sorted_by_name(x), #x " not sorted by name")
+
+/// \return a pointer to the first entry with the given name, assuming the entries are sorted by
+/// name. \return nullptr if not found.
+template <typename T, size_t N>
+const T *get_by_sorted_name(const wchar_t *name, const T (&vals)[N]) {
+    assert(name && "Null name");
+    auto is_less = [](const T &v, const wchar_t *n) -> bool { return std::wcscmp(v.name, n) < 0; };
+    auto where = std::lower_bound(std::begin(vals), std::end(vals), name, is_less);
+    if (where != std::end(vals) && std::wcscmp(where->name, name) == 0) {
+        return &*where;
+    }
+    return nullptr;
+}
+
+template <typename T, size_t N>
+const T *get_by_sorted_name(const wcstring &name, const T (&vals)[N]) {
+    return get_by_sorted_name(name.c_str(), vals);
+}
+
+/// As established in 1ab81ab90d1a408702e11f081fdaaafa30636c31, iswdigit() is very slow under glibc,
+/// and does nothing more than establish whether or not the single specified character is in the
+/// range ('0','9').
+__attribute__((always_inline)) bool inline iswdigit(const wchar_t c) {
+    return c >= L'0' && c <= L'9';
+}
 
 #endif  // FISH_COMMON_H

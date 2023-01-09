@@ -5,19 +5,23 @@
 #define FISH_READER_H
 
 #include <stddef.h>
+#include <stdint.h>
 
+#include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "common.h"
 #include "complete.h"
 #include "highlight.h"
+#include "maybe.h"
 #include "parse_constants.h"
 
+class env_stack_t;
 class environment_t;
 class history_t;
 class io_chain_t;
-class operation_context_t;
 class parser_t;
 
 /// An edit action that can be undone.
@@ -38,13 +42,16 @@ struct edit_t {
     explicit edit_t(size_t offset, size_t length, wcstring replacement)
         : offset(offset), length(length), replacement(std::move(replacement)) {}
 
+    explicit edit_t(source_range_t range, wcstring replacement)
+        : edit_t(range.start, range.length, std::move(replacement)) {}
+
     /// Used for testing.
     bool operator==(const edit_t &other) const;
 };
 
-/// Modify a string according to the given edit.
+/// Modify a string and its syntax highlighting according to the given edit.
 /// Currently exposed for testing only.
-void apply_edit(wcstring *target, const edit_t &edit);
+void apply_edit(wcstring *target, std::vector<highlight_spec_t> *colors, const edit_t &edit);
 
 /// The history of all edits to some command line.
 struct undo_history_t {
@@ -76,23 +83,14 @@ struct undo_history_t {
 
 /// Helper class for storing a command line.
 class editable_line_t {
-    /// The command line.
-    wcstring text_;
-    /// The current position of the cursor in the command line.
-    size_t position_ = 0;
-
-    /// The nesting level for atomic edits, so that recursive invocations of start_edit_group()
-    /// are not ended by one end_edit_group() call.
-    int32_t edit_group_level_ = -1;
-    /// Monotonically increasing edit group, ignored when edit_group_level_ is -1. Allowed to wrap.
-    uint32_t edit_group_id_ = -1;
-
    public:
-    undo_history_t undo_history;
-
     const wcstring &text() const { return text_; }
-    /// Set the text directly without maintaining undo invariants. Use with caution.
-    void set_text_bypassing_undo_history(wcstring &&text) { text_ = text; }
+
+    const std::vector<highlight_spec_t> &colors() const { return colors_; }
+    void set_colors(std::vector<highlight_spec_t> colors) {
+        assert(colors.size() == size());
+        colors_ = std::move(colors);
+    }
 
     size_t position() const { return position_; }
     void set_position(size_t position) { position_ = position; }
@@ -104,21 +102,11 @@ class editable_line_t {
 
     wchar_t at(size_t idx) const { return text().at(idx); }
 
-    void clear() {
-        undo_history.clear();
-        if (empty()) return;
-        set_text_bypassing_undo_history(L"");
-        set_position(0);
-    }
+    void clear();
 
     /// Modify the commandline according to @edit. Most modifications to the
     /// text should pass through this function.
-    void push_edit(edit_t &&edit);
-
-    /// Modify the commandline by inserting a string at the cursor.
-    /// Does not create a new undo point, but adds to the last edit which
-    /// must be an insertion, too.
-    void insert_coalesce(const wcstring &str);
+    void push_edit(edit_t edit, bool allow_coalesce);
 
     /// Undo the most recent edit that was not yet undone. Returns true on success.
     bool undo();
@@ -130,6 +118,25 @@ class editable_line_t {
     void begin_edit_group();
     /// End a logical grouping of command line edits that should be undone/redone together.
     void end_edit_group();
+
+   private:
+    /// Whether we want to append this string to the previous edit.
+    bool want_to_coalesce_insertion_of(const wcstring &str) const;
+
+    /// The command line.
+    wcstring text_;
+    /// Syntax highlighting.
+    std::vector<highlight_spec_t> colors_;
+    /// The current position of the cursor in the command line.
+    size_t position_ = 0;
+
+    /// The history of all edits.
+    undo_history_t undo_history_;
+    /// The nesting level for atomic edits, so that recursive invocations of start_edit_group()
+    /// are not ended by one end_edit_group() call.
+    int32_t edit_group_level_ = -1;
+    /// Monotonically increasing edit group, ignored when edit_group_level_ is -1. Allowed to wrap.
+    uint32_t edit_group_id_ = -1;
 };
 
 /// Read commands from \c fd until encountering EOF.
@@ -149,6 +156,21 @@ void restore_term_mode();
 /// Change the history file for the current command reading context.
 void reader_change_history(const wcstring &name);
 
+/// Strategy for determining how the selection behaves.
+enum class cursor_selection_mode_t : uint8_t {
+    /// The character at/after the cursor is excluded.
+    /// This is most useful with a line cursor shape.
+    exclusive,
+    /// The character at/after the cursor is included.
+    /// This is most useful with a block or underscore cursor shape.
+    inclusive,
+};
+
+void reader_change_cursor_selection_mode(cursor_selection_mode_t selection_mode);
+
+/// Enable or disable autosuggestions based on the associated variable.
+void reader_set_autosuggestion_enabled(const env_stack_t &vars);
+
 /// Write the title to the titlebar. This function is called just before a new application starts
 /// executing and just after it finishes.
 ///
@@ -164,28 +186,6 @@ void reader_schedule_prompt_repaint();
 /// Enqueue an event to the back of the reader's input queue.
 class char_event_t;
 void reader_queue_ch(const char_event_t &ch);
-
-/// Get the string of character currently entered into the command buffer, or 0 if interactive mode
-/// is uninitialized.
-const wchar_t *reader_get_buffer();
-
-/// Returns the current reader's history.
-std::shared_ptr<history_t> reader_get_history();
-
-/// Set the string of characters in the command buffer, as well as the cursor position.
-///
-/// \param b the new buffer value
-/// \param p the cursor position. If \c p is larger than the length of the command line, the cursor
-/// is placed on the last character.
-void reader_set_buffer(const wcstring &b, size_t p = -1);
-
-/// Get the current cursor position in the command line. If interactive mode is uninitialized,
-/// return (size_t)-1.
-size_t reader_get_cursor_pos();
-
-/// Get the current selection range in the command line. Returns false if there is no active
-/// selection, true otherwise.
-bool reader_get_selection(size_t *start, size_t *len);
 
 /// Return the value of the interrupted flag, which is set by the sigint handler, and clear it if it
 /// was set. In practice this will return 0 or SIGINT.
@@ -215,6 +215,9 @@ struct reader_config_t {
     /// Right prompt command, typically fish_right_prompt.
     wcstring right_prompt_cmd{};
 
+    /// Name of the event to trigger once we're set up.
+    wcstring event{};
+
     /// Whether tab completion is OK.
     bool complete_ok{false};
 
@@ -240,8 +243,11 @@ struct reader_config_t {
     int in{0};
 };
 
-/// Push a new reader environment controlled by \p conf.
-/// If \p history_name is not empty, then use the history with that name.
+class reader_data_t;
+bool check_exit_loop_maybe_warning(reader_data_t *data);
+
+/// Push a new reader environment controlled by \p conf, using the given history name.
+/// If \p history_name is empty, then save history in-memory only; do not write it to disk.
 void reader_push(parser_t &parser, const wcstring &history_name, reader_config_t &&conf);
 
 /// Return to previous reader environment.
@@ -250,30 +256,46 @@ void reader_pop();
 /// The readers interrupt signal handler. Cancels all currently running blocks.
 void reader_handle_sigint();
 
-/// \return whether we should cancel fish script due to fish itself receiving a signal.
-/// TODO: this doesn't belong in reader.
-bool check_cancel_from_fish_signal();
-
-/// Test whether the interactive reader is in search mode.
-bool reader_is_in_search_mode();
-
-/// Test whether the interactive reader has visible pager contents.
-bool reader_has_pager_contents();
+/// \return whether fish is currently unwinding the stack in preparation to exit.
+bool fish_is_unwinding_for_exit();
 
 /// Given a command line and an autosuggestion, return the string that gets shown to the user.
 /// Exposed for testing purposes only.
 wcstring combine_command_and_autosuggestion(const wcstring &cmdline,
                                             const wcstring &autosuggestion);
 
-/// Expand abbreviations at the given cursor position. Exposed for testing purposes only.
-/// \return none if no abbreviations were expanded, otherwise the new command line.
-maybe_t<edit_t> reader_expand_abbreviation_in_command(const wcstring &cmdline, size_t cursor_pos,
-                                                      const environment_t &vars);
+/// Expand at most one abbreviation at the given cursor position, updating the position if the
+/// abbreviation wants to move the cursor. Use the parser to run any abbreviations which want
+/// function calls. \return none if no abbreviations were expanded, otherwise the resulting
+/// replacement.
+struct abbrs_replacement_t;
+maybe_t<abbrs_replacement_t> reader_expand_abbreviation_at_cursor(const wcstring &cmdline,
+                                                                  size_t cursor_pos,
+                                                                  parser_t &parser);
 
 /// Apply a completion string. Exposed for testing only.
 wcstring completion_apply_to_command_line(const wcstring &val_str, complete_flags_t flags,
                                           const wcstring &command_line, size_t *inout_cursor_pos,
                                           bool append_only);
+
+/// Snapshotted state from the reader.
+struct commandline_state_t {
+    wcstring text;                         // command line text, or empty if not interactive
+    size_t cursor_pos{0};                  // position of the cursor, may be as large as text.size()
+    maybe_t<source_range_t> selection{};   // visual selection, or none if none
+    std::shared_ptr<history_t> history{};  // current reader history, or null if not interactive
+    bool pager_mode{false};                // pager is visible
+    bool pager_fully_disclosed{false};     // pager already shows everything if possible
+    bool search_mode{false};               // pager is visible and search is active
+    bool initialized{false};               // if false, the reader has not yet been entered
+};
+
+/// Get the command line state. This may be fetched on a background thread.
+commandline_state_t commandline_get_state();
+
+/// Set the command line text and position. This may be called on a background thread; the reader
+/// will pick it up when it is done executing.
+void commandline_set_buffer(wcstring text, size_t cursor_pos = -1);
 
 /// Return the current interactive reads loop count. Useful for determining how many commands have
 /// been executed between invocations of code.

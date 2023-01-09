@@ -8,10 +8,7 @@
 // Type "exit" or "quit" to terminate the program.
 #include "config.h"  // IWYU pragma: keep
 
-#include <errno.h>
 #include <getopt.h>
-#include <signal.h>
-#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <termios.h>
@@ -19,7 +16,6 @@
 
 #include <cstring>
 #include <cwchar>
-#include <memory>
 #include <string>
 #include <vector>
 
@@ -29,6 +25,7 @@
 #include "fish_version.h"
 #include "input.h"
 #include "input_common.h"
+#include "maybe.h"
 #include "parser.h"
 #include "print_help.h"
 #include "proc.h"
@@ -42,7 +39,7 @@ static const wchar_t *ctrl_symbolic_names[] = {
     nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, L"\\a",
     L"\\b",  L"\\t",  L"\\n",  L"\\v",  L"\\f",  L"\\r",  nullptr, nullptr,
     nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
-    nullptr, nullptr, nullptr, L"\\e",  nullptr, nullptr, nullptr, nullptr};
+    nullptr, nullptr, nullptr, L"\\e",  L"\\x1c", nullptr, nullptr, nullptr};
 
 /// Return true if the recent sequence of characters indicates the user wants to exit the program.
 static bool should_exit(wchar_t wc) {
@@ -205,30 +202,32 @@ static bool output_matching_key_name(wchar_t wc) {
     return false;
 }
 
-static double output_elapsed_time(double prev_tstamp, bool first_char_seen) {
+static double output_elapsed_time(double prev_tstamp, bool first_char_seen, bool verbose) {
     // How much time has passed since the previous char was received in microseconds.
     double now = timef();
     long long int delta_tstamp_us = 1000000 * (now - prev_tstamp);
 
-    if (delta_tstamp_us >= 200000 && first_char_seen) std::fputwc(L'\n', stderr);
-    if (delta_tstamp_us >= 1000000) {
-        std::fwprintf(stderr, L"              ");
-    } else {
-        std::fwprintf(stderr, L"(%3lld.%03lld ms)  ", delta_tstamp_us / 1000,
-                      delta_tstamp_us % 1000);
+    if (verbose) {
+        if (delta_tstamp_us >= 200000 && first_char_seen) std::fputwc(L'\n', stderr);
+        if (delta_tstamp_us >= 1000000) {
+            std::fwprintf(stderr, L"              ");
+        } else {
+            std::fwprintf(stderr, L"(%3lld.%03lld ms)  ", delta_tstamp_us / 1000,
+                          delta_tstamp_us % 1000);
+        }
     }
     return now;
 }
 
 /// Process the characters we receive as the user presses keys.
-static void process_input(bool continuous_mode) {
+static void process_input(bool continuous_mode, bool verbose) {
     bool first_char_seen = false;
     double prev_tstamp = 0.0;
     input_event_queue_t queue;
     std::vector<wchar_t> bind_chars;
 
     std::fwprintf(stderr, L"Press a key:\n");
-    for (;;) {
+    while (!check_exit_loop_maybe_warning(nullptr)) {
         maybe_t<char_event_t> evt{};
         if (reader_test_and_clear_interrupted()) {
             evt = char_event_t{shell_modes.c_cc[VINTR]};
@@ -244,19 +243,21 @@ static void process_input(bool continuous_mode) {
         }
 
         wchar_t wc = evt->get_char();
-        prev_tstamp = output_elapsed_time(prev_tstamp, first_char_seen);
+        prev_tstamp = output_elapsed_time(prev_tstamp, first_char_seen, verbose);
         // Hack for #3189. Do not suggest \c@ as the binding for nul, because a string containing
         // nul cannot be passed to builtin_bind since it uses C strings. We'll output the name of
         // this key (nul) elsewhere.
         if (wc) {
             add_char_to_bind_command(wc, bind_chars);
         }
-        output_info_about_char(wc);
+        if (verbose) {
+            output_info_about_char(wc);
+        }
         if (output_matching_key_name(wc)) {
             output_bind_command(bind_chars);
         }
 
-        if (should_exit(wc)) {
+        if (continuous_mode && should_exit(wc)) {
             std::fwprintf(stderr, L"\nExiting at your request.\n");
             break;
         }
@@ -266,7 +267,7 @@ static void process_input(bool continuous_mode) {
 }
 
 /// Setup our environment (e.g., tty modes), process key strokes, then reset the environment.
-[[noreturn]] static void setup_and_process_keys(bool continuous_mode) {
+[[noreturn]] static void setup_and_process_keys(bool continuous_mode, bool verbose) {
     set_interactive_session(true);
     set_main_thread();
     setup_fork_guards();
@@ -288,17 +289,18 @@ static void process_input(bool continuous_mode) {
         std::fwprintf(stderr, L"\n");
     }
 
-    process_input(continuous_mode);
+    process_input(continuous_mode, verbose);
     restore_term_mode();
     _exit(0);
 }
 
-static bool parse_flags(int argc, char **argv, bool *continuous_mode) {
-    const char *short_opts = "+chv";
+static bool parse_flags(int argc, char **argv, bool *continuous_mode, bool *verbose) {
+    const char *short_opts = "+chvV";
     const struct option long_opts[] = {{"continuous", no_argument, nullptr, 'c'},
                                        {"help", no_argument, nullptr, 'h'},
                                        {"version", no_argument, nullptr, 'v'},
-                                       {nullptr, 0, nullptr, 0}};
+                                       {"verbose", no_argument, nullptr, 'V'},
+                                       {}};
     int opt;
     bool error = false;
     while (!error && (opt = getopt_long(argc, argv, short_opts, long_opts, nullptr)) != -1) {
@@ -314,6 +316,10 @@ static bool parse_flags(int argc, char **argv, bool *continuous_mode) {
             case 'v': {
                 std::fwprintf(stdout, _(L"%ls, version %s\n"), program_name, get_fish_version());
                 exit(0);
+            }
+            case 'V': {
+                *verbose = true;
+                break;
             }
             default: {
                 // We assume getopt_long() has already emitted a diagnostic msg.
@@ -337,15 +343,16 @@ static bool parse_flags(int argc, char **argv, bool *continuous_mode) {
 int main(int argc, char **argv) {
     program_name = L"fish_key_reader";
     bool continuous_mode = false;
+    bool verbose = false;
 
-    if (!parse_flags(argc, argv, &continuous_mode)) return 1;
+    if (!parse_flags(argc, argv, &continuous_mode, &verbose)) return 1;
 
     if (!isatty(STDIN_FILENO)) {
         std::fwprintf(stderr, L"Stdin must be attached to a tty.\n");
         return 1;
     }
 
-    setup_and_process_keys(continuous_mode);
+    setup_and_process_keys(continuous_mode, verbose);
     exit_without_destructors(0);
     return EXIT_FAILURE;  // above should exit
 }

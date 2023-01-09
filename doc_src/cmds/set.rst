@@ -6,98 +6,150 @@ set - display and change shell variables
 Synopsis
 --------
 
-::
+.. synopsis::
 
-    set [SCOPE_OPTIONS]
-    set [OPTIONS] VARIABLE_NAME VALUES...
-    set [OPTIONS] VARIABLE_NAME[INDICES]... VALUES...
-    set ( -q | --query ) [SCOPE_OPTIONS] VARIABLE_NAMES...
-    set ( -e | --erase ) [SCOPE_OPTIONS] VARIABLE_NAME...
-    set ( -e | --erase ) [SCOPE_OPTIONS] VARIABLE_NAME[INDICES]...
-    set ( -S | --show ) [VARIABLE_NAME]...
+    set
+    set (-f | --function) (-l | local) (-g | --global) (-U | --universal)
+    set [-Uflg] NAME [VALUE ...]
+    set [-Uflg] NAME[[INDEX ...]] [VALUE ...]
+    set (-a | --append) [-flgU] NAME VALUE ...
+    set (-q | --query) (-e | --erase) [-flgU] [NAME][[INDEX]] ...]
+    set (-S | --show) [NAME ...]
 
 Description
 -----------
 
 ``set`` manipulates :ref:`shell variables <variables>`.
 
-If both a variable name and values are provided, ``set`` assigns the values to the variable of that name. Because all variables in fish are :ref:`lists <variables-lists>`, multiple values are allowed.
+If both *NAME* and *VALUE* are provided, ``set`` assigns any values to variable *NAME*.
+Variables in fish are :ref:`lists <variables-lists>`, multiple values are allowed.
+One or more variable *INDEX* can be specified including ranges (not for all options.)
 
-If only a variable name has been given, ``set`` sets the variable to the empty list.
+If no *VALUE* is given, the variable will be set to the empty list i.e. ``''``.
 
-If ``set`` is called with no arguments, it prints the names and values of all shell variables in sorted order. Passing :ref:`scope <variables-scope>` or :ref:`export <variables-export>` flags allows filtering this to only matching variables, so ``set --local`` would only show local variables.
+If ``set`` is ran without arguments, it prints the names and values of all shell variables in sorted order.
+Passing :ref:`scope <variables-scope>` or :ref:`export <variables-export>` flags allows filtering this to only matching variables, so ``set --local`` would only show local variables.
 
 With ``--erase`` and optionally a scope flag ``set`` will erase the matching variable (or the variable of that name in the smallest possible scope).
 
 With ``--show``, ``set`` will describe the given variable names, explaining how they have been defined - in which scope with which values and options.
 
-The following options control variable scope:
+The following scope control variable scope:
 
-- ``-l`` or ``--local`` forces the specified shell variable to be given a scope that is local to the current block, even if a variable with the given name exists and is non-local
+**-U** or **--universal**
+    Sets a universal variable.
+    The variable will be immediately available to all the user's ``fish`` instances on the machine, and will be persist across restarts of the shell.
 
-- ``-g`` or ``--global`` causes the specified shell variable to be given a global scope. Non-global variables disappear when the block they belong to ends
+**-f** or **--function**
+    Sets a variable scoped to the executing function.
+    It is erased when the function ends.
 
-- ``-U`` or ``--universal`` causes the specified shell variable to be given a universal scope. If this option is supplied, the variable will be shared between all the current user's fish instances on the current computer, and will be preserved across restarts of the shell.
+**-l** or **--local**
+    Sets a locally-scoped variable in this block.
+    It is erased when the block ends.
+    Outside of a block, this is the same as **--function**.
 
-These options control additional variable options:
+**-g** or **--global**
+    Sets a globally-scoped variable.
+    Global variables don't disappear and are available to all functions running in the same shell.
+    They can even be modified.
 
-- ``-x`` or ``--export`` causes the specified shell variable to be exported to child processes (making it an "environment variable")
+These options modify how variables operate:
 
-- ``-u`` or ``--unexport`` causes the specified shell variable to NOT be exported to child processes
+**--export** or **-x**
+    Causes the specified shell variable to be exported to child processes (making it an "environment variable").
 
-- ``--path`` causes the specified variable to be treated as a path variable, meaning it will automatically be split on colons,  and joined using colons when quoted (``echo "$PATH"``) or exported.
+**--unexport** or **-u**
+    Causes the specified shell variable to NOT be exported to child processes.
 
-- ``--unpath`` causes the specified variable to not be treated as a path variable. Variables with a name ending in "PATH" are automatically path variables, so this can be used to treat such a variable normally.
+**--path**
+    Treat specified variable as a :ref:`path variable <variables-path>`; variable will be split on colons (``:``) and will be displayed joined by colons colons when quoted (``echo "$PATH"``) or exported.
 
-The following other options are available:
+**--unpath**
+     Causes variable to no longer be tred as a :ref:`path variable <variables-path>`.
+     Note: variables ending in "PATH" are automatically path variables.
 
-- ``-a`` or ``--append`` causes the values to be appended to the current set of values for the variable. This can be used with ``--prepend`` to both append and prepend at the same time. This cannot be used when assigning to a variable slice.
+Further options:
 
-- ``-p`` or ``--prepend`` causes the values to be prepended to the current set of values for the variable. This can be used with ``--append`` to both append and prepend at the same time. This cannot be used when assigning to a variable slice.
+**-a** or **--append** *NAME* *VALUE* ...
+    Appends *VALUES* to the current set of values for variable **NAME**.
+    Can be used with **--prepend** to both append and prepend at the same time.
+    This cannot be used when assigning to a variable slice.
 
-- ``-e`` or ``--erase`` causes the specified shell variables to be erased
+**-p** or **--prepend** *NAME* *VALUE* ...
+    Prepends *VALUES* to the current set of values for variable **NAME**.
+    This can be used with **--append** to both append and prepend at the same time.
+    This cannot be used when assigning to a variable slice.
 
-- ``-q`` or ``--query`` test if the specified variable names are defined. Does not output anything, but the builtins exit status is the number of variables specified that were not defined, or 255 if more than 255 variables are not defined.
+**-e** or **--erase** *NAME*[*INDEX*]
+    Causes the specified shell variables to be erased.
+    Supports erasing from multiple scopes at once.
+    Individual items in a variable at *INDEX* in brackets can be specified.
 
-- ``-n`` or ``--names``: List only the names of all defined variables, not their value. The names are guaranteed to be sorted.
+**-q** or **--query** *NAME*[*INDEX*]
+    Test if the specified variable names are defined.
+    If an *INDEX* is provided, check for items at that slot.
+    Does not output anything, but the shell status is set to the number of variables specified that were not defined, up to a maximum of 255.
+    If no variable was given, it also returns 255.
 
-- ``-S`` or ``--show`` shows information about the given variables. If no variable names are given then all variables are shown in sorted order. It shows the scopes the given variables are set in, along with the values in each and whether or not it is exported. No other flags can be used with this option.
+**-n** or **--names**
+    List only the names of all defined variables, not their value.
+    The names are guaranteed to be sorted.
 
-- ``-L`` or ``--long`` do not abbreviate long values when printing set variables
+**-S** or **--show**
+    Shows information about the given variables.
+    If no variable names are given then all variables are shown in sorted order.
+    It shows the scopes the given variables are set in, along with the values in each and whether or not it is exported.
+    No other flags can be used with this option.
 
+**-L** or **--long**
+    Do not abbreviate long values when printing set variables.
 
-If a variable is set to more than one value, the variable will be a list with the specified elements. If a variable is set to zero elements, it will become a list with zero elements.
+**-h** or **--help**
+    Displays help about using this command.
 
-If the variable name is one or more list elements, such as ``PATH[1 3 7]``, only those list elements specified will be changed. If you specify a negative index when expanding or assigning to a list variable, the index will be calculated from the end of the list. For example, the index -1 means the last index of a list.
+If a variable is set to more than one value, the variable will be a list with the specified elements.
+If a variable is set to zero elements, it will become a list with zero elements.
+
+If the variable name is one or more list elements, such as ``PATH[1 3 7]``, only those list elements specified will be changed.
+If you specify a negative index when expanding or assigning to a list variable, the index will be calculated from the end of the list.
+For example, the index -1 means the last index of a list.
 
 The scoping rules when creating or updating a variable are:
 
-- Variables may be explicitly set to universal, global or local. Variables with the same name in different scopes will not be changed.
+- Variables may be explicitly set as universal, global, function, or local.
+  Variables with the same name but in a different scope will not be changed.
 
-- If a variable is not explicitly set to be either universal, global or local, but has been previously defined, the previous variable scope is used.
+- If the scope of a variable is not explicitly set *but a variable by that name has been previously defined*, the scope of the existing variable is used.
+  If the variable is already defined in multiple scopes, the variable with the narrowest scope will be updated.
 
-- If a variable is not explicitly set to be either universal, global or local and has never before been defined, the variable will be local to the currently executing function. Note that this is different from using the ``-l`` or ``--local`` flag. If one of those flags is used, the variable will be local to the most inner currently executing block, while without these the variable will be local to the function. If no function is executing, the variable will be global.
+- If a variable's scope is not explicitly set and there is no existing variable by that name, the variable will be local to the currently executing function.
+  Note that this is different from using the ``-l`` or ``--local`` flag, in which case the variable will be local to the most-inner currently executing block, while without them the variable will be local to the function as a whole.
+  If no function is executing, the variable will be set in the global scope.
 
 
 The exporting rules when creating or updating a variable are identical to the scoping rules for variables:
 
-- Variables may be explicitly set to either exported or not exported. When an exported variable goes out of scope, it is unexported.
+- Variables may be explicitly set to either exported or not exported.
+  When an exported variable goes out of scope, it is unexported.
 
 - If a variable is not explicitly set to be exported or not exported, but has been previously defined, the previous exporting rule for the variable is kept.
 
 - If a variable is not explicitly set to be either exported or unexported and has never before been defined, the variable will not be exported.
 
-
 In query mode, the scope to be examined can be specified.
+Whether the variable has to be a path variable or exported can also be specified.
 
 In erase mode, if variable indices are specified, only the specified slices of the list variable will be erased.
 
-``set`` requires all options to come before any other arguments. For example, ``set flags -l`` will have the effect of setting the value of the variable ``flags`` to '-l', not making the variable local.
+``set`` requires all options to come before any other arguments.
+For example, ``set flags -l`` will have the effect of setting the value of the variable :envvar:`flags` to '-l', not making the variable local.
 
 Exit status
 -----------
 
-In assignment mode, ``set`` does not modify the exit status, but passes along whatever $status was set, including by command substitutions. This allows capturing the output and exit status of a subcommand, like in ``if set output (command)``.
+In assignment mode, ``set`` does not modify the exit status, but passes along whatever :envvar:`status` was set, including by command substitutions.
+This allows capturing the output and exit status of a subcommand, like in ``if set output (command)``.
 
 In query mode, the exit status is the number of variables that were not found.
 
@@ -107,50 +159,58 @@ In erase mode, ``set`` exits with a zero exit status in case of success, with a 
 Examples
 --------
 
+Print all global, exported variables::
 
-::
+    > set -gx
 
-    # Prints all global, exported variables.
-    set -xg
+Set the value of the variable _$foo_ to be 'hi'.::
 
-    # Sets the value of the variable $foo to be 'hi'.
-    set foo hi
+    > set foo hi
 
-    # Appends the value "there" to the variable $foo.
-    set -a foo there
+Append the value "there" to the variable $foo::
 
-    # Does the same thing as the previous two commands the way it would be done pre-fish 3.0.
-    set foo hi
-    set foo $foo there
+    > set -a foo there
 
-    # Removes the variable $smurf
-    set -e smurf
+Remove _$smurf_ from the scope::
 
-    # Changes the fourth element of the $PATH list to ~/bin
-    set PATH[4] ~/bin
+    > set -e smurf
 
-    # Outputs the path to Python if ``type -p`` returns true.
+Remove _$smurf_ from the global and universal scoeps::
+
+    > set -e -Ug smurf
+
+Change the fourth element of the $PATH list to ~/bin::
+
+    > set PATH[4] ~/bin
+
+Outputs the path to Python if ``type -p`` returns true::
+
     if set python_path (type -p python)
         echo "Python is at $python_path"
     end
 
-    # Setting a variable doesn't modify $status!
-    false
-    set foo bar
-    echo $status # prints 1, because of the "false" above.
+Setting a variable doesn't modify $status; a command substitution still will, though::
 
-    true
-    set foo banana (false)
-    echo $status # prints 1, because of the "(false)" above.
-    
-    # Like other shells, pass a variable to just one command:
-    # Run fish with a temporary home directory.
-    HOME=(mktemp -d) fish
-    # Which is essentially the same as:
-    begin; set -lx HOME (mktemp -d); fish; end
+    > echo $status
+    0
+    > false
+    > set foo bar
+    > echo $status
+    1
+    > true
+    > set foo banana (false)
+    > echo $status
+    1
+
+``VAR=VALUE command`` sets a variable for just one command, like other shells.
+This runs fish with a temporary home directory::
+
+    > HOME=(mktemp -d) fish
+
+(which is essentially the same as)::
+
+    > begin; set -lx HOME (mktemp -d); fish; end
 
 Notes
 -----
-
-Fish versions prior to 3.0 supported the syntax ``set PATH[1] PATH[4] /bin /sbin``, which worked like
-``set PATH[1 4] /bin /sbin``. This syntax was not widely used, and was ambiguous and inconsistent.
+- Fish versions prior to 3.0 supported the syntax ``set PATH[1] PATH[4] /bin /sbin``, which worked like ``set PATH[1 4] /bin /sbin``.

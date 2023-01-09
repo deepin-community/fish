@@ -1,4 +1,0 @@
-path-sync-with-etc-profile.patch
-remove-deprecated-tests.patch
-#isolate-home-tests
-#use-curdir-not-pwd

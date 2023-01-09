@@ -3,26 +3,30 @@
 #define FISH_PARSER_H
 
 #include <stddef.h>
-#include <unistd.h>
 
 #include <csignal>
+#include <cstdint>
+#include <deque>
 #include <list>
 #include <memory>
-#include <type_traits>
+#include <utility>
 #include <vector>
 
 #include "common.h"
-#include "event.h"
+#include "env.h"
 #include "expand.h"
+#include "job_group.h"
+#include "maybe.h"
 #include "operation_context.h"
 #include "parse_constants.h"
-#include "parse_execution.h"
 #include "parse_tree.h"
 #include "proc.h"
 #include "util.h"
 #include "wait_handle.h"
 
+struct event_t;
 class io_chain_t;
+class autoclose_fd_t;
 
 /// event_blockage_t represents a block on events.
 struct event_blockage_t {};
@@ -34,7 +38,7 @@ inline bool event_block_list_blocks_type(const event_blockage_list_t &ebls) {
 }
 
 /// Types of blocks.
-enum class block_type_t {
+enum class block_type_t : uint16_t {
     while_block,              /// While loop block
     for_block,                /// For loop block
     if_block,                 /// If block
@@ -59,39 +63,46 @@ enum class loop_status_t {
 
 /// block_t represents a block of commands.
 class block_t {
+   private:
     /// Construct from a block type.
     explicit block_t(block_type_t t);
 
+   public:
+    // If this is a function block, the function name. Otherwise empty.
+    wcstring function_name{};
+
+    /// List of event blocks.
+    event_blockage_list_t event_blocks{};
+
+    // If this is a function block, the function args. Otherwise empty.
+    wcstring_list_t function_args{};
+
+    /// Name of file that created this block.
+    filename_ref_t src_filename{};
+
+    // If this is an event block, the event. Otherwise ignored.
+    std::shared_ptr<event_t> event;
+
+    // If this is a source block, the source'd file, interned.
+    // Otherwise nothing.
+    filename_ref_t sourced_file{};
+
+    /// Line number where this block was created.
+    int src_lineno{0};
+
+   private:
     /// Type of block.
     const block_type_t block_type;
 
    public:
-    /// Name of file that created this block. This string is intern'd.
-    const wchar_t *src_filename{nullptr};
-    /// Line number where this block was created.
-    int src_lineno{0};
     /// Whether we should pop the environment variable stack when we're popped off of the block
     /// stack.
     bool wants_pop_env{false};
-    /// List of event blocks.
-    event_blockage_list_t event_blocks{};
-
-    // If this is a function block, the function name and arguments.
-    // Otherwise empty.
-    wcstring function_name{};
-    wcstring_list_t function_args{};
-
-    // If this is a source block, the source'd file, interned.
-    // Otherwise nothing.
-    const wchar_t *sourced_file{};
-
-    // If this is an event block, the event. Otherwise ignored.
-    maybe_t<event_t> event;
-
-    block_type_t type() const { return this->block_type; }
 
     /// Description of the block, for debugging.
     wcstring description() const;
+
+    block_type_t type() const { return this->block_type; }
 
     /// \return if we are a function call (with or without shadowing).
     bool is_function_call() const {
@@ -103,15 +114,13 @@ class block_t {
     static block_t if_block();
     static block_t event_block(event_t evt);
     static block_t function_block(wcstring name, wcstring_list_t args, bool shadows);
-    static block_t source_block(const wchar_t *src);
+    static block_t source_block(filename_ref_t src);
     static block_t for_block();
     static block_t while_block();
     static block_t switch_block();
     static block_t scope_block(block_type_t type);
     static block_t breakpoint_block();
     static block_t variable_assignment_block();
-
-    ~block_t();
 };
 
 struct profile_item_t {
@@ -135,8 +144,6 @@ struct profile_item_t {
 };
 
 class parse_execution_context_t;
-class completion_t;
-struct event_t;
 
 /// Miscellaneous data used to avoid recursion and others.
 struct library_data_t {
@@ -151,6 +158,9 @@ struct library_data_t {
 
     /// Number of recursive calls to the internal completion function.
     uint32_t complete_recursion_level{0};
+
+    /// If set, we are currently within fish's initialization routines.
+    bool within_fish_init{false};
 
     /// If we're currently repainting the commandline.
     /// Useful to stop infinite loops.
@@ -168,12 +178,6 @@ struct library_data_t {
 
     /// Whether we are running a subshell command.
     bool is_subshell{false};
-
-    /// Whether we are running a block of commands.
-    bool is_block{false};
-
-    /// Whether we are running due to a `breakpoint` command.
-    bool is_breakpoint{false};
 
     /// Whether we are running an event handler. This is not a bool because we keep count of the
     /// event nesting level.
@@ -204,11 +208,10 @@ struct library_data_t {
     size_t read_limit{0};
 
     /// The current filename we are evaluating, either from builtin source or on the command line.
-    /// This is an intern'd string.
-    const wchar_t *current_filename{};
+    filename_ref_t current_filename{};
 
     /// List of events that have been sent but have not yet been delivered because they are blocked.
-    std::vector<shared_ptr<const event_t>> blocked_events{};
+    std::vector<std::shared_ptr<const event_t>> blocked_events{};
 
     /// A stack of fake values to be returned by builtin_commandline. This is used by the completion
     /// machinery when wrapping: e.g. if `tig` wraps `git` then git completions need to see git on
@@ -218,9 +221,16 @@ struct library_data_t {
     /// A file descriptor holding the current working directory, for use in openat().
     /// This is never null and never invalid.
     std::shared_ptr<const autoclose_fd_t> cwd_fd{};
-};
 
-class operation_context_t;
+    /// Status variables set by the main thread as jobs are parsed and read by various consumers.
+    struct {
+        /// Used to get the head of the current job (not the current command, at least for now)
+        /// for `status current-command`.
+        wcstring command;
+        /// Used to get the full text of the current job for `status current-commandline`.
+        wcstring commandline;
+    } status_vars;
+};
 
 /// The result of parser_t::eval family.
 struct eval_res_t {
@@ -230,7 +240,7 @@ struct eval_res_t {
     /// If set, there was an error that should be considered a failed expansion, such as
     /// command-not-found. For example, `touch (not-a-command)` will not invoke 'touch' because
     /// command-not-found will mark break_expand.
-    bool break_expand;
+    bool break_expand{false};
 
     /// If set, no commands were executed and there we no errors.
     bool was_empty{false};
@@ -241,6 +251,12 @@ struct eval_res_t {
     /* implicit */ eval_res_t(proc_status_t status, bool break_expand = false,
                               bool was_empty = false, bool no_status = false)
         : status(status), break_expand(break_expand), was_empty(was_empty), no_status(no_status) {}
+};
+
+enum class parser_status_var_t : uint8_t {
+    current_command,
+    current_commandline,
+    count_,
 };
 
 class parser_t : public std::enable_shared_from_this<parser_t> {
@@ -262,12 +278,22 @@ class parser_t : public std::enable_shared_from_this<parser_t> {
     /// This is in "reverse" order: the topmost block is at the front. This enables iteration from
     /// top down using range-based for loops.
     std::deque<block_t> block_list;
+
     /// The 'depth' of the fish call stack.
     int eval_level = -1;
+
     /// Set of variables for the parser.
     const std::shared_ptr<env_stack_t> variables;
+
     /// Miscellaneous library data.
     library_data_t library_data{};
+
+    /// If set, we synchronize universal variables after external commands,
+    /// including sending on-variable change events.
+    bool syncs_uvars_{false};
+
+    /// If set, we are the principal parser.
+    bool is_principal_{false};
 
     /// List of profile items.
     /// This must be a deque because we return pointers to them to callers,
@@ -275,28 +301,28 @@ class parser_t : public std::enable_shared_from_this<parser_t> {
     /// to profile_items). deque does not move items on reallocation.
     std::deque<profile_item_t> profile_items;
 
-    // No copying allowed.
-    parser_t(const parser_t &);
-    parser_t &operator=(const parser_t &);
-
     /// Adds a job to the beginning of the job list.
-    void job_add(shared_ptr<job_t> job);
+    void job_add(std::shared_ptr<job_t> job);
 
-    /// Returns the name of the currently evaluated function if we are currently evaluating a
-    /// function, null otherwise. This is tested by moving down the block-scope-stack, checking
-    /// every block if it is of type FUNCTION_CALL.
-    const wchar_t *is_function(size_t idx = 0) const;
+    /// \return whether we are currently evaluating a function.
+    bool is_function() const;
 
-    /// Create a parser.
-    parser_t();
-    parser_t(std::shared_ptr<env_stack_t> vars);
+    /// \return whether we are currently evaluating a command substitution.
+    bool is_command_substitution() const;
 
-    /// The main parser.
-    static std::shared_ptr<parser_t> principal;
+    /// Create a parser
+    parser_t(std::shared_ptr<env_stack_t> vars, bool is_principal = false);
 
    public:
+    // No copying allowed.
+    parser_t(const parser_t &) = delete;
+    parser_t &operator=(const parser_t &) = delete;
+
     /// Get the "principal" parser, whatever that is.
     static parser_t &principal_parser();
+
+    /// Assert that this parser is allowed to execute on the current thread.
+    void assert_can_execute() const;
 
     /// Global event blocks.
     event_blockage_list_t global_event_blocks;
@@ -308,9 +334,6 @@ class parser_t : public std::enable_shared_from_this<parser_t> {
     /// \param job_group if set, the job group to give to spawned jobs.
     /// \param block_type The type of block to push on the block stack, which must be either 'top'
     /// or 'subst'.
-    /// \param break_expand If not null, return by reference whether the error ought to be an expand
-    /// error. This includes nested expand errors, and command-not-found.
-    ///
     /// \return the result of evaluation.
     eval_res_t eval(const wcstring &cmd, const io_chain_t &io,
                     const job_group_ref_t &job_group = {},
@@ -345,6 +368,13 @@ class parser_t : public std::enable_shared_from_this<parser_t> {
     /// Returns the current line number.
     int get_lineno() const;
 
+    /// \return whether we are currently evaluating a "block" such as an if statement.
+    /// This supports 'status is-block'.
+    bool is_block() const;
+
+    /// \return whether we have a breakpoint block.
+    bool is_breakpoint() const;
+
     /// Returns the block at the given index. 0 corresponds to the innermost block. Returns nullptr
     /// when idx is at or equal to the number of blocks.
     const block_t *block_at_index(size_t idx) const;
@@ -352,9 +382,6 @@ class parser_t : public std::enable_shared_from_this<parser_t> {
 
     /// Return the list of blocks. The first block is at the top.
     const std::deque<block_t> &blocks() const { return block_list; }
-
-    /// Returns the current (innermost) block.
-    block_t *current_block();
 
     /// Get the list of jobs.
     job_list_t &jobs() { return job_list; }
@@ -381,29 +408,27 @@ class parser_t : public std::enable_shared_from_this<parser_t> {
     /// \return a value like ENV_OK.
     int set_var_and_fire(const wcstring &key, env_mode_flags_t mode, wcstring val);
     int set_var_and_fire(const wcstring &key, env_mode_flags_t mode, wcstring_list_t vals);
-    int set_empty_var_and_fire(const wcstring &key, env_mode_flags_t mode);
+
+    /// Update any universal variables and send event handlers.
+    /// If \p always is set, then do it even if we have no pending changes (that is, look for
+    /// changes from other fish instances); otherwise only sync if this instance has changed uvars.
+    void sync_uvars_and_fire(bool always = false);
 
     /// Pushes a new block. Returns a pointer to the block, stored in the parser. The pointer is
-    /// valid until the call to pop_block()
+    /// valid until the call to pop_block().
     block_t *push_block(block_t &&b);
 
     /// Remove the outermost block, asserting it's the given one.
     void pop_block(const block_t *expected);
 
-    /// Return a description of the given blocktype.
-    static const wchar_t *get_block_desc(block_type_t block);
-
     /// Return the function name for the specified stack frame. Default is one (current frame).
-    const wchar_t *get_function_name(int level = 1);
+    maybe_t<wcstring> get_function_name(int level = 1);
 
     /// Promotes a job to the front of the list.
     void job_promote(job_t *job);
 
     /// Return the job with the specified job id. If id is 0 or less, return the last job used.
     const job_t *job_with_id(job_id_t job_id) const;
-
-    /// Return the job with the specified internal job id.
-    const job_t *job_with_internal_id(internal_job_id_t job_id) const;
 
     /// Returns the job with the given pid.
     job_t *job_get_from_pid(pid_t pid) const;
@@ -424,8 +449,8 @@ class parser_t : public std::enable_shared_from_this<parser_t> {
 
     /// Returns the file currently evaluated by the parser. This can be different than
     /// reader_current_filename, e.g. if we are evaluating a function defined in a different file
-    /// than the one curently read.
-    const wchar_t *current_filename() const;
+    /// than the one currently read.
+    filename_ref_t current_filename() const;
 
     /// Return if we are interactive, which means we are executing a command that the user typed in
     /// (and not, say, a prompt).
@@ -437,6 +462,9 @@ class parser_t : public std::enable_shared_from_this<parser_t> {
     /// \return whether the number of functions in the stack exceeds our stack depth limit.
     bool function_stack_is_overflowing() const;
 
+    /// Mark whether we should sync universal variables.
+    void set_syncs_uvars(bool flag) { syncs_uvars_ = flag; }
+
     /// \return a shared pointer reference to this parser.
     std::shared_ptr<parser_t> shared();
 
@@ -445,6 +473,9 @@ class parser_t : public std::enable_shared_from_this<parser_t> {
 
     /// \return the operation context for this parser.
     operation_context_t context();
+
+    /// Checks if the max eval depth has been exceeded
+    bool is_eval_depth_exceeded() const { return eval_level >= FISH_MAX_EVAL_DEPTH; }
 
     ~parser_t();
 };
