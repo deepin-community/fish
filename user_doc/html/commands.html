@@ -1,18 +1,17 @@
-
 <!DOCTYPE html>
 
-<html lang="en">
+<html lang="en" data-content_root="./">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="generator" content="Docutils 0.19: https://docutils.sourceforge.io/" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>Commands &#8212; fish-shell 3.6.0 documentation</title>
-    <link rel="stylesheet" type="text/css" href="_static/pygments.css" />
-    <link rel="stylesheet" type="text/css" href="_static/pydoctheme.css" />
+    <title>Commands &#8212; fish-shell 3.7.1 documentation</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=a864bcb0" />
+    <link rel="stylesheet" type="text/css" href="_static/pydoctheme.css?v=4e2636db" />
     <link rel="stylesheet" type="text/css" href="/docs/shared/style.css" />
-    <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js"></script>
-    <script src="_static/doctools.js"></script>
-    <script src="_static/sphinx_highlight.js"></script>
+    <script src="_static/documentation_options.js?v=5c477e40"></script>
+    <script src="_static/doctools.js?v=888ff710"></script>
+    <script src="_static/sphinx_highlight.js?v=dc90522c"></script>
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
     <link rel="next" title="_ - call fish’s translations" href="cmds/_.html" />
@@ -28,7 +27,7 @@
              style="width: 80px; height: 80px; vertical-align: middle; margin-top: -1px"/></li>
     <li><a href="https://fishshell.com/">fish-shell</a> &#187;</li>
     
-    <a href="index.html">fish-shell 3.6.0 documentation</a> &#187;
+    <a href="index.html">fish-shell 3.7.1 documentation</a> &#187;
     
 
         <li class="nav-item nav-item-this"><a href="">Commands</a></li>
@@ -68,6 +67,7 @@
 <li class="toctree-l1"><a class="reference internal" href="fish_for_bash_users.html">Fish for bash users</a></li>
 <li class="toctree-l1"><a class="reference internal" href="tutorial.html">Tutorial</a></li>
 <li class="toctree-l1"><a class="reference internal" href="completions.html">Writing your own completions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="prompt.html">Writing your own prompt</a></li>
 <li class="toctree-l1"><a class="reference internal" href="design.html">Design</a></li>
 <li class="toctree-l1"><a class="reference internal" href="relnotes.html">Release notes</a></li>
 <li class="toctree-l1"><a class="reference internal" href="license.html">License</a></li>
@@ -106,11 +106,11 @@
           <div class="body" role="main">
             
   <section id="commands">
-<span id="id1"></span><h1>Commands<a class="headerlink" href="#commands" title="Permalink to this heading">¶</a></h1>
+<span id="id1"></span><h1>Commands<a class="headerlink" href="#commands" title="Link to this heading">¶</a></h1>
 <p>This is a list of all the commands fish ships with.</p>
 <p>Broadly speaking, these fall into a few categories:</p>
 <section id="keywords">
-<h2>Keywords<a class="headerlink" href="#keywords" title="Permalink to this heading">¶</a></h2>
+<h2>Keywords<a class="headerlink" href="#keywords" title="Link to this heading">¶</a></h2>
 <p>Core language keywords that make up the syntax, like</p>
 <ul class="simple">
 <li><p><a class="reference internal" href="cmds/if.html"><span class="doc">if</span></a> for conditions.</p></li>
@@ -127,7 +127,7 @@
 </ul>
 </section>
 <section id="tools">
-<h2>Tools<a class="headerlink" href="#tools" title="Permalink to this heading">¶</a></h2>
+<h2>Tools<a class="headerlink" href="#tools" title="Link to this heading">¶</a></h2>
 <p>Builtins to do a task, like</p>
 <ul class="simple">
 <li><p><a class="reference internal" href="cmds/cd.html"><span class="doc">cd</span></a> to change the current directory.</p></li>
@@ -153,7 +153,7 @@
 </ul>
 </section>
 <section id="known-functions">
-<h2>Known functions<a class="headerlink" href="#known-functions" title="Permalink to this heading">¶</a></h2>
+<h2>Known functions<a class="headerlink" href="#known-functions" title="Link to this heading">¶</a></h2>
 <p>Known functions are a customization point. You can change them to change how your fish behaves. This includes:</p>
 <ul class="simple">
 <li><p><a class="reference internal" href="cmds/fish_prompt.html"><span class="doc">fish_prompt</span></a> and <a class="reference internal" href="cmds/fish_right_prompt.html"><span class="doc">fish_right_prompt</span></a> and <a class="reference internal" href="cmds/fish_mode_prompt.html"><span class="doc">fish_mode_prompt</span></a> to print your prompt.</p></li>
@@ -163,7 +163,7 @@
 </ul>
 </section>
 <section id="helper-functions">
-<h2>Helper functions<a class="headerlink" href="#helper-functions" title="Permalink to this heading">¶</a></h2>
+<h2>Helper functions<a class="headerlink" href="#helper-functions" title="Link to this heading">¶</a></h2>
 <p>Some helper functions, often to give you information for use in your prompt:</p>
 <ul class="simple">
 <li><p><a class="reference internal" href="cmds/fish_git_prompt.html"><span class="doc">fish_git_prompt</span></a> and <a class="reference internal" href="cmds/fish_hg_prompt.html"><span class="doc">fish_hg_prompt</span></a> to print information about the current git or mercurial repository.</p></li>
@@ -180,12 +180,12 @@
 </ul>
 </section>
 <section id="helper-commands">
-<h2>Helper commands<a class="headerlink" href="#helper-commands" title="Permalink to this heading">¶</a></h2>
+<h2>Helper commands<a class="headerlink" href="#helper-commands" title="Link to this heading">¶</a></h2>
 <p>fish also ships some things as external commands so they can be easily called from elsewhere.</p>
 <p>This includes <a class="reference internal" href="cmds/fish_indent.html"><span class="doc">fish_indent</span></a> to format fish code and <a class="reference internal" href="cmds/fish_key_reader.html"><span class="doc">fish_key_reader</span></a> to show you what escape sequence a keypress produces.</p>
 </section>
 <section id="the-full-list">
-<h2>The full list<a class="headerlink" href="#the-full-list" title="Permalink to this heading">¶</a></h2>
+<h2>The full list<a class="headerlink" href="#the-full-list" title="Link to this heading">¶</a></h2>
 <p>And here is the full list:</p>
 <div class="toctree-wrapper compound">
 <ul>
@@ -206,7 +206,7 @@
 <li class="toctree-l1"><a class="reference internal" href="cmds/cdh.html">cdh - change to a recently visited directory</a></li>
 <li class="toctree-l1"><a class="reference internal" href="cmds/command.html">command - run a program</a></li>
 <li class="toctree-l1"><a class="reference internal" href="cmds/commandline.html">commandline - set or get the current command line buffer</a></li>
-<li class="toctree-l1"><a class="reference internal" href="cmds/complete.html">complete - edit command specific tab-completions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="cmds/complete.html">complete - edit command-specific tab-completions</a></li>
 <li class="toctree-l1"><a class="reference internal" href="cmds/contains.html">contains - test if a word is present in a list</a></li>
 <li class="toctree-l1"><a class="reference internal" href="cmds/continue.html">continue - skip the remainder of the current iteration of the current inner loop</a></li>
 <li class="toctree-l1"><a class="reference internal" href="cmds/count.html">count - count the number of elements of a list</a></li>
@@ -229,6 +229,7 @@
 <li class="toctree-l1"><a class="reference internal" href="cmds/fish_clipboard_paste.html">fish_clipboard_paste - get text from the system’s clipboard</a></li>
 <li class="toctree-l1"><a class="reference internal" href="cmds/fish_command_not_found.html">fish_command_not_found - what to do when a command wasn’t found</a></li>
 <li class="toctree-l1"><a class="reference internal" href="cmds/fish_config.html">fish_config - start the web-based configuration interface</a></li>
+<li class="toctree-l1"><a class="reference internal" href="cmds/fish_default_key_bindings.html">fish_default_key_bindings - set emacs key bindings for fish</a></li>
 <li class="toctree-l1"><a class="reference internal" href="cmds/fish_delta.html">fish_delta - compare functions and completions to the default</a></li>
 <li class="toctree-l1"><a class="reference internal" href="cmds/fish_git_prompt.html">fish_git_prompt - output git information for use in a prompt</a></li>
 <li class="toctree-l1"><a class="reference internal" href="cmds/fish_greeting.html">fish_greeting - display a welcome message in interactive shells</a></li>
@@ -245,6 +246,7 @@
 <li class="toctree-l1"><a class="reference internal" href="cmds/fish_title.html">fish_title - define the terminal’s title</a></li>
 <li class="toctree-l1"><a class="reference internal" href="cmds/fish_update_completions.html">fish_update_completions - update completions using manual pages</a></li>
 <li class="toctree-l1"><a class="reference internal" href="cmds/fish_vcs_prompt.html">fish_vcs_prompt - output version control system information for use in a prompt</a></li>
+<li class="toctree-l1"><a class="reference internal" href="cmds/fish_vi_key_bindings.html">fish_vi_key_bindings - set vi key bindings for fish</a></li>
 <li class="toctree-l1"><a class="reference internal" href="cmds/for.html">for - perform a set of commands multiple times</a></li>
 <li class="toctree-l1"><a class="reference internal" href="cmds/funced.html">funced - edit a function interactively</a></li>
 <li class="toctree-l1"><a class="reference internal" href="cmds/funcsave.html">funcsave - save the definition of a function to the user’s autoload directory</a></li>
@@ -327,7 +329,7 @@
              style="width: 80px; height: 80px; vertical-align: middle; margin-top: -1px"/></li>
     <li><a href="https://fishshell.com/">fish-shell</a> &#187;</li>
     
-    <a href="index.html">fish-shell 3.6.0 documentation</a> &#187;
+    <a href="index.html">fish-shell 3.7.1 documentation</a> &#187;
     
 
         <li class="nav-item nav-item-this"><a href="">Commands</a></li>
@@ -358,12 +360,12 @@
     <a href="https://github.com/fish-shell/fish-shell/issues">Found a bug</a>?
     <br />
 
-    Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 6.0.0.
+    Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 7.2.6.
     </div>
 </div>
 
 <script type="text/javascript">
- FISH_DOCS_VERSION = "3.6";
+ FISH_DOCS_VERSION = "3.7";
 
  function copy_to_clipboard(it) {
      // Find the pre tag we're interested in.

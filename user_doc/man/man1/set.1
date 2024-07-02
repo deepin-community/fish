@@ -27,7 +27,7 @@ level margin: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .\" new: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .in \\n[rst2man-indent\\n[rst2man-indent-level]]u
 ..
-.TH "SET" "1" "Jan 07, 2023" "3.6" "fish-shell"
+.TH "SET" "1" "Mar 19, 2024" "3.7" "fish-shell"
 .SH NAME
 set \- display and change shell variables
 .SH SYNOPSIS
@@ -49,7 +49,7 @@ If both \fINAME\fP and \fIVALUE\fP are provided, \fBset\fP assigns any values to
 Variables in fish are \fI\%lists\fP, multiple values are allowed.
 One or more variable \fIINDEX\fP can be specified including ranges (not for all options.)
 .sp
-If no \fIVALUE\fP is given, the variable will be set to the empty list i.e. \fB\(aq\(aq\fP\&.
+If no \fIVALUE\fP is given, the variable will be set to the empty list.
 .sp
 If \fBset\fP is ran without arguments, it prints the names and values of all shell variables in sorted order.
 Passing \fI\%scope\fP or \fI\%export\fP flags allows filtering this to only matching variables, so \fBset \-\-local\fP would only show local variables.
@@ -58,12 +58,12 @@ With \fB\-\-erase\fP and optionally a scope flag \fBset\fP will erase the matchi
 .sp
 With \fB\-\-show\fP, \fBset\fP will describe the given variable names, explaining how they have been defined \- in which scope with which values and options.
 .sp
-The following scope control variable scope:
+The following options control variable scope:
 .INDENT 0.0
 .TP
 \fB\-U\fP or \fB\-\-universal\fP
 Sets a universal variable.
-The variable will be immediately available to all the user\(aqs \fBfish\fP instances on the machine, and will be persist across restarts of the shell.
+The variable will be immediately available to all the user\(aqs \fBfish\fP instances on the machine, and will be persisted across restarts of the shell.
 .TP
 \fB\-f\fP or \fB\-\-function\fP
 Sets a variable scoped to the executing function.
@@ -76,8 +76,8 @@ Outside of a block, this is the same as \fB\-\-function\fP\&.
 .TP
 \fB\-g\fP or \fB\-\-global\fP
 Sets a globally\-scoped variable.
-Global variables don\(aqt disappear and are available to all functions running in the same shell.
-They can even be modified.
+Global variables are available to all functions running in the same shell.
+They can be modified or erased.
 .UNINDENT
 .sp
 These options modify how variables operate:
@@ -90,10 +90,10 @@ Causes the specified shell variable to be exported to child processes (making it
 Causes the specified shell variable to NOT be exported to child processes.
 .TP
 \fB\-\-path\fP
-Treat specified variable as a \fI\%path variable\fP; variable will be split on colons (\fB:\fP) and will be displayed joined by colons colons when quoted (\fBecho \(dq$PATH\(dq\fP) or exported.
+Treat specified variable as a \fI\%path variable\fP; variable will be split on colons (\fB:\fP) and will be displayed joined by colons when quoted (\fBecho \(dq$PATH\(dq\fP) or exported.
 .TP
 \fB\-\-unpath\fP
-Causes variable to no longer be tred as a \fI\%path variable\fP\&.
+Causes variable to no longer be treated as a \fI\%path variable\fP\&.
 Note: variables ending in \(dqPATH\(dq are automatically path variables.
 .UNINDENT
 .sp
@@ -235,7 +235,7 @@ Remove _$smurf_ from the scope:
 .UNINDENT
 .UNINDENT
 .sp
-Remove _$smurf_ from the global and universal scoeps:
+Remove _$smurf_ from the global and universal scopes:
 .INDENT 0.0
 .INDENT 3.5
 .sp

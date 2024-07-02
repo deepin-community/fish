@@ -4,7 +4,7 @@
 set -U _fish_abbr_cuckoo somevalue
 set fish (status fish-path)
 $fish -c abbr
-# CHECK: abbr -a -U -- cuckoo somevalue
+# CHECK: abbr -a -- cuckoo somevalue # imported from a universal variable, see `help abbr`
 
 # Test basic add and list of __abbr1
 abbr __abbr1 alpha beta gamma
@@ -170,7 +170,23 @@ abbr --show
 # CHECK: abbr -a -- nonregex_name foo
 # CHECK: abbr -a --regex 'A[0-9]B' -- regex_name bar
 # CHECK: abbr -a --position anywhere --function replace_history -- !!
+
+# Confirm that this erases the old uvar
+# (slightly cheating since we haven't imported it as an abbr,
+#  but that's okay)
+abbr --erase cuckoo
+echo erase $status
+# CHECK: erase 0
+set --show _fish_abbr_cuckoo
+# Nothing
+
+abbr --add '$PAGER' less
 abbr --erase (abbr --list)
+abbr --list
+# Nothing
+abbr --add '$PAGER' less
+abbr --list
+# CHECK: $PAGER
 
 abbr --add bogus --position never stuff
 # CHECKERR: abbr: Invalid position 'never'
@@ -178,3 +194,8 @@ abbr --add bogus --position never stuff
 
 abbr --add bogus --position anywhere --position command stuff
 # CHECKERR: abbr: Cannot specify multiple positions
+
+abbr --add --regex foo --function foo
+# CHECKERR: abbr --add: Name cannot be empty
+echo foo
+# CHECK: foo

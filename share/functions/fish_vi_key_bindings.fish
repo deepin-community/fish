@@ -28,7 +28,10 @@ function fish_vi_key_bindings --description 'vi-like key bindings for fish'
         # This triggers the handler, which calls us again and ensures the user_key_bindings
         # are executed.
         set fish_key_bindings fish_vi_key_bindings
-        return
+        # unless the handler somehow doesn't exist, which would leave us without bindings.
+        # this happens in no-config mode.
+        functions -q __fish_reload_key_bindings
+        and return
     end
 
     set -l init_mode insert
@@ -88,7 +91,7 @@ function fish_vi_key_bindings --description 'vi-like key bindings for fish'
 
     bind -s --preset [ history-token-search-backward
     bind -s --preset ] history-token-search-forward
-    bind -s --preset / history-pager
+    bind -s --preset -m insert / history-pager repaint-mode
 
     bind -s --preset k up-or-search
     bind -s --preset j down-or-search
@@ -122,8 +125,6 @@ function fish_vi_key_bindings --description 'vi-like key bindings for fish'
     bind -s --preset -M default \ch backward-char
     bind -s --preset -M insert \x7f backward-delete-char
     bind -s --preset -M default \x7f backward-char
-    bind -s --preset -M insert -k sdc backward-delete-char # shifted delete
-    bind -s --preset -M default -k sdc backward-delete-char # shifted delete
 
     bind -s --preset dd kill-whole-line
     bind -s --preset D kill-line

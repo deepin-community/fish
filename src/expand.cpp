@@ -665,6 +665,23 @@ static expand_result_t expand_cmdsubst(wcstring input, const operation_context_t
             case STATUS_NOT_EXECUTABLE:
                 err = L"Command not executable";
                 break;
+            case STATUS_INVALID_ARGS:
+                // TODO: Also overused
+                // This is sent for:
+                // invalid redirections or pipes (like `<&foo`),
+                // invalid variables (invalid name or read-only) for for-loops,
+                // switch $foo if $foo expands to more than one argument
+                // time in a background job.
+                err = L"Invalid arguments";
+                break;
+            case STATUS_EXPAND_ERROR:
+                // Sent in `for $foo in ...` if $foo expands to more than one word
+                err = L"Expansion error";
+                break;
+            case STATUS_UNMATCHED_WILDCARD:
+                // Sent in `for $foo in ...` if $foo expands to more than one word
+                err = L"Unmatched wildcard";
+                break;
             default:
                 err = L"Unknown error while evaluating command substitution";
                 break;
@@ -864,6 +881,9 @@ wcstring replace_home_directory_with_tilde(const wcstring &str, const environmen
     if (string_prefixes_string(L"/", result)) {
         wcstring home_directory = L"~";
         expand_tilde(home_directory, vars);
+        // If we can't get a home directory, don't replace anything.
+        // This is the case e.g. with --no-execute.
+        if (home_directory.empty()) return result;
         if (!string_suffixes_string(L"/", home_directory)) {
             home_directory.push_back(L'/');
         }

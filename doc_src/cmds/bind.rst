@@ -143,6 +143,9 @@ The following special input functions are available:
 ``capitalize-word``
     make the current word begin with a capital letter
 
+``clear-screen``
+    clears the screen and redraws the prompt. if the terminal doesn't support clearing the screen it is the same as ``repaint``.
+
 ``complete``
     guess the remainder of the current token
 
@@ -198,6 +201,9 @@ The following special input functions are available:
 
 ``history-pager``
     invoke the searchable pager on history (incremental search); or if the history pager is already active, search further backwards in time.
+
+``history-pager-delete``
+    permanently delete the history item selected in the history pager
 
 ``history-search-backward``
     search the history for the previous match
@@ -374,3 +380,6 @@ The escape key can be used standalone, for example, to switch from insertion mod
 Holding alt and something else also typically sends escape, for example holding alt+a will send an escape character and then an "a".
 
 fish waits for a period after receiving the escape character, to determine whether it is standalone or part of an escape sequence. While waiting, additional key presses make the escape key behave as a meta key. If no other key presses come in, it is handled as a standalone escape. The waiting period is set to 30 milliseconds (0.03 seconds). It can be configured by setting the ``fish_escape_delay_ms`` variable to a value between 10 and 5000 ms. This can be a universal variable that you set once from an interactive session.
+So the escape character has its own timeout configured with :envvar:`fish_escape_delay_ms`.
+
+See also :ref:`Key sequences <interactive-key-sequences>`.

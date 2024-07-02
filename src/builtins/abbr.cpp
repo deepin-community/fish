@@ -22,6 +22,7 @@
 #include "../common.h"
 #include "../env.h"
 #include "../io.h"
+#include "../parser.h"
 #include "../re.h"
 #include "../wcstringutil.h"
 #include "../wgetopt.h"
@@ -98,7 +99,6 @@ static int abbr_show(const abbr_options_t &, io_streams_t &streams) {
     for (const auto &abbr : abbrs->list()) {
         comps.clear();
         comps.push_back(L"abbr -a");
-        if (abbr.from_universal) comps.push_back(L"-U");
         if (abbr.is_regex()) {
             comps.push_back(L"--regex");
             comps.push_back(escape_string(abbr.key));
@@ -121,6 +121,7 @@ static int abbr_show(const abbr_options_t &, io_streams_t &streams) {
         if (!abbr.replacement_is_function) {
             comps.push_back(escape_string(abbr.replacement));
         }
+        if (abbr.from_universal) comps.push_back(_(L"# imported from a universal variable, see `help abbr`"));
         wcstring result = join_strings(comps, L' ');
         result.push_back(L'\n');
         streams.out.append(result);
@@ -138,7 +139,7 @@ static int abbr_list(const abbr_options_t &opts, io_streams_t &streams) {
     }
     const auto abbrs = abbrs_get_set();
     for (const auto &abbr : abbrs->list()) {
-        wcstring name = escape_string(abbr.name);
+        wcstring name = abbr.name;
         name.push_back(L'\n');
         streams.out.append(name);
     }
@@ -201,11 +202,12 @@ static int abbr_add(const abbr_options_t &opts, io_streams_t &streams) {
         streams.err.append_format(_(L"%ls %ls: Requires at least two arguments\n"), CMD, subcmd);
         return STATUS_INVALID_ARGS;
     }
-    const wcstring &name = opts.args[0];
-    if (name.empty()) {
+
+    if (opts.args.empty() || opts.args[0].empty()) {
         streams.err.append_format(_(L"%ls %ls: Name cannot be empty\n"), CMD, subcmd);
         return STATUS_INVALID_ARGS;
     }
+    const wcstring &name = opts.args[0];
     if (std::any_of(name.begin(), name.end(), iswspace)) {
         streams.err.append_format(
             _(L"%ls %ls: Abbreviation '%ls' cannot have spaces in the word\n"), CMD, subcmd,
@@ -260,7 +262,7 @@ static int abbr_add(const abbr_options_t &opts, io_streams_t &streams) {
     abbrs_position_t position = opts.position ? *opts.position : abbrs_position_t::command;
 
     // Note historically we have allowed overwriting existing abbreviations.
-    abbreviation_t abbr{std::move(name), std::move(key), std::move(replacement), position};
+    abbreviation_t abbr{name, std::move(key), std::move(replacement), position};
     abbr.regex = std::move(regex);
     abbr.replacement_is_function = opts.function.has_value();
     abbr.set_cursor_marker = opts.set_cursor_marker;
@@ -269,7 +271,7 @@ static int abbr_add(const abbr_options_t &opts, io_streams_t &streams) {
 }
 
 // Erase the named abbreviations.
-static int abbr_erase(const abbr_options_t &opts, io_streams_t &) {
+static int abbr_erase(const abbr_options_t &opts, parser_t &parser, io_streams_t &) {
     if (opts.args.empty()) {
         // This has historically been a silent failure.
         return STATUS_CMD_ERROR;
@@ -282,6 +284,14 @@ static int abbr_erase(const abbr_options_t &opts, io_streams_t &) {
         if (!abbrs->erase(arg)) {
             result = ENV_NOT_FOUND;
         }
+        // Erase the old uvar - this makes `abbr -e` work.
+        wcstring esc_src = escape_string(arg, 0, STRING_STYLE_VAR);
+        if (!esc_src.empty()) {
+            wcstring var_name = L"_fish_abbr_" + esc_src;
+            auto ret = parser.vars().remove(var_name, ENV_UNIVERSAL);
+            if (ret == ENV_OK) result = STATUS_CMD_OK;
+        }
+
     }
     return result;
 }
@@ -384,9 +394,15 @@ maybe_t<int> builtin_abbr(parser_t &parser, io_streams_t &streams, const wchar_t
                 opts.list = true;
                 break;
             case 'g':
-            case 'U':
                 // Kept for backwards compatibility but ignored.
+                // This basically does nothing now.
                 break;
+            case 'U': {
+                // Kept and made ineffective, so we warn.
+                streams.err.append_format(_(L"%ls: Warning: Option '%ls' was removed and is now ignored"), cmd, argv[w.woptind - 1]);
+                builtin_print_error_trailer(parser, streams.err, cmd);
+                break;
+            }
             case 'h': {
                 builtin_print_help(parser, streams, cmd);
                 return STATUS_CMD_OK;
@@ -410,7 +426,7 @@ maybe_t<int> builtin_abbr(parser_t &parser, io_streams_t &streams, const wchar_t
     if (opts.show) return abbr_show(opts, streams);
     if (opts.list) return abbr_list(opts, streams);
     if (opts.rename) return abbr_rename(opts, streams);
-    if (opts.erase) return abbr_erase(opts, streams);
+    if (opts.erase) return abbr_erase(opts, parser, streams);
     if (opts.query) return abbr_query(opts, streams);
 
     // validate() should error or ensure at least one path is set.

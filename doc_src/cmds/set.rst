@@ -25,7 +25,7 @@ If both *NAME* and *VALUE* are provided, ``set`` assigns any values to variable 
 Variables in fish are :ref:`lists <variables-lists>`, multiple values are allowed.
 One or more variable *INDEX* can be specified including ranges (not for all options.)
 
-If no *VALUE* is given, the variable will be set to the empty list i.e. ``''``.
+If no *VALUE* is given, the variable will be set to the empty list.
 
 If ``set`` is ran without arguments, it prints the names and values of all shell variables in sorted order.
 Passing :ref:`scope <variables-scope>` or :ref:`export <variables-export>` flags allows filtering this to only matching variables, so ``set --local`` would only show local variables.
@@ -34,11 +34,11 @@ With ``--erase`` and optionally a scope flag ``set`` will erase the matching var
 
 With ``--show``, ``set`` will describe the given variable names, explaining how they have been defined - in which scope with which values and options.
 
-The following scope control variable scope:
+The following options control variable scope:
 
 **-U** or **--universal**
     Sets a universal variable.
-    The variable will be immediately available to all the user's ``fish`` instances on the machine, and will be persist across restarts of the shell.
+    The variable will be immediately available to all the user's ``fish`` instances on the machine, and will be persisted across restarts of the shell.
 
 **-f** or **--function**
     Sets a variable scoped to the executing function.
@@ -51,8 +51,8 @@ The following scope control variable scope:
 
 **-g** or **--global**
     Sets a globally-scoped variable.
-    Global variables don't disappear and are available to all functions running in the same shell.
-    They can even be modified.
+    Global variables are available to all functions running in the same shell.
+    They can be modified or erased.
 
 These options modify how variables operate:
 
@@ -63,10 +63,10 @@ These options modify how variables operate:
     Causes the specified shell variable to NOT be exported to child processes.
 
 **--path**
-    Treat specified variable as a :ref:`path variable <variables-path>`; variable will be split on colons (``:``) and will be displayed joined by colons colons when quoted (``echo "$PATH"``) or exported.
+    Treat specified variable as a :ref:`path variable <variables-path>`; variable will be split on colons (``:``) and will be displayed joined by colons when quoted (``echo "$PATH"``) or exported.
 
 **--unpath**
-     Causes variable to no longer be tred as a :ref:`path variable <variables-path>`.
+     Causes variable to no longer be treated as a :ref:`path variable <variables-path>`.
      Note: variables ending in "PATH" are automatically path variables.
 
 Further options:
@@ -175,7 +175,7 @@ Remove _$smurf_ from the scope::
 
     > set -e smurf
 
-Remove _$smurf_ from the global and universal scoeps::
+Remove _$smurf_ from the global and universal scopes::
 
     > set -e -Ug smurf
 

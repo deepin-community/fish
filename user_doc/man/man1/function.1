@@ -27,7 +27,7 @@ level margin: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .\" new: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .in \\n[rst2man-indent\\n[rst2man-indent-level]]u
 ..
-.TH "FUNCTION" "1" "Jan 07, 2023" "3.6" "fish-shell"
+.TH "FUNCTION" "1" "Mar 19, 2024" "3.7" "fish-shell"
 .SH NAME
 function \- create a function
 .SH SYNOPSIS
@@ -54,7 +54,7 @@ A description of what the function does, suitable as a completion description.
 Inherit completions from the given \fIWRAPPED_COMMAND\fP\&. See the documentation for \fI\%complete\fP for more information.
 .TP
 \fB\-e\fP \fIEVENT_NAME\fP or \fB\-\-on\-event\fP \fIEVENT_NAME\fP
-Run this function when the specified named event is emitted. Fish internally generates named events, for example,when showing the prompt. Custom events can be emitted using the \fI\%emit\fP command.
+Run this function when the specified named event is emitted. Fish internally generates named events, for example, when showing the prompt. Custom events can be emitted using the \fI\%emit\fP command.
 .TP
 \fB\-v\fP \fIVARIABLE_NAME\fP or \fB\-\-on\-variable\fP \fIVARIABLE_NAME\fP
 Run this function when the variable \fIVARIABLE_NAME\fP changes value. Note that \fBfish\fP makes no guarantees on any particular timing or even that the function will be run for every single \fBset\fP\&. Rather it will be run when the variable has been set at least once, possibly skipping some values or being run when the variable has been set to the same value (except for universal variables set in other shells \- only changes in the value will be picked up for those).

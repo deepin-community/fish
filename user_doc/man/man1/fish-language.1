@@ -27,7 +27,7 @@ level margin: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .\" new: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .in \\n[rst2man-indent\\n[rst2man-indent-level]]u
 ..
-.TH "FISH-LANGUAGE" "1" "Jan 07, 2023" "3.6" "fish-shell"
+.TH "FISH-LANGUAGE" "1" "Mar 19, 2024" "3.7" "fish-shell"
 .sp
 This document is a comprehensive overview of fish\(aqs scripting language.
 .sp
@@ -100,39 +100,29 @@ Here we define some of the terms used on this page and throughout the rest of th
 .UNINDENT
 .SH QUOTES
 .sp
-Sometimes features like \fI\%parameter expansion\fP and \fI\%character escapes\fP get in the way. When that happens, you can use quotes, either single (\fB\(aq\fP) or double (\fB\(dq\fP). Between single quotes, fish performs no expansions. Between double quotes, fish only performs \fI\%variable expansion\fP\&. No other kind of expansion (including \fI\%brace expansion\fP or parameter expansion) is performed, and escape sequences (for example, \fB\en\fP) are ignored. Within quotes, whitespace is not used to separate arguments, allowing quoted arguments to contain spaces.
+Sometimes you want to give a command an argument that contains characters special to fish, like spaces or \fB$\fP or \fB*\fP\&. To do that, you can use quotes:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+rm \(dqmy file.txt\(dq
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+to remove a file called \fBmy file.txt\fP instead of trying to remove two files, \fBmy\fP and \fBfile.txt\fP\&.
+.sp
+Fish understands two kinds of quotes: Single (\fB\(aq\fP) and double (\fB\(dq\fP), and both work slightly differently.
+.sp
+Between single quotes, fish performs no expansions. Between double quotes, fish only performs \fI\%variable expansion\fP and \fI\%command substitution\fP in the \fB$(command)\fP\&. No other kind of expansion (including \fI\%brace expansion\fP or parameter expansion) is performed, and escape sequences (for example, \fB\en\fP) are ignored. Within quotes, whitespace is not used to separate arguments, allowing quoted arguments to contain spaces.
 .sp
 The only meaningful escape sequences in single quotes are \fB\e\(aq\fP, which escapes a single quote and \fB\e\e\fP, which escapes the backslash symbol. The only meaningful escapes in double quotes are \fB\e\(dq\fP, which escapes a double quote, \fB\e$\fP, which escapes a dollar character, \fB\e\fP followed by a newline, which deletes the backslash and the newline, and \fB\e\e\fP, which escapes the backslash symbol.
 .sp
 Single quotes have no special meaning within double quotes and vice versa.
 .sp
-Example:
-.INDENT 0.0
-.INDENT 3.5
-.sp
-.nf
-.ft C
-rm \(dqcumbersome filename.txt\(dq
-.ft P
-.fi
-.UNINDENT
-.UNINDENT
-.sp
-removes the file \fBcumbersome filename.txt\fP, while
-.INDENT 0.0
-.INDENT 3.5
-.sp
-.nf
-.ft C
-rm cumbersome filename.txt
-.ft P
-.fi
-.UNINDENT
-.UNINDENT
-.sp
-removes two files, \fBcumbersome\fP and \fBfilename.txt\fP\&.
-.sp
-Another example:
+More examples:
 .INDENT 0.0
 .INDENT 3.5
 .sp
@@ -145,6 +135,18 @@ grep \(aqenabled)$\(aq foo.txt
 .UNINDENT
 .sp
 searches for lines ending in \fBenabled)\fP in \fBfoo.txt\fP (the \fB$\fP is special to \fBgrep\fP: it matches the end of the line).
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+apt install \(dqpostgres\-*\(dq
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+installs all packages with a name starting with \(dqpostgres\-\(dq, instead of looking through the current directory for files named \(dqpostgres\-something\(dq.
 .SH ESCAPING CHARACTERS
 .sp
 Some characters cannot be written directly on the command line. For these characters, so\-called escape sequences are provided. These are:
@@ -367,9 +369,56 @@ will attempt to build \fBfish\fP, and any errors will be shown using the \fBless
 As a convenience, the pipe \fB&|\fP redirects both stdout and stderr to the same process. This is different from bash, which uses \fB|&\fP\&.
 .IP [2] 5
 A \(dqpager\(dq here is a program that takes output and \(dqpaginates\(dq it. \fBless\fP doesn\(aqt just do pages, it allows arbitrary scrolling (even back!).
+.SH COMBINING PIPES AND REDIRECTIONS
+.sp
+It is possible to use multiple redirections and a pipe at the same time. In that case, they are read in this order:
+.INDENT 0.0
+.IP 1. 3
+First the pipe is set up.
+.IP 2. 3
+Then the redirections are evaluated from left\-to\-right.
+.UNINDENT
+.sp
+This is important when any redirections reference other file descriptors with the \fB&N\fP syntax. When you say \fB>&2\fP, that will redirect stdout to where stderr is pointing to \fIat that time\fP\&.
+.sp
+Consider this helper function:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+# Just make a function that prints something to stdout and stderr
+function print
+    echo out
+    echo err >&2
+end
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+Now let\(aqs see a few cases:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+# Redirect both stderr and stdout to less
+# (can also be spelt as \(ga&|\(ga)
+print 2>&1 | less
+
+# Show the \(dqout\(dq on stderr, silence the \(dqerr\(dq
+print >&2 2>/dev/null
+
+# Silence both
+print >/dev/null 2>&1
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
 .SH JOB CONTROL
 .sp
-When you start a job in fish, fish itself will pause, and give control of the terminal to the program just started. Sometimes, you want to continue using the commandline, and have the job run in the background. To create a background job, append an & (ampersand) to your command. This will tell fish to run the job in the background. Background jobs are very useful when running programs that have a graphical user interface.
+When you start a job in fish, fish itself will pause, and give control of the terminal to the program just started. Sometimes, you want to continue using the commandline, and have the job run in the background. To create a background job, append an \fB&\fP (ampersand) to your command. This will tell fish to run the job in the background. Background jobs are very useful when running programs that have a graphical user interface.
 .sp
 Example:
 .INDENT 0.0
@@ -546,28 +595,63 @@ set \-gx EDITOR emacs # I don\(aqt like vim.
 .SH CONDITIONS
 .sp
 Fish has some builtins that let you execute commands only if a specific criterion is met: \fI\%if\fP, \fI\%switch\fP, \fI\%and\fP and \fI\%or\fP, and also the familiar \fI\%&&/||\fP syntax.
+.SS The \fBif\fP statement
 .sp
-The \fI\%switch\fP command is used to execute one of possibly many blocks of commands depending on the value of a string. See the documentation for \fI\%switch\fP for more information.
+The \fI\%if\fP statement runs a block of commands if the condition was true.
 .sp
-The other conditionals use the \fI\%exit status\fP of a command to decide if a command or a block of commands should be executed.
-.sp
-Unlike programming languages you might know, \fI\%if\fP doesn\(aqt take a \fIcondition\fP, it takes a \fIcommand\fP\&. If that command returned a successful \fI\%exit status\fP (that\(aqs 0), the \fBif\fP branch is taken, otherwise the \fI\%else\fP branch.
-.sp
-To check a condition, there is the \fI\%test\fP command:
+Like other shells, but unlike typical programming languages you might know, the condition here is a \fIcommand\fP\&. Fish runs it, and if it returns a true \fI\%exit status\fP (that\(aqs 0), the if\-block is run. For example:
 .INDENT 0.0
 .INDENT 3.5
 .sp
 .nf
 .ft C
-if test 5 \-gt 2
-    echo Yes, five is greater than two
+if test \-e /etc/os\-release
+    cat /etc/os\-release
 end
 .ft P
 .fi
 .UNINDENT
 .UNINDENT
 .sp
-Some examples:
+This uses the \fI\%test\fP command to see if the file /etc/os\-release exists. If it does, it runs \fBcat\fP, which prints it on the screen.
+.sp
+Unlike other shells, the condition command just ends after the first job, there is no \fBthen\fP here. Combiners like \fBand\fP and \fBor\fP extend the condition.
+.sp
+\fBif\fP is commonly used with the \fI\%test\fP command that can check conditions.:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+if test 5 \-gt 2
+    echo \(dqYes, 5 is greater than 2\(dq
+end
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+\fBif\fP can also take \fBelse if\fP clauses with additional conditions and an  \fI\%else\fP clause that is executed when everything else was false:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+if test \(dq$number\(dq \-gt 10
+   echo Your number was greater than 10
+else if test \(dq$number\(dq \-gt 5
+   echo Your number was greater than 5
+else if test \(dq$number\(dq \-gt 1
+   echo Your number was greater than 1
+else
+   echo Your number was smaller or equal to 1
+end
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+The \fI\%not\fP keyword can be used to invert the status:
 .INDENT 0.0
 .INDENT 3.5
 .sp
@@ -576,13 +660,49 @@ Some examples:
 # Just see if the file contains the string \(dqfish\(dq anywhere.
 # This executes the \(gagrep\(ga command, which searches for a string,
 # and if it finds it returns a status of 0.
+# The \(ganot\(ga then turns 0 into 1 or anything else into 0.
 # The \(ga\-q\(ga switch stops it from printing any matches.
-if grep \-q fish myanimals
-    echo \(dqYou have fish!\(dq
-else
+if not grep \-q fish myanimals
     echo \(dqYou don\(aqt have fish!\(dq
+else
+    echo \(dqYou have fish!\(dq
 end
-
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.SS The \fBswitch\fP statement
+.sp
+The \fI\%switch\fP command is used to execute one of possibly many blocks of commands depending on the value of a string. It can take multiple \fI\%case\fP blocks that are executed when the string matches. They can take \fI\%wildcards\fP\&. For example:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+switch (uname)
+case Linux
+    echo Hi Tux!
+case Darwin
+    echo Hi Hexley!
+case DragonFly \(aq*BSD\(aq
+    echo Hi Beastie! # this also works for FreeBSD and NetBSD
+case \(aq*\(aq
+    echo Hi, stranger!
+end
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+Unlike other shells or programming languages, there is no fallthrough \- the first matching \fBcase\fP block is executed and then control jumps out of the \fBswitch\fP\&.
+.SS Combiners (\fBand\fP / \fBor\fP / \fB&&\fP / \fB||\fP)
+.sp
+For simple checks, you can use combiners. \fI\%and\fP or \fB&&\fP run the second command if the first succeeded, while \fI\%or\fP or \fB||\fP run it if the first failed. For example:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
 # $XDG_CONFIG_HOME is a standard place to store configuration.
 # If it\(aqs not set applications should use ~/.config.
 set \-q XDG_CONFIG_HOME; and set \-l configdir $XDG_CONFIG_HOME
@@ -622,7 +742,7 @@ end
 .UNINDENT
 .UNINDENT
 .sp
-These do essentially the same thing, but the former takes 2 seconds longer because the \fBsleep\fP always needs to run. So, in cases like these, the ordering is quite important for performance.
+These do essentially the same thing, but the former takes 2 seconds longer because the \fBsleep\fP always needs to run.
 .sp
 Or you can have a case where it is necessary to stop early:
 .INDENT 0.0
@@ -638,7 +758,36 @@ if command \-sq foo; and foo
 .sp
 If this went on after seeing that the command \(dqfoo\(dq doesn\(aqt exist, it would try to run \fBfoo\fP and error because it wasn\(aqt found!
 .sp
-For more, see the documentation for the builtins or the \fI\%Conditionals\fP section of the tutorial.
+Combiners really just execute step\-by\-step, so it isn\(aqt recommended to build longer chains of them because they might do something you don\(aqt want. Consider:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+test \-e /etc/my.config
+or echo \(dqOH NO WE NEED A CONFIG FILE\(dq
+and return 1
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+This will execute \fBreturn 1\fP also if the \fBtest\fP succeeded. This is because fish runs \fBtest \-e /etc/my.config\fP, sets $status to 0, then skips the \fBecho\fP, keeps $status at 0, and then executes the \fBreturn 1\fP because $status is still 0.
+.sp
+So if you have more complex conditions or want to run multiple things after something failed, consider using an \fI\%if\fP\&. Here that would be:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+if not test \-e /etc/my.config
+    echo \(dqOH NO WE NEED A CONFIG FILE\(dq
+    return 1
+end
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
 .SH LOOPS AND BLOCKS
 .sp
 Like most programming language, fish also has the familiar \fI\%while\fP and \fI\%for\fP loops.
@@ -951,17 +1100,29 @@ end
 When using this feature together with list brackets, the brackets will be used from the inside out. \fB$$foo[5]\fP will use the fifth element of \fB$foo\fP as a variable name, instead of giving the fifth element of all the variables $foo refers to. That would instead be expressed as \fB$$foo[1..\-1][5]\fP (take all elements of \fB$foo\fP, use them as variable names, then give the fifth element of those).
 .SS Command substitution
 .sp
-The output of a command (or an entire \fI\%pipeline\fP) can be used as the arguments to another command.
+A \fBcommand substitution\fP is an expansion that uses the \fIoutput\fP of a command as the arguments to another. For example:
+.INDENT 0.0
+.INDENT 3.5
 .sp
-When you write a command in parentheses like \fBoutercommand (innercommand)\fP, fish first runs \fBinnercommand\fP, and then uses each line of its output as a separate argument to \fBoutercommand\fP, which will then be executed. Unlike other shells, the value of \fB$IFS\fP is not used [4], fish splits on newlines.
+.nf
+.ft C
+echo (pwd)
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
 .sp
-A command substitution can have a dollar sign before the opening parenthesis like \fBoutercommand $(innercommand)\fP\&. This variant is also allowed inside double quotes. When using double quotes, the command output is not split up by lines, but trailing empty lines are still removed.
+This executes the \fI\%pwd\fP command, takes its output (more specifically what it wrote to the standard output \(dqstdout\(dq stream) and uses it as arguments to \fI\%echo\fP\&. So the inner command (the \fBpwd\fP) is run first and has to complete before the outer command can even be started.
+.sp
+If the inner command prints multiple lines, fish will use each separate line as a separate argument to the outer command. Unlike other shells, the value of \fB$IFS\fP is not used [4], fish splits on newlines.
+.sp
+A command substitution can also be spelled with a dollar sign like \fBoutercommand $(innercommand)\fP\&. This variant is also allowed inside double quotes. When using double quotes, the command output is not split up by lines, but trailing empty lines are still removed.
 .sp
 If the output is piped to \fI\%string split or string split0\fP as the last step, those splits are used as they appear instead of splitting lines.
 .sp
 The exit status of the last run command substitution is available in the \fI\%status\fP variable if the substitution happens in the context of a \fI\%set\fP command (so \fBif set \-l (something)\fP checks if \fBsomething\fP returned true).
 .sp
-To use only some lines of the output, refer to \fI\%index range expansion\fP\&.
+To use only some lines of the output, refer to \fI\%slices\fP\&.
 .sp
 Examples:
 .INDENT 0.0
@@ -1172,7 +1333,7 @@ for file in $PATH/*
 .UNINDENT
 .sp
 Because \fI\%PATH\fP is a list, this expands to all the files in all the directories in it. And if there are no directories in \fI\%PATH\fP, the right answer here is to expand to no files.
-.SS Index range expansion
+.SS Slices
 .sp
 Sometimes it\(aqs necessary to access only some of the elements of a \fI\%list\fP (all fish variables are lists), or some of the lines a \fI\%command substitution\fP outputs. Both are possible in fish by writing a set of indices in brackets, like:
 .INDENT 0.0
@@ -1200,7 +1361,7 @@ If a list has 5 elements the indices go from 1 to 5, so a range of \fB2..16\fP w
 If the end is negative the range always goes up, so \fB2..\-2\fP will go from element 2 to 4, and \fB2..\-16\fP won\(aqt go anywhere because there is no way to go from the second element to one that doesn\(aqt exist, while going up.
 If the start is negative the range always goes down, so \fB\-2..1\fP will go from element 4 to 1, and \fB\-16..2\fP won\(aqt go anywhere because there is no way to go from an element that doesn\(aqt exist to the second element, while going down.
 .sp
-A missing starting index in a range defaults to 1. This is allowed if the range is the first index expression of the sequence. Similarly, a missing ending index, defaulting to \-1 is allowed for the last index range in the sequence.
+A missing starting index in a range defaults to 1. This is allowed if the range is the first index expression of the sequence. Similarly, a missing ending index, defaulting to \-1 is allowed for the last index in the sequence.
 .sp
 Multiple ranges are also possible, separated with a space.
 .sp
@@ -1374,9 +1535,9 @@ So you set a variable with \fBset\fP, and use it with a \fB$\fP and the name.
 There are four kinds of variables in fish: universal, global, function and local variables.
 .INDENT 0.0
 .IP \(bu 2
-Universal variables are shared between all fish sessions a user is running on one computer.
+Universal variables are shared between all fish sessions a user is running on one computer. They are stored on disk and persist even after reboot.
 .IP \(bu 2
-Global variables are specific to the current fish session, and will never be erased unless explicitly requested by using \fBset \-e\fP\&.
+Global variables are specific to the current fish session. They can be erased by explicitly requesting \fBset \-e\fP\&.
 .IP \(bu 2
 Function variables are specific to the currently executing function. They are erased (\(dqgo out of scope\(dq) when the current function ends. Outside of a function, they don\(aqt go out of scope.
 .IP \(bu 2
@@ -1489,6 +1650,32 @@ end
 .UNINDENT
 .UNINDENT
 .sp
+When a function calls another, local variables aren\(aqt visible:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+function shiver
+    set phrase \(aqShiver me timbers\(aq
+end
+
+function avast
+    set \-\-local phrase \(aqAvast, mateys\(aq
+    # Calling the shiver function here can not
+    # change any variables in the local scope
+    # so phrase remains as we set it here.
+    shiver
+    echo $phrase
+end
+avast
+
+# Outputs \(dqAvast, mateys\(dq
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
 When in doubt, use function\-scoped variables. When you need to make a variable accessible everywhere, make it global. When you need to persistently store configuration, make it universal. When you want to use a variable only in a short block, make it local.
 .SS Overriding variables for a single command
 .sp
@@ -1549,7 +1736,7 @@ mp3s=*.mp3 vlc $mp3s
 Unlike other shells, this does \fInot\fP inhibit any lookup (aliases or similar). Calling a command after setting a variable override will result in the exact same command being run.
 .sp
 This syntax is supported since fish 3.1.
-.SS More on universal variables
+.SS Universal Variables
 .sp
 Universal variables are variables that are shared between all the user\(aqs fish sessions on the computer. Fish stores many of its configuration options as universal variables. This means that in order to change fish settings, all you have to do is change the variable value once, and it will be automatically updated for all sessions, and preserved across computer reboots and login/logout.
 .sp
@@ -1558,34 +1745,6 @@ To see universal variables in action, start two fish sessions side by side, and 
 \fI\%Universal variables\fP are stored in the file \fB\&.config/fish/fish_variables\fP\&. Do not edit this file directly, as your edits may be overwritten. Edit the variables through fish scripts or by using fish interactively instead.
 .sp
 Do not append to universal variables in \fI\%config.fish\fP, because these variables will then get longer with each new shell instance. Instead, simply set them once at the command line.
-.SS Variable scope for functions
-.sp
-When calling a function, all current local variables temporarily disappear. This shadowing of the local scope is needed since the variable namespace would become cluttered, making it very easy to accidentally overwrite variables from another function.
-.sp
-For example:
-.INDENT 0.0
-.INDENT 3.5
-.sp
-.nf
-.ft C
-function shiver
-    set phrase \(aqShiver me timbers\(aq
-end
-
-function avast
-    set \-\-local phrase \(aqAvast, mateys\(aq
-    # Calling the shiver function here can not
-    # change any variables in the local scope
-    shiver
-    echo $phrase
-end
-avast
-
-# Outputs \(dqAvast, mateys\(dq
-.ft P
-.fi
-.UNINDENT
-.UNINDENT
 .SS Exporting variables
 .sp
 Variables in fish can be exported, so they will be inherited by any commands started by fish. In particular, this is necessary for variables used to configure external commands like \fBPAGER\fP or \fBGOPATH\fP, but also for variables that contain general system settings like \fBPATH\fP or \fBLANGUAGE\fP\&. If an external command needs to know a variable, it needs to be exported. Exported variables are also often called \(dqenvironment variables\(dq.
@@ -1719,7 +1878,7 @@ apple
 .UNINDENT
 .UNINDENT
 .sp
-As you see, you can use a range of indices, see \fI\%index range expansion\fP for details.
+As you see, you can use a range of indices, see \fI\%slices\fP for details.
 .sp
 All lists are one\-dimensional and can\(aqt contain other lists, although it is possible to fake nested lists using dereferencing \- see \fI\%variable expansion\fP\&.
 .sp
@@ -1928,6 +2087,18 @@ A number of variable starting with the prefixes \fBfish_color\fP and \fBfish_pag
 .UNINDENT
 .INDENT 0.0
 .TP
+.B fish_term24bit
+If this is set to 1, fish will assume the terminal understands 24\-bit RGB color sequences, and won\(aqt translate them to the 256 or 16 color palette.
+This is often detected automatically.
+.UNINDENT
+.INDENT 0.0
+.TP
+.B fish_term256
+If this is set to 1, fish will assume the terminal understands 256 colors, and won\(aqt translate matching colors down to the 16 color palette.
+This is usually autodetected.
+.UNINDENT
+.INDENT 0.0
+.TP
 .B fish_ambiguous_width
 controls the computed width of ambiguous\-width characters. This should be set to 1 if your terminal renders these characters as single\-width (typical), or 2 if double\-width.
 .UNINDENT
@@ -1955,6 +2126,11 @@ the name of the function that sets up the keyboard shortcuts for the \fI\%comman
 .TP
 .B fish_escape_delay_ms
 sets how long fish waits for another key after seeing an escape, to distinguish pressing the escape key from the start of an escape sequence. The default is 30ms. Increasing it increases the latency but allows pressing escape instead of alt for alt+character bindings. For more information, see \fI\%the chapter in the bind documentation\fP\&.
+.UNINDENT
+.INDENT 0.0
+.TP
+.B fish_sequence_key_delay_ms
+sets how long fish waits for another key after seeing a key that is part of a longer sequence, to disambiguate. For instance if you had bound \fB\ecx\ece\fP to open an editor, fish would wait for this long in milliseconds to see a ctrl\-e after a ctrl\-x. If the time elapses, it will handle it as a ctrl\-x (by default this would copy the current commandline to the clipboard). See also \fI\%Key sequences\fP\&.
 .UNINDENT
 .INDENT 0.0
 .TP
@@ -2422,7 +2598,16 @@ Configuration snippets (named \fB*.fish\fP) in the directories:
 .IP \(bu 2
 \fB$__fish_sysconf_dir/conf.d\fP (by default, \fB/etc/fish/conf.d/\fP)
 .IP \(bu 2
-Directories for others to ship configuration snippets for their software. Fish searches the directories under \fB$__fish_user_data_dir\fP (usually \fB~/.local/share/fish\fP, controlled by the \fBXDG_DATA_HOME\fP environment variable) and in the \fBXDG_DATA_DIRS\fP environment variable for a \fBfish/vendor_conf.d\fP directory; if not defined, the default value of \fBXDG_DATA_DIRS\fP is \fB/usr/share/fish/vendor_conf.d\fP and \fB/usr/local/share/fish/vendor_conf.d\fP, unless your distribution customized this.
+Directories for others to ship configuration snippets for their software:
+.INDENT 2.0
+.IP \(bu 2
+the directories under \fB$__fish_user_data_dir\fP (usually \fB~/.local/share/fish\fP, controlled by the \fBXDG_DATA_HOME\fP environment variable)
+.IP \(bu 2
+a \fBfish/vendor_conf.d\fP directory in the directories listed in \fB$XDG_DATA_DIRS\fP (default \fB/usr/share/fish/vendor_conf.d\fP and \fB/usr/local/share/fish/vendor_conf.d\fP)
+.UNINDENT
+.sp
+These directories are also accessible in \fB$__fish_vendor_confdirs\fP\&.
+Note that changing that in a running fish won\(aqt do anything as by that point the directories have already been read.
 .UNINDENT
 .sp
 If there are multiple files with the same name in these directories, only the first will be executed.
@@ -2438,6 +2623,8 @@ User configuration, usually in \fB~/.config/fish/config.fish\fP (controlled by t
 These files are all executed on the startup of every shell. If you want to run a command only on starting an interactive shell, use the exit status of the command \fBstatus \-\-is\-interactive\fP to determine if the shell is interactive. If you want to run a command only when using a login shell, use \fBstatus \-\-is\-login\fP instead. This will speed up the starting of non\-interactive or non\-login shells.
 .sp
 If you are developing another program, you may want to add configuration for all users of fish on a system. This is discouraged; if not carefully written, they may have side\-effects or slow the startup of the shell. Additionally, users of other shells won\(aqt benefit from the fish\-specific configuration. However, if they are required, you can install them to the \(dqvendor\(dq configuration directory. As this path may vary from system to system, \fBpkg\-config\fP should be used to discover it: \fBpkg\-config \-\-variable confdir fish\fP\&.
+.sp
+For system integration, fish also ships a file called \fB__fish_build_paths.fish\fP\&. This can be customized during build, for instance because your system requires special paths to be used.
 .SH FUTURE FEATURE FLAGS
 .sp
 Feature flags are how fish stages changes that might break scripts. Breaking changes are introduced as opt\-in, in a few releases they become opt\-out, and eventually the old behavior is removed.
@@ -2549,7 +2736,7 @@ end
 .UNINDENT
 .UNINDENT
 .sp
-Fish already the following named events for the \fB\-\-on\-event\fP switch:
+Fish already has the following named events for the \fB\-\-on\-event\fP switch:
 .INDENT 0.0
 .IP \(bu 2
 \fBfish_prompt\fP is emitted whenever a new fish prompt is about to be displayed.

@@ -106,7 +106,10 @@ function fish_config --description "Launch fish's web based configuration"
                     read -P"Overwrite prompt? [y/N]" -l yesno
                     if string match -riq 'y(es)?' -- $yesno
                         echo Overwriting
-                        cp $__fish_config_dir/functions/fish_prompt.fish{,.bak}
+                        # Skip the cp if unnecessary,
+                        # or we'd throw an error on a stock fish.
+                        path is $__fish_config_dir/functions/fish_prompt.fish
+                        and cp $__fish_config_dir/functions/fish_prompt.fish{,.bak}
 
                         set -l have
                         if set -q argv[1]
@@ -290,7 +293,7 @@ function fish_config --description "Launch fish's web based configuration"
                                 # Cache the value from whatever scope currently defines it
                                 set -l value $$color
                                 set -eg $color
-                                set -U $color "$value"
+                                set -U $color $value
                             end
                         end
                     end

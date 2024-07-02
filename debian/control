@@ -1,8 +1,7 @@
 Source: fish
 Section: shells
 Priority: optional
-Maintainer: Tristan Seligmann <mithrandi@debian.org>
-Uploaders: Mo Zhou <lumin@debian.org>
+Maintainer: Mo Zhou <lumin@debian.org>
 Build-Depends: cmake,
                debhelper-compat (= 13),
                gettext,
@@ -26,6 +25,7 @@ Depends: fish-common (= ${source:Version}),
          bsdextrautils,
          groff-base,
          man-db,
+         procps,
          python3,
          ${misc:Depends},
          ${shlibs:Depends}
@@ -40,7 +40,7 @@ Package: fish-common
 Architecture: all
 Multi-Arch: foreign
 Depends: ${misc:Depends}
-Recommends: fish
+Recommends: fish, python3:any
 Description: friendly interactive shell (architecture-independent files)
  Fish is a shell geared towards interactive use.  Its features are focused on
  user friendliness and discoverability.  The language syntax is simple but

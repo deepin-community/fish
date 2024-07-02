@@ -27,7 +27,7 @@ level margin: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .\" new: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .in \\n[rst2man-indent\\n[rst2man-indent-level]]u
 ..
-.TH "ABBR" "1" "Jan 07, 2023" "3.6" "fish-shell"
+.TH "ABBR" "1" "Mar 19, 2024" "3.7" "fish-shell"
 .SH NAME
 abbr \- manage fish abbreviations
 .SH SYNOPSIS
@@ -60,7 +60,36 @@ An abbreviation may match a literal word, or it may match a pattern given by a r
 .sp
 Combining these features, it is possible to create custom syntaxes, where a regular expression recognizes matching tokens, and the expansion function interprets them. See the \fI\%Examples\fP section.
 .sp
-Abbreviations may be added to \fI\%config.fish\fP\&.
+Changed in version 3.6.0: Previous versions of this allowed saving abbreviations in universal variables.
+That\(aqs no longer possible. Existing variables will still be imported and \fBabbr \-\-erase\fP will also erase the variables.
+We recommend adding abbreviations to \fI\%config.fish\fP by just adding the \fBabbr \-\-add\fP command.
+When you run \fBabbr\fP, you will see output like this
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+> abbr
+abbr \-a \-\- foo bar # imported from a universal variable, see \(gahelp abbr\(ga
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+In that case you should take the part before the \fB#\fP comment and save it in \fI\%config.fish\fP,
+then you can run \fBabbr \-\-erase\fP to remove the universal variable:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+> abbr >> ~/.config/fish/config.fish
+> abbr \-\-erase (abbr \-\-list)
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+
 .SH "ADD" SUBCOMMAND
 .nf
 \fBabbr\fP [\fB\-a\fP | \fB\-\-add\fP] \fINAME\fP [\fB\-\-position\fP \fBcommand\fP | \fBanywhere\fP] [\fB\-r\fP | \fB\-\-regex\fP \fIPATTERN\fP]
