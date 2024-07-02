@@ -27,7 +27,7 @@ level margin: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .\" new: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .in \\n[rst2man-indent\\n[rst2man-indent-level]]u
 ..
-.TH "FISH-INTERACTIVE" "1" "Jan 07, 2023" "3.6" "fish-shell"
+.TH "FISH-INTERACTIVE" "1" "Mar 19, 2024" "3.7" "fish-shell"
 .sp
 Fish prides itself on being really nice to use interactively. That\(aqs down to a few features we\(aqll explain in the next few sections.
 .sp
@@ -360,6 +360,15 @@ T}	T{
 history search matches and selected pager items (background only)
 T}
 _
+T{
+.INDENT 0.0
+.TP
+.B fish_color_history_current
+.UNINDENT
+T}	T{
+the current position in the history for commands like \fBdirh\fP and \fBcdh\fP
+T}
+_
 .TE
 .sp
 If a variable isn\(aqt set or is empty, fish usually tries \fB$fish_color_normal\fP, except for:
@@ -601,7 +610,45 @@ When it is fish\(aqs turn to ask for input (like after it started or the command
 The output of the former is displayed on the left and the latter\(aqs output on the right side of the terminal. The output of \fI\%fish_mode_prompt\fP will be prepended on the left, though the default function only does this when in \fI\%vi\-mode\fP\&.
 .SH CONFIGURABLE GREETING
 .sp
-When it is started interactively, fish tries to run the \fI\%fish_greeting\fP function. The default fish_greeting prints a simple greeting. You can change its text by changing the \fB$fish_greeting\fP variable.
+When it is started interactively, fish tries to run the \fI\%fish_greeting\fP function. The default fish_greeting prints a simple greeting. You can change its text by changing the \fB$fish_greeting\fP variable, for instance using a \fI\%universal variable\fP:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+set \-U fish_greeting
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+or you can set it \fI\%globally\fP in \fI\%config.fish\fP:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+set \-g fish_greeting \(aqHey, stranger!\(aq
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+or you can script it by changing the function:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+function fish_greeting
+    random choice \(dqHello!\(dq \(dqHi\(dq \(dqG\(aqday\(dq \(dqHowdy\(dq
+end
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+save this in config.fish or \fI\%a function file\fP\&. You can also use \fI\%funced\fP and \fI\%funcsave\fP to edit it easily.
 .SH PRIVATE MODE
 .sp
 If \fB$fish_private_mode\fP is set to a non\-empty value, commands will not be written to the history file on disk.
@@ -613,7 +660,7 @@ You can query the variable \fBfish_private_mode\fP (\fBif test \-n \(dq$fish_pri
 .sp
 The fish editor features copy and paste, a \fI\%searchable history\fP and many editor functions that can be bound to special keyboard shortcuts.
 .sp
-Like bash and other shells, fish includes two sets of keyboard shortcuts (or key bindings): one inspired by the Emacs text editor, and one by the Vi text editor. The default editing mode is Emacs. You can switch to Vi mode by running \fBfish_vi_key_bindings\fP and switch back with \fBfish_default_key_bindings\fP\&. You can also make your own key bindings by creating a function and setting the \fBfish_key_bindings\fP variable to its name. For example:
+Like bash and other shells, fish includes two sets of keyboard shortcuts (or key bindings): one inspired by the Emacs text editor, and one by the Vi text editor. The default editing mode is Emacs. You can switch to Vi mode by running \fI\%fish_vi_key_bindings\fP and switch back with \fI\%fish_default_key_bindings\fP\&. You can also make your own key bindings by creating a function and setting the \fBfish_key_bindings\fP variable to its name. For example:
 .INDENT 0.0
 .INDENT 3.5
 .sp
@@ -690,7 +737,7 @@ Some bindings are common across Emacs and Vi mode, because they aren\(aqt text e
 .UNINDENT
 .SS Emacs mode commands
 .sp
-To enable emacs mode, use \fBfish_default_key_bindings\fP\&. This is also the default.
+To enable emacs mode, use \fI\%fish_default_key_bindings\fP\&. This is also the default.
 .INDENT 0.0
 .IP \(bu 2
 \fBHome\fP or \fBControl\fP+\fBA\fP moves the cursor to the beginning of the line.
@@ -708,6 +755,8 @@ To enable emacs mode, use \fBfish_default_key_bindings\fP\&. This is also the de
 \fBAlt\fP+\fB<\fP moves to the beginning of the commandline, \fBAlt\fP+\fB>\fP moves to the end.
 .IP \(bu 2
 \fBControl\fP+\fBK\fP deletes from the cursor to the end of line (moving it to the \fI\%Copy and paste (Kill Ring)\fP).
+.IP \(bu 2
+\fBEscape\fP and \fBControl\fP+\fBG\fP cancel the current operation. Immediately after an unambiguous completion this undoes it.
 .IP \(bu 2
 \fBAlt\fP+\fBC\fP capitalizes the current word.
 .IP \(bu 2
@@ -729,8 +778,7 @@ You can change these key bindings using the \fI\%bind\fP builtin.
 .sp
 Vi mode allows for the use of Vi\-like commands at the prompt. Initially, \fI\%insert mode\fP is active. \fBEscape\fP enters \fI\%command mode\fP\&. The commands available in command, insert and visual mode are described below. Vi mode shares \fI\%some bindings\fP with \fI\%Emacs mode\fP\&.
 .sp
-To enable vi mode, use \fBfish_vi_key_bindings\fP\&.
-.sp
+To enable vi mode, use \fI\%fish_vi_key_bindings\fP\&.
 It is also possible to add all emacs\-mode bindings to vi\-mode by using something like:
 .INDENT 0.0
 .INDENT 3.5
@@ -767,8 +815,12 @@ The \fBfish_vi_cursor\fP function will be used to change the cursor\(aqs shape d
 set fish_cursor_default block
 # Set the insert mode cursor to a line
 set fish_cursor_insert line
-# Set the replace mode cursor to an underscore
+# Set the replace mode cursors to an underscore
 set fish_cursor_replace_one underscore
+set fish_cursor_replace underscore
+# Set the external cursor to a line. The external cursor appears when a command is started.
+# The cursor shape takes the value of fish_cursor_default when fish_cursor_external is not specified.
+set fish_cursor_external line
 # The following variable can be used to configure cursor shape in
 # visual mode, but due to fish_cursor_default, is redundant here
 set fish_cursor_visual block
@@ -778,6 +830,8 @@ set fish_cursor_visual block
 .UNINDENT
 .sp
 Additionally, \fBblink\fP can be added after each of the cursor shape parameters to set a blinking cursor in the specified shape.
+.sp
+Fish knows the shapes \(dqblock\(dq, \(dqline\(dq and \(dqunderscore\(dq, other values will be ignored.
 .sp
 If the cursor shape does not appear to be changing after setting the above variables, it\(aqs likely your terminal emulator does not support the capabilities necessary to do this. It may also be the case, however, that \fBfish_vi_cursor\fP has not detected your terminal\(aqs features correctly (for example, if you are using \fBtmux\fP). If this is the case, you can force \fBfish_vi_cursor\fP to set the cursor shape by setting \fB$fish_vi_force_cursor\fP in \fBconfig.fish\fP\&. You\(aqll have to restart fish for any changes to take effect. If cursor shape setting remains broken after this, it\(aqs almost certainly an issue with your terminal emulator, and not fish.
 .SS Command mode
@@ -793,13 +847,17 @@ Command mode is also known as normal mode.
 .IP \(bu 2
 \fBi\fP enters \fI\%insert mode\fP at the current cursor position.
 .IP \(bu 2
-\fBShift\fP+\fBR\fP enters \fI\%insert mode\fP at the beginning of the line.
+\fBShift\fP+\fBI\fP enters \fI\%insert mode\fP at the beginning of the line.
 .IP \(bu 2
 \fBv\fP enters \fI\%visual mode\fP at the current cursor position.
 .IP \(bu 2
 \fBa\fP enters \fI\%insert mode\fP after the current cursor position.
 .IP \(bu 2
 \fBShift\fP+\fBA\fP enters \fI\%insert mode\fP at the end of the line.
+.IP \(bu 2
+\fBo\fP inserts a new line under the current one and enters \fI\%insert mode\fP
+.IP \(bu 2
+\fBO\fP (capital\-\(dqo\(dq) inserts a new line above the current one and enters \fI\%insert mode\fP
 .IP \(bu 2
 \fB0\fP (zero) moves the cursor to beginning of line (remaining in command mode).
 .IP \(bu 2
@@ -811,11 +869,17 @@ Command mode is also known as normal mode.
 .IP \(bu 2
 \fBu\fP undoes the most recent edit of the command line.
 .IP \(bu 2
+\fBControl\fP+\fBR\fP redoes the most recent edit.
+.IP \(bu 2
 \fB[\fP and \fB]\fP search the command history for the previous/next token containing the token under the cursor before the search was started. See the \fI\%history\fP section for more information on history searching.
 .IP \(bu 2
 \fB/\fP opens the history in a pager. This will show history entries matching the search, a few at a time. Pressing it again will search older entries, pressing \fBControl\fP+\fBS\fP (that otherwise toggles pager search) will go to newer entries. The search bar will always be selected.
 .IP \(bu 2
 \fBBackspace\fP moves the cursor left.
+.IP \(bu 2
+\fBg\fP / \fBG\fP moves the cursor to the beginning/end of the commandline, respectively.
+.IP \(bu 2
+\fB:q\fP exits fish.
 .UNINDENT
 .SS Insert mode
 .INDENT 0.0
@@ -870,7 +934,36 @@ bind \ecc \(aqcommandline \-r \(dq\(dq\(aq
 .sp
 Put \fBbind\fP statements into \fI\%config.fish\fP or a function called \fBfish_user_key_bindings\fP\&.
 .sp
-The key sequence (the \fB\ecc\fP) here depends on your setup, in particular the terminal. To find out what the terminal sends use \fI\%fish_key_reader\fP:
+If you change your mind on a binding and want to go back to fish\(aqs default, you can simply erase it again:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+bind \-\-erase \ecc
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+Fish remembers its preset bindings and so it will take effect again. This saves you from having to remember what it was before and add it again yourself.
+.sp
+If you use \fI\%vi bindings\fP, note that \fBbind\fP will by default bind keys in \fI\%command mode\fP\&. To bind something in \fI\%insert mode\fP:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+bind \-\-mode insert \ecc \(aqcommandline \-r \(dq\(dq\(aq
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.SS Key sequences
+.sp
+The terminal tells fish which keys you pressed by sending some sequences of bytes to describe that key. For some keys, this is easy \- pressing \fBa\fP simply means the terminal sends \(dqa\(dq. In others it\(aqs more complicated and terminals disagree on which they send.
+.sp
+In these cases, \fI\%fish_key_reader\fP can tell you how to write the key sequence for your terminal. Just start it and press the keys you are interested in:
 .INDENT 0.0
 .INDENT 3.5
 .sp
@@ -889,9 +982,9 @@ bind \ee\e[C \(aqdo something\(aq
 .UNINDENT
 .UNINDENT
 .sp
-Note that some key combinations are indistinguishable or unbindable. For instance control\-i \fIis the same\fP as the tab key. This is a terminal limitation that fish can\(aqt do anything about.
+Note that some key combinations are indistinguishable or unbindable. For instance control\-i \fIis the same\fP as the tab key. This is a terminal limitation that fish can\(aqt do anything about. When \fBfish_key_reader\fP prints the same sequence for two different keys, then that is because your terminal sends the same sequence for them.
 .sp
-Also, \fBEscape\fP is the same thing as \fBAlt\fP in a terminal. To distinguish between pressing \fBEscape\fP and then another key, and pressing \fBAlt\fP and that key (or an escape sequence the key sends), fish waits for a certain time after seeing an escape character. This is configurable via the \fBfish_escape_delay_ms\fP variable.
+Also, \fBEscape\fP is the same thing as \fBAlt\fP in a terminal. To distinguish between pressing \fBEscape\fP and then another key, and pressing \fBAlt\fP and that key (or an escape sequence the key sends), fish waits for a certain time after seeing an escape character. This is configurable via the \fI\%fish_escape_delay_ms\fP variable.
 .sp
 If you want to be able to press \fBEscape\fP and then a character and have it count as \fBAlt\fP+that character, set it to a higher value, e.g.:
 .INDENT 0.0
@@ -900,6 +993,25 @@ If you want to be able to press \fBEscape\fP and then a character and have it co
 .nf
 .ft C
 set \-g fish_escape_delay_ms 100
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+Similarly, to disambiguate \fIother\fP keypresses where you\(aqve bound a subsequence and a longer sequence, fish has \fI\%fish_sequence_key_delay_ms\fP:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+# This binds \(dqjk\(dq to switch to normal mode in vi\-mode.
+# If you kept it like that, every time you press \(dqj\(dq,
+# fish would wait for a \(dqk\(dq or other key to disambiguate
+bind \-M insert \-m default jk cancel repaint\-mode
+
+# After setting this, fish only waits 200ms for the \(dqk\(dq,
+# or decides to treat the \(dqj\(dq as a separate sequence, inserting it.
+set \-g fish_sequence_key_delay_ms 200
 .ft P
 .fi
 .UNINDENT

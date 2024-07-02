@@ -366,7 +366,8 @@ class completer_t {
     bool conditions_test(const wcstring_list_t &conditions);
 
     void complete_strings(const wcstring &wc_escaped, const description_func_t &desc_func,
-                          const completion_list_t &possible_comp, complete_flags_t flags);
+                          const completion_list_t &possible_comp, complete_flags_t flags,
+                          expand_flags_t extra_expand_flags = {});
 
     expand_flags_t expand_flags() const {
         expand_flags_t result{};
@@ -510,12 +511,16 @@ static void parse_cmd_string(const wcstring &str, wcstring *path, wcstring *cmd,
 /// @param  possible_comp
 ///    the list of possible completions to iterate over
 /// @param  flags
-///    The flags
+///    The flags controlling completion
+/// @param extra_expand_flags
+///    Additional flags controlling expansion.
 void completer_t::complete_strings(const wcstring &wc_escaped, const description_func_t &desc_func,
-                                   const completion_list_t &possible_comp, complete_flags_t flags) {
+                                   const completion_list_t &possible_comp, complete_flags_t flags,
+                                   expand_flags_t extra_expand_flags) {
     wcstring tmp = wc_escaped;
     if (!expand_one(tmp,
-                    this->expand_flags() | expand_flag::skip_cmdsubst | expand_flag::skip_wildcards,
+                    this->expand_flags() | extra_expand_flags | expand_flag::skip_cmdsubst |
+                        expand_flag::skip_wildcards,
                     ctx))
         return;
 
@@ -525,7 +530,7 @@ void completer_t::complete_strings(const wcstring &wc_escaped, const description
         const wcstring &comp_str = comp.completion;
         if (!comp_str.empty()) {
             wildcard_complete(comp_str, wc.c_str(), desc_func, &this->completions,
-                              this->expand_flags(), flags);
+                              this->expand_flags() | extra_expand_flags, flags);
         }
     }
 }
@@ -730,7 +735,9 @@ void completer_t::complete_from_args(const wcstring &str, const wcstring &args,
         ctx.parser->set_last_statuses(status);
     }
 
-    this->complete_strings(escape_string(str), const_desc(desc), possible_comp, flags);
+    // Allow leading dots - see #3707.
+    this->complete_strings(escape_string(str), const_desc(desc), possible_comp, flags,
+                           expand_flag::allow_nonliteral_leading_dot);
 }
 
 static size_t leading_dash_count(const wchar_t *str) {
@@ -1234,7 +1241,7 @@ bool completer_t::try_complete_variable(const wcstring &str) {
     // Now complete if we have a variable start. Note the variable text may be empty; in that case
     // don't generate an autosuggestion, but do allow tab completion.
     bool allow_empty = !this->flags.autosuggestion;
-    bool text_is_empty = (variable_start == len);
+    bool text_is_empty = (variable_start == len - 1);
     bool result = false;
     if (variable_start != wcstring::npos && (allow_empty || !text_is_empty)) {
         result = this->complete_variable(str, variable_start + 1);

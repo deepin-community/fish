@@ -1,18 +1,17 @@
-
 <!DOCTYPE html>
 
-<html lang="en">
+<html lang="en" data-content_root="../">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="generator" content="Docutils 0.19: https://docutils.sourceforge.io/" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>fish_clipboard_paste - get text from the system’s clipboard &#8212; fish-shell 3.6.0 documentation</title>
-    <link rel="stylesheet" type="text/css" href="../_static/pygments.css" />
-    <link rel="stylesheet" type="text/css" href="../_static/pydoctheme.css" />
+    <title>fish_clipboard_paste - get text from the system’s clipboard &#8212; fish-shell 3.7.1 documentation</title>
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=a864bcb0" />
+    <link rel="stylesheet" type="text/css" href="../_static/pydoctheme.css?v=4e2636db" />
     <link rel="stylesheet" type="text/css" href="/docs/shared/style.css" />
-    <script data-url_root="../" id="documentation_options" src="../_static/documentation_options.js"></script>
-    <script src="../_static/doctools.js"></script>
-    <script src="../_static/sphinx_highlight.js"></script>
+    <script src="../_static/documentation_options.js?v=5c477e40"></script>
+    <script src="../_static/doctools.js?v=888ff710"></script>
+    <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
     <link rel="next" title="fish_command_not_found - what to do when a command wasn’t found" href="fish_command_not_found.html" />
@@ -28,7 +27,7 @@
              style="width: 80px; height: 80px; vertical-align: middle; margin-top: -1px"/></li>
     <li><a href="https://fishshell.com/">fish-shell</a> &#187;</li>
     
-    <a href="../index.html">fish-shell 3.6.0 documentation</a> &#187;
+    <a href="../index.html">fish-shell 3.7.1 documentation</a> &#187;
     
 
           <li class="nav-item nav-item-1"><a href="../commands.html" accesskey="U">Commands</a> &#187;</li>
@@ -69,6 +68,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../fish_for_bash_users.html">Fish for bash users</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../tutorial.html">Tutorial</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../completions.html">Writing your own completions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../prompt.html">Writing your own prompt</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../design.html">Design</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../relnotes.html">Release notes</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../license.html">License</a></li>
@@ -104,9 +104,9 @@
           <div class="body" role="main">
             
   <section id="fish-clipboard-paste-get-text-from-the-system-s-clipboard">
-<span id="cmd-fish-clipboard-paste"></span><h1>fish_clipboard_paste - get text from the system’s clipboard<a class="headerlink" href="#fish-clipboard-paste-get-text-from-the-system-s-clipboard" title="Permalink to this heading">¶</a></h1>
+<span id="cmd-fish-clipboard-paste"></span><h1>fish_clipboard_paste - get text from the system’s clipboard<a class="headerlink" href="#fish-clipboard-paste-get-text-from-the-system-s-clipboard" title="Link to this heading">¶</a></h1>
 <section id="synopsis">
-<h2>Synopsis<a class="headerlink" href="#synopsis" title="Permalink to this heading">¶</a></h2>
+<h2>Synopsis<a class="headerlink" href="#synopsis" title="Link to this heading">¶</a></h2>
 <div class="highlight-fish-synopsis notranslate"><div class="highlight"><pre><span></span><span class="nf">fish_clipboard_paste</span>
 
 <span class="nf">fish_clipboard_paste</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">foo</span>
@@ -114,7 +114,7 @@
 </div>
 </section>
 <section id="description">
-<h2>Description<a class="headerlink" href="#description" title="Permalink to this heading">¶</a></h2>
+<h2>Description<a class="headerlink" href="#description" title="Link to this heading">¶</a></h2>
 <p>The <code class="docutils literal notranslate"><span class="pre">fish_clipboard_paste</span></code> function copies text from the system clipboard.</p>
 <p>If its stdout is not a terminal (see <a class="reference internal" href="isatty.html"><span class="doc">isatty</span></a>), it will output everything there, as-is, without any additional newlines. If it is, it will put the text in the commandline instead.</p>
 <p>If it outputs to the commandline, it will automatically escape the output if the cursor is currently inside single-quotes so it is suitable for single-quotes (meaning it escapes <code class="docutils literal notranslate"><span class="pre">'</span></code> and <code class="docutils literal notranslate"><span class="pre">\\</span></code>).</p>
@@ -129,7 +129,7 @@
 </ul>
 </section>
 <section id="see-also">
-<h2>See also<a class="headerlink" href="#see-also" title="Permalink to this heading">¶</a></h2>
+<h2>See also<a class="headerlink" href="#see-also" title="Link to this heading">¶</a></h2>
 <ul class="simple">
 <li><p><a class="reference internal" href="fish_clipboard_copy.html"><span class="doc">fish_clipboard_copy - copy text to the system’s clipboard</span></a> which does the inverse.</p></li>
 </ul>
@@ -150,7 +150,7 @@
              style="width: 80px; height: 80px; vertical-align: middle; margin-top: -1px"/></li>
     <li><a href="https://fishshell.com/">fish-shell</a> &#187;</li>
     
-    <a href="../index.html">fish-shell 3.6.0 documentation</a> &#187;
+    <a href="../index.html">fish-shell 3.7.1 documentation</a> &#187;
     
 
           <li class="nav-item nav-item-1"><a href="../commands.html" >Commands</a> &#187;</li>
@@ -182,12 +182,12 @@
     <a href="https://github.com/fish-shell/fish-shell/issues">Found a bug</a>?
     <br />
 
-    Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 6.0.0.
+    Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 7.2.6.
     </div>
 </div>
 
 <script type="text/javascript">
- FISH_DOCS_VERSION = "3.6";
+ FISH_DOCS_VERSION = "3.7";
 
  function copy_to_clipboard(it) {
      // Find the pre tag we're interested in.

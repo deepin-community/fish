@@ -149,6 +149,8 @@ function help --description 'Show help for the fish shell'
             set fish_help_page faq.html
         case fish-for-bash-users
             set fish_help_page fish_for_bash_users.html
+        case custom-prompt
+            set fish_help_page prompt.html
         case $faqpages
             set fish_help_page "faq.html#$fish_help_item"
         case $for_bash_pages
@@ -242,11 +244,6 @@ function help --description 'Show help for the fish shell'
         $fish_browser $page_url &
         disown $last_pid >/dev/null 2>&1
     else
-        # Work around lynx bug where <div class="contents"> always has the same formatting as links (unreadable)
-        # by using a custom style sheet. See https://github.com/fish-shell/fish-shell/issues/4170
-        if string match -qr '^lynx' -- $fish_browser
-            set fish_browser $fish_browser -lss={$__fish_data_dir}/lynx.lss
-        end
         $fish_browser $page_url
     end
 end

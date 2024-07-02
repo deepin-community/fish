@@ -27,7 +27,7 @@ level margin: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .\" new: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .in \\n[rst2man-indent\\n[rst2man-indent-level]]u
 ..
-.TH "FISH-DOC" "1" "Jan 07, 2023" "3.6" "fish-shell"
+.TH "FISH-DOC" "1" "Mar 19, 2024" "3.7" "fish-shell"
 .sp
 This is the documentation for \fBfish\fP, the \fBf\fPriendly \fBi\fPnteractive \fBsh\fPell.
 .sp
@@ -157,9 +157,26 @@ A script written in \fBbash\fP would need a first line like this:
 .sp
 When the shell tells the kernel to execute the file, it will use the interpreter \fB/bin/bash\fP\&.
 .sp
-For a script written in another language, just replace \fB/bin/bash\fP with the interpreter for that language (for example: \fB/usr/bin/python\fP for a python script, or \fB/usr/local/bin/fish\fP for a fish script).
+For a script written in another language, just replace \fB/bin/bash\fP with the interpreter for that language. For example: \fB/usr/bin/python\fP for a python script, or \fB/usr/local/bin/fish\fP for a fish script, if that is where you have them installed.
 .sp
-This line is only needed when scripts are executed without specifying the interpreter. For functions inside fish or when executing a script with \fBfish /path/to/script\fP, a shebang is not required (but it doesn\(aqt hurt!).
+If you want to share your script with others, you might want to use \fBenv\fP to allow for the interpreter to be installed in other locations. For example:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+#!/usr/bin/env fish
+echo Hello from fish $version
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+This will call \fBenv\fP, which then goes through \fI\%PATH\fP to find a program called \(dqfish\(dq. This makes it work, whether fish is installed in (for example) \fB/usr/local/bin/fish\fP, \fB/usr/bin/fish\fP, or \fB~/.local/bin/fish\fP, as long as that directory is in \fI\%PATH\fP\&.
+.sp
+The shebang line is only used when scripts are executed without specifying the interpreter. For functions inside fish or when executing a script with \fBfish /path/to/script\fP, a shebang is not required (but it doesn\(aqt hurt!).
+.sp
+When executing files without an interpreter, fish, like other shells, tries your system shell, typically \fB/bin/sh\fP\&. This is needed because some scripts are shipped without a shebang line.
 .SH CONFIGURATION
 .sp
 To store configuration write it to a file called \fB~/.config/fish/config.fish\fP\&.
@@ -1093,6 +1110,15 @@ T}	T{
 history search matches and selected pager items (background only)
 T}
 _
+T{
+.INDENT 0.0
+.TP
+.B fish_color_history_current
+.UNINDENT
+T}	T{
+the current position in the history for commands like \fBdirh\fP and \fBcdh\fP
+T}
+_
 .TE
 .sp
 If a variable isn\(aqt set or is empty, fish usually tries \fB$fish_color_normal\fP, except for:
@@ -1334,7 +1360,45 @@ When it is fish\(aqs turn to ask for input (like after it started or the command
 The output of the former is displayed on the left and the latter\(aqs output on the right side of the terminal. The output of \fI\%fish_mode_prompt\fP will be prepended on the left, though the default function only does this when in \fI\%vi\-mode\fP\&.
 .SS Configurable greeting
 .sp
-When it is started interactively, fish tries to run the \fI\%fish_greeting\fP function. The default fish_greeting prints a simple greeting. You can change its text by changing the \fB$fish_greeting\fP variable.
+When it is started interactively, fish tries to run the \fI\%fish_greeting\fP function. The default fish_greeting prints a simple greeting. You can change its text by changing the \fB$fish_greeting\fP variable, for instance using a \fI\%universal variable\fP:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+set \-U fish_greeting
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+or you can set it \fI\%globally\fP in \fI\%config.fish\fP:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+set \-g fish_greeting \(aqHey, stranger!\(aq
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+or you can script it by changing the function:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+function fish_greeting
+    random choice \(dqHello!\(dq \(dqHi\(dq \(dqG\(aqday\(dq \(dqHowdy\(dq
+end
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+save this in config.fish or \fI\%a function file\fP\&. You can also use \fI\%funced\fP and \fI\%funcsave\fP to edit it easily.
 .SS Private mode
 .sp
 If \fB$fish_private_mode\fP is set to a non\-empty value, commands will not be written to the history file on disk.
@@ -1346,7 +1410,7 @@ You can query the variable \fBfish_private_mode\fP (\fBif test \-n \(dq$fish_pri
 .sp
 The fish editor features copy and paste, a \fI\%searchable history\fP and many editor functions that can be bound to special keyboard shortcuts.
 .sp
-Like bash and other shells, fish includes two sets of keyboard shortcuts (or key bindings): one inspired by the Emacs text editor, and one by the Vi text editor. The default editing mode is Emacs. You can switch to Vi mode by running \fBfish_vi_key_bindings\fP and switch back with \fBfish_default_key_bindings\fP\&. You can also make your own key bindings by creating a function and setting the \fBfish_key_bindings\fP variable to its name. For example:
+Like bash and other shells, fish includes two sets of keyboard shortcuts (or key bindings): one inspired by the Emacs text editor, and one by the Vi text editor. The default editing mode is Emacs. You can switch to Vi mode by running \fI\%fish_vi_key_bindings\fP and switch back with \fI\%fish_default_key_bindings\fP\&. You can also make your own key bindings by creating a function and setting the \fBfish_key_bindings\fP variable to its name. For example:
 .INDENT 0.0
 .INDENT 3.5
 .sp
@@ -1423,7 +1487,7 @@ Some bindings are common across Emacs and Vi mode, because they aren\(aqt text e
 .UNINDENT
 .SS Emacs mode commands
 .sp
-To enable emacs mode, use \fBfish_default_key_bindings\fP\&. This is also the default.
+To enable emacs mode, use \fI\%fish_default_key_bindings\fP\&. This is also the default.
 .INDENT 0.0
 .IP \(bu 2
 \fBHome\fP or \fBControl\fP+\fBA\fP moves the cursor to the beginning of the line.
@@ -1441,6 +1505,8 @@ To enable emacs mode, use \fBfish_default_key_bindings\fP\&. This is also the de
 \fBAlt\fP+\fB<\fP moves to the beginning of the commandline, \fBAlt\fP+\fB>\fP moves to the end.
 .IP \(bu 2
 \fBControl\fP+\fBK\fP deletes from the cursor to the end of line (moving it to the \fI\%Copy and paste (Kill Ring)\fP).
+.IP \(bu 2
+\fBEscape\fP and \fBControl\fP+\fBG\fP cancel the current operation. Immediately after an unambiguous completion this undoes it.
 .IP \(bu 2
 \fBAlt\fP+\fBC\fP capitalizes the current word.
 .IP \(bu 2
@@ -1462,8 +1528,7 @@ You can change these key bindings using the \fI\%bind\fP builtin.
 .sp
 Vi mode allows for the use of Vi\-like commands at the prompt. Initially, \fI\%insert mode\fP is active. \fBEscape\fP enters \fI\%command mode\fP\&. The commands available in command, insert and visual mode are described below. Vi mode shares \fI\%some bindings\fP with \fI\%Emacs mode\fP\&.
 .sp
-To enable vi mode, use \fBfish_vi_key_bindings\fP\&.
-.sp
+To enable vi mode, use \fI\%fish_vi_key_bindings\fP\&.
 It is also possible to add all emacs\-mode bindings to vi\-mode by using something like:
 .INDENT 0.0
 .INDENT 3.5
@@ -1500,8 +1565,12 @@ The \fBfish_vi_cursor\fP function will be used to change the cursor\(aqs shape d
 set fish_cursor_default block
 # Set the insert mode cursor to a line
 set fish_cursor_insert line
-# Set the replace mode cursor to an underscore
+# Set the replace mode cursors to an underscore
 set fish_cursor_replace_one underscore
+set fish_cursor_replace underscore
+# Set the external cursor to a line. The external cursor appears when a command is started.
+# The cursor shape takes the value of fish_cursor_default when fish_cursor_external is not specified.
+set fish_cursor_external line
 # The following variable can be used to configure cursor shape in
 # visual mode, but due to fish_cursor_default, is redundant here
 set fish_cursor_visual block
@@ -1511,6 +1580,8 @@ set fish_cursor_visual block
 .UNINDENT
 .sp
 Additionally, \fBblink\fP can be added after each of the cursor shape parameters to set a blinking cursor in the specified shape.
+.sp
+Fish knows the shapes \(dqblock\(dq, \(dqline\(dq and \(dqunderscore\(dq, other values will be ignored.
 .sp
 If the cursor shape does not appear to be changing after setting the above variables, it\(aqs likely your terminal emulator does not support the capabilities necessary to do this. It may also be the case, however, that \fBfish_vi_cursor\fP has not detected your terminal\(aqs features correctly (for example, if you are using \fBtmux\fP). If this is the case, you can force \fBfish_vi_cursor\fP to set the cursor shape by setting \fB$fish_vi_force_cursor\fP in \fBconfig.fish\fP\&. You\(aqll have to restart fish for any changes to take effect. If cursor shape setting remains broken after this, it\(aqs almost certainly an issue with your terminal emulator, and not fish.
 .SS Command mode
@@ -1526,13 +1597,17 @@ Command mode is also known as normal mode.
 .IP \(bu 2
 \fBi\fP enters \fI\%insert mode\fP at the current cursor position.
 .IP \(bu 2
-\fBShift\fP+\fBR\fP enters \fI\%insert mode\fP at the beginning of the line.
+\fBShift\fP+\fBI\fP enters \fI\%insert mode\fP at the beginning of the line.
 .IP \(bu 2
 \fBv\fP enters \fI\%visual mode\fP at the current cursor position.
 .IP \(bu 2
 \fBa\fP enters \fI\%insert mode\fP after the current cursor position.
 .IP \(bu 2
 \fBShift\fP+\fBA\fP enters \fI\%insert mode\fP at the end of the line.
+.IP \(bu 2
+\fBo\fP inserts a new line under the current one and enters \fI\%insert mode\fP
+.IP \(bu 2
+\fBO\fP (capital\-\(dqo\(dq) inserts a new line above the current one and enters \fI\%insert mode\fP
 .IP \(bu 2
 \fB0\fP (zero) moves the cursor to beginning of line (remaining in command mode).
 .IP \(bu 2
@@ -1544,11 +1619,17 @@ Command mode is also known as normal mode.
 .IP \(bu 2
 \fBu\fP undoes the most recent edit of the command line.
 .IP \(bu 2
+\fBControl\fP+\fBR\fP redoes the most recent edit.
+.IP \(bu 2
 \fB[\fP and \fB]\fP search the command history for the previous/next token containing the token under the cursor before the search was started. See the \fI\%history\fP section for more information on history searching.
 .IP \(bu 2
 \fB/\fP opens the history in a pager. This will show history entries matching the search, a few at a time. Pressing it again will search older entries, pressing \fBControl\fP+\fBS\fP (that otherwise toggles pager search) will go to newer entries. The search bar will always be selected.
 .IP \(bu 2
 \fBBackspace\fP moves the cursor left.
+.IP \(bu 2
+\fBg\fP / \fBG\fP moves the cursor to the beginning/end of the commandline, respectively.
+.IP \(bu 2
+\fB:q\fP exits fish.
 .UNINDENT
 .SS Insert mode
 .INDENT 0.0
@@ -1603,7 +1684,36 @@ bind \ecc \(aqcommandline \-r \(dq\(dq\(aq
 .sp
 Put \fBbind\fP statements into \fI\%config.fish\fP or a function called \fBfish_user_key_bindings\fP\&.
 .sp
-The key sequence (the \fB\ecc\fP) here depends on your setup, in particular the terminal. To find out what the terminal sends use \fI\%fish_key_reader\fP:
+If you change your mind on a binding and want to go back to fish\(aqs default, you can simply erase it again:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+bind \-\-erase \ecc
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+Fish remembers its preset bindings and so it will take effect again. This saves you from having to remember what it was before and add it again yourself.
+.sp
+If you use \fI\%vi bindings\fP, note that \fBbind\fP will by default bind keys in \fI\%command mode\fP\&. To bind something in \fI\%insert mode\fP:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+bind \-\-mode insert \ecc \(aqcommandline \-r \(dq\(dq\(aq
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.SS Key sequences
+.sp
+The terminal tells fish which keys you pressed by sending some sequences of bytes to describe that key. For some keys, this is easy \- pressing \fBa\fP simply means the terminal sends \(dqa\(dq. In others it\(aqs more complicated and terminals disagree on which they send.
+.sp
+In these cases, \fI\%fish_key_reader\fP can tell you how to write the key sequence for your terminal. Just start it and press the keys you are interested in:
 .INDENT 0.0
 .INDENT 3.5
 .sp
@@ -1622,9 +1732,9 @@ bind \ee\e[C \(aqdo something\(aq
 .UNINDENT
 .UNINDENT
 .sp
-Note that some key combinations are indistinguishable or unbindable. For instance control\-i \fIis the same\fP as the tab key. This is a terminal limitation that fish can\(aqt do anything about.
+Note that some key combinations are indistinguishable or unbindable. For instance control\-i \fIis the same\fP as the tab key. This is a terminal limitation that fish can\(aqt do anything about. When \fBfish_key_reader\fP prints the same sequence for two different keys, then that is because your terminal sends the same sequence for them.
 .sp
-Also, \fBEscape\fP is the same thing as \fBAlt\fP in a terminal. To distinguish between pressing \fBEscape\fP and then another key, and pressing \fBAlt\fP and that key (or an escape sequence the key sends), fish waits for a certain time after seeing an escape character. This is configurable via the \fBfish_escape_delay_ms\fP variable.
+Also, \fBEscape\fP is the same thing as \fBAlt\fP in a terminal. To distinguish between pressing \fBEscape\fP and then another key, and pressing \fBAlt\fP and that key (or an escape sequence the key sends), fish waits for a certain time after seeing an escape character. This is configurable via the \fI\%fish_escape_delay_ms\fP variable.
 .sp
 If you want to be able to press \fBEscape\fP and then a character and have it count as \fBAlt\fP+that character, set it to a higher value, e.g.:
 .INDENT 0.0
@@ -1633,6 +1743,25 @@ If you want to be able to press \fBEscape\fP and then a character and have it co
 .nf
 .ft C
 set \-g fish_escape_delay_ms 100
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+Similarly, to disambiguate \fIother\fP keypresses where you\(aqve bound a subsequence and a longer sequence, fish has \fI\%fish_sequence_key_delay_ms\fP:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+# This binds \(dqjk\(dq to switch to normal mode in vi\-mode.
+# If you kept it like that, every time you press \(dqj\(dq,
+# fish would wait for a \(dqk\(dq or other key to disambiguate
+bind \-M insert \-m default jk cancel repaint\-mode
+
+# After setting this, fish only waits 200ms for the \(dqk\(dq,
+# or decides to treat the \(dqj\(dq as a separate sequence, inserting it.
+set \-g fish_sequence_key_delay_ms 200
 .ft P
 .fi
 .UNINDENT
@@ -1794,39 +1923,29 @@ Here we define some of the terms used on this page and throughout the rest of th
 .UNINDENT
 .SS Quotes
 .sp
-Sometimes features like \fI\%parameter expansion\fP and \fI\%character escapes\fP get in the way. When that happens, you can use quotes, either single (\fB\(aq\fP) or double (\fB\(dq\fP). Between single quotes, fish performs no expansions. Between double quotes, fish only performs \fI\%variable expansion\fP\&. No other kind of expansion (including \fI\%brace expansion\fP or parameter expansion) is performed, and escape sequences (for example, \fB\en\fP) are ignored. Within quotes, whitespace is not used to separate arguments, allowing quoted arguments to contain spaces.
+Sometimes you want to give a command an argument that contains characters special to fish, like spaces or \fB$\fP or \fB*\fP\&. To do that, you can use quotes:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+rm \(dqmy file.txt\(dq
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+to remove a file called \fBmy file.txt\fP instead of trying to remove two files, \fBmy\fP and \fBfile.txt\fP\&.
+.sp
+Fish understands two kinds of quotes: Single (\fB\(aq\fP) and double (\fB\(dq\fP), and both work slightly differently.
+.sp
+Between single quotes, fish performs no expansions. Between double quotes, fish only performs \fI\%variable expansion\fP and \fI\%command substitution\fP in the \fB$(command)\fP\&. No other kind of expansion (including \fI\%brace expansion\fP or parameter expansion) is performed, and escape sequences (for example, \fB\en\fP) are ignored. Within quotes, whitespace is not used to separate arguments, allowing quoted arguments to contain spaces.
 .sp
 The only meaningful escape sequences in single quotes are \fB\e\(aq\fP, which escapes a single quote and \fB\e\e\fP, which escapes the backslash symbol. The only meaningful escapes in double quotes are \fB\e\(dq\fP, which escapes a double quote, \fB\e$\fP, which escapes a dollar character, \fB\e\fP followed by a newline, which deletes the backslash and the newline, and \fB\e\e\fP, which escapes the backslash symbol.
 .sp
 Single quotes have no special meaning within double quotes and vice versa.
 .sp
-Example:
-.INDENT 0.0
-.INDENT 3.5
-.sp
-.nf
-.ft C
-rm \(dqcumbersome filename.txt\(dq
-.ft P
-.fi
-.UNINDENT
-.UNINDENT
-.sp
-removes the file \fBcumbersome filename.txt\fP, while
-.INDENT 0.0
-.INDENT 3.5
-.sp
-.nf
-.ft C
-rm cumbersome filename.txt
-.ft P
-.fi
-.UNINDENT
-.UNINDENT
-.sp
-removes two files, \fBcumbersome\fP and \fBfilename.txt\fP\&.
-.sp
-Another example:
+More examples:
 .INDENT 0.0
 .INDENT 3.5
 .sp
@@ -1839,6 +1958,18 @@ grep \(aqenabled)$\(aq foo.txt
 .UNINDENT
 .sp
 searches for lines ending in \fBenabled)\fP in \fBfoo.txt\fP (the \fB$\fP is special to \fBgrep\fP: it matches the end of the line).
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+apt install \(dqpostgres\-*\(dq
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+installs all packages with a name starting with \(dqpostgres\-\(dq, instead of looking through the current directory for files named \(dqpostgres\-something\(dq.
 .SS Escaping Characters
 .sp
 Some characters cannot be written directly on the command line. For these characters, so\-called escape sequences are provided. These are:
@@ -2061,9 +2192,56 @@ will attempt to build \fBfish\fP, and any errors will be shown using the \fBless
 As a convenience, the pipe \fB&|\fP redirects both stdout and stderr to the same process. This is different from bash, which uses \fB|&\fP\&.
 .IP [2] 5
 A \(dqpager\(dq here is a program that takes output and \(dqpaginates\(dq it. \fBless\fP doesn\(aqt just do pages, it allows arbitrary scrolling (even back!).
+.SS Combining pipes and redirections
+.sp
+It is possible to use multiple redirections and a pipe at the same time. In that case, they are read in this order:
+.INDENT 0.0
+.IP 1. 3
+First the pipe is set up.
+.IP 2. 3
+Then the redirections are evaluated from left\-to\-right.
+.UNINDENT
+.sp
+This is important when any redirections reference other file descriptors with the \fB&N\fP syntax. When you say \fB>&2\fP, that will redirect stdout to where stderr is pointing to \fIat that time\fP\&.
+.sp
+Consider this helper function:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+# Just make a function that prints something to stdout and stderr
+function print
+    echo out
+    echo err >&2
+end
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+Now let\(aqs see a few cases:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+# Redirect both stderr and stdout to less
+# (can also be spelt as \(ga&|\(ga)
+print 2>&1 | less
+
+# Show the \(dqout\(dq on stderr, silence the \(dqerr\(dq
+print >&2 2>/dev/null
+
+# Silence both
+print >/dev/null 2>&1
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
 .SS Job control
 .sp
-When you start a job in fish, fish itself will pause, and give control of the terminal to the program just started. Sometimes, you want to continue using the commandline, and have the job run in the background. To create a background job, append an & (ampersand) to your command. This will tell fish to run the job in the background. Background jobs are very useful when running programs that have a graphical user interface.
+When you start a job in fish, fish itself will pause, and give control of the terminal to the program just started. Sometimes, you want to continue using the commandline, and have the job run in the background. To create a background job, append an \fB&\fP (ampersand) to your command. This will tell fish to run the job in the background. Background jobs are very useful when running programs that have a graphical user interface.
 .sp
 Example:
 .INDENT 0.0
@@ -2240,28 +2418,63 @@ set \-gx EDITOR emacs # I don\(aqt like vim.
 .SS Conditions
 .sp
 Fish has some builtins that let you execute commands only if a specific criterion is met: \fI\%if\fP, \fI\%switch\fP, \fI\%and\fP and \fI\%or\fP, and also the familiar \fI\%&&/||\fP syntax.
+.SS The \fBif\fP statement
 .sp
-The \fI\%switch\fP command is used to execute one of possibly many blocks of commands depending on the value of a string. See the documentation for \fI\%switch\fP for more information.
+The \fI\%if\fP statement runs a block of commands if the condition was true.
 .sp
-The other conditionals use the \fI\%exit status\fP of a command to decide if a command or a block of commands should be executed.
-.sp
-Unlike programming languages you might know, \fI\%if\fP doesn\(aqt take a \fIcondition\fP, it takes a \fIcommand\fP\&. If that command returned a successful \fI\%exit status\fP (that\(aqs 0), the \fBif\fP branch is taken, otherwise the \fI\%else\fP branch.
-.sp
-To check a condition, there is the \fI\%test\fP command:
+Like other shells, but unlike typical programming languages you might know, the condition here is a \fIcommand\fP\&. Fish runs it, and if it returns a true \fI\%exit status\fP (that\(aqs 0), the if\-block is run. For example:
 .INDENT 0.0
 .INDENT 3.5
 .sp
 .nf
 .ft C
-if test 5 \-gt 2
-    echo Yes, five is greater than two
+if test \-e /etc/os\-release
+    cat /etc/os\-release
 end
 .ft P
 .fi
 .UNINDENT
 .UNINDENT
 .sp
-Some examples:
+This uses the \fI\%test\fP command to see if the file /etc/os\-release exists. If it does, it runs \fBcat\fP, which prints it on the screen.
+.sp
+Unlike other shells, the condition command just ends after the first job, there is no \fBthen\fP here. Combiners like \fBand\fP and \fBor\fP extend the condition.
+.sp
+\fBif\fP is commonly used with the \fI\%test\fP command that can check conditions.:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+if test 5 \-gt 2
+    echo \(dqYes, 5 is greater than 2\(dq
+end
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+\fBif\fP can also take \fBelse if\fP clauses with additional conditions and an  \fI\%else\fP clause that is executed when everything else was false:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+if test \(dq$number\(dq \-gt 10
+   echo Your number was greater than 10
+else if test \(dq$number\(dq \-gt 5
+   echo Your number was greater than 5
+else if test \(dq$number\(dq \-gt 1
+   echo Your number was greater than 1
+else
+   echo Your number was smaller or equal to 1
+end
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+The \fI\%not\fP keyword can be used to invert the status:
 .INDENT 0.0
 .INDENT 3.5
 .sp
@@ -2270,13 +2483,49 @@ Some examples:
 # Just see if the file contains the string \(dqfish\(dq anywhere.
 # This executes the \(gagrep\(ga command, which searches for a string,
 # and if it finds it returns a status of 0.
+# The \(ganot\(ga then turns 0 into 1 or anything else into 0.
 # The \(ga\-q\(ga switch stops it from printing any matches.
-if grep \-q fish myanimals
-    echo \(dqYou have fish!\(dq
-else
+if not grep \-q fish myanimals
     echo \(dqYou don\(aqt have fish!\(dq
+else
+    echo \(dqYou have fish!\(dq
 end
-
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.SS The \fBswitch\fP statement
+.sp
+The \fI\%switch\fP command is used to execute one of possibly many blocks of commands depending on the value of a string. It can take multiple \fI\%case\fP blocks that are executed when the string matches. They can take \fI\%wildcards\fP\&. For example:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+switch (uname)
+case Linux
+    echo Hi Tux!
+case Darwin
+    echo Hi Hexley!
+case DragonFly \(aq*BSD\(aq
+    echo Hi Beastie! # this also works for FreeBSD and NetBSD
+case \(aq*\(aq
+    echo Hi, stranger!
+end
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+Unlike other shells or programming languages, there is no fallthrough \- the first matching \fBcase\fP block is executed and then control jumps out of the \fBswitch\fP\&.
+.SS Combiners (\fBand\fP / \fBor\fP / \fB&&\fP / \fB||\fP)
+.sp
+For simple checks, you can use combiners. \fI\%and\fP or \fB&&\fP run the second command if the first succeeded, while \fI\%or\fP or \fB||\fP run it if the first failed. For example:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
 # $XDG_CONFIG_HOME is a standard place to store configuration.
 # If it\(aqs not set applications should use ~/.config.
 set \-q XDG_CONFIG_HOME; and set \-l configdir $XDG_CONFIG_HOME
@@ -2316,7 +2565,7 @@ end
 .UNINDENT
 .UNINDENT
 .sp
-These do essentially the same thing, but the former takes 2 seconds longer because the \fBsleep\fP always needs to run. So, in cases like these, the ordering is quite important for performance.
+These do essentially the same thing, but the former takes 2 seconds longer because the \fBsleep\fP always needs to run.
 .sp
 Or you can have a case where it is necessary to stop early:
 .INDENT 0.0
@@ -2332,7 +2581,36 @@ if command \-sq foo; and foo
 .sp
 If this went on after seeing that the command \(dqfoo\(dq doesn\(aqt exist, it would try to run \fBfoo\fP and error because it wasn\(aqt found!
 .sp
-For more, see the documentation for the builtins or the \fI\%Conditionals\fP section of the tutorial.
+Combiners really just execute step\-by\-step, so it isn\(aqt recommended to build longer chains of them because they might do something you don\(aqt want. Consider:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+test \-e /etc/my.config
+or echo \(dqOH NO WE NEED A CONFIG FILE\(dq
+and return 1
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+This will execute \fBreturn 1\fP also if the \fBtest\fP succeeded. This is because fish runs \fBtest \-e /etc/my.config\fP, sets $status to 0, then skips the \fBecho\fP, keeps $status at 0, and then executes the \fBreturn 1\fP because $status is still 0.
+.sp
+So if you have more complex conditions or want to run multiple things after something failed, consider using an \fI\%if\fP\&. Here that would be:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+if not test \-e /etc/my.config
+    echo \(dqOH NO WE NEED A CONFIG FILE\(dq
+    return 1
+end
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
 .SS Loops and blocks
 .sp
 Like most programming language, fish also has the familiar \fI\%while\fP and \fI\%for\fP loops.
@@ -2645,17 +2923,29 @@ end
 When using this feature together with list brackets, the brackets will be used from the inside out. \fB$$foo[5]\fP will use the fifth element of \fB$foo\fP as a variable name, instead of giving the fifth element of all the variables $foo refers to. That would instead be expressed as \fB$$foo[1..\-1][5]\fP (take all elements of \fB$foo\fP, use them as variable names, then give the fifth element of those).
 .SS Command substitution
 .sp
-The output of a command (or an entire \fI\%pipeline\fP) can be used as the arguments to another command.
+A \fBcommand substitution\fP is an expansion that uses the \fIoutput\fP of a command as the arguments to another. For example:
+.INDENT 0.0
+.INDENT 3.5
 .sp
-When you write a command in parentheses like \fBoutercommand (innercommand)\fP, fish first runs \fBinnercommand\fP, and then uses each line of its output as a separate argument to \fBoutercommand\fP, which will then be executed. Unlike other shells, the value of \fB$IFS\fP is not used [4], fish splits on newlines.
+.nf
+.ft C
+echo (pwd)
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
 .sp
-A command substitution can have a dollar sign before the opening parenthesis like \fBoutercommand $(innercommand)\fP\&. This variant is also allowed inside double quotes. When using double quotes, the command output is not split up by lines, but trailing empty lines are still removed.
+This executes the \fI\%pwd\fP command, takes its output (more specifically what it wrote to the standard output \(dqstdout\(dq stream) and uses it as arguments to \fI\%echo\fP\&. So the inner command (the \fBpwd\fP) is run first and has to complete before the outer command can even be started.
+.sp
+If the inner command prints multiple lines, fish will use each separate line as a separate argument to the outer command. Unlike other shells, the value of \fB$IFS\fP is not used [4], fish splits on newlines.
+.sp
+A command substitution can also be spelled with a dollar sign like \fBoutercommand $(innercommand)\fP\&. This variant is also allowed inside double quotes. When using double quotes, the command output is not split up by lines, but trailing empty lines are still removed.
 .sp
 If the output is piped to \fI\%string split or string split0\fP as the last step, those splits are used as they appear instead of splitting lines.
 .sp
 The exit status of the last run command substitution is available in the \fI\%status\fP variable if the substitution happens in the context of a \fI\%set\fP command (so \fBif set \-l (something)\fP checks if \fBsomething\fP returned true).
 .sp
-To use only some lines of the output, refer to \fI\%index range expansion\fP\&.
+To use only some lines of the output, refer to \fI\%slices\fP\&.
 .sp
 Examples:
 .INDENT 0.0
@@ -2866,7 +3156,7 @@ for file in $PATH/*
 .UNINDENT
 .sp
 Because \fI\%PATH\fP is a list, this expands to all the files in all the directories in it. And if there are no directories in \fI\%PATH\fP, the right answer here is to expand to no files.
-.SS Index range expansion
+.SS Slices
 .sp
 Sometimes it\(aqs necessary to access only some of the elements of a \fI\%list\fP (all fish variables are lists), or some of the lines a \fI\%command substitution\fP outputs. Both are possible in fish by writing a set of indices in brackets, like:
 .INDENT 0.0
@@ -2894,7 +3184,7 @@ If a list has 5 elements the indices go from 1 to 5, so a range of \fB2..16\fP w
 If the end is negative the range always goes up, so \fB2..\-2\fP will go from element 2 to 4, and \fB2..\-16\fP won\(aqt go anywhere because there is no way to go from the second element to one that doesn\(aqt exist, while going up.
 If the start is negative the range always goes down, so \fB\-2..1\fP will go from element 4 to 1, and \fB\-16..2\fP won\(aqt go anywhere because there is no way to go from an element that doesn\(aqt exist to the second element, while going down.
 .sp
-A missing starting index in a range defaults to 1. This is allowed if the range is the first index expression of the sequence. Similarly, a missing ending index, defaulting to \-1 is allowed for the last index range in the sequence.
+A missing starting index in a range defaults to 1. This is allowed if the range is the first index expression of the sequence. Similarly, a missing ending index, defaulting to \-1 is allowed for the last index in the sequence.
 .sp
 Multiple ranges are also possible, separated with a space.
 .sp
@@ -3068,9 +3358,9 @@ So you set a variable with \fBset\fP, and use it with a \fB$\fP and the name.
 There are four kinds of variables in fish: universal, global, function and local variables.
 .INDENT 0.0
 .IP \(bu 2
-Universal variables are shared between all fish sessions a user is running on one computer.
+Universal variables are shared between all fish sessions a user is running on one computer. They are stored on disk and persist even after reboot.
 .IP \(bu 2
-Global variables are specific to the current fish session, and will never be erased unless explicitly requested by using \fBset \-e\fP\&.
+Global variables are specific to the current fish session. They can be erased by explicitly requesting \fBset \-e\fP\&.
 .IP \(bu 2
 Function variables are specific to the currently executing function. They are erased (\(dqgo out of scope\(dq) when the current function ends. Outside of a function, they don\(aqt go out of scope.
 .IP \(bu 2
@@ -3183,6 +3473,32 @@ end
 .UNINDENT
 .UNINDENT
 .sp
+When a function calls another, local variables aren\(aqt visible:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+function shiver
+    set phrase \(aqShiver me timbers\(aq
+end
+
+function avast
+    set \-\-local phrase \(aqAvast, mateys\(aq
+    # Calling the shiver function here can not
+    # change any variables in the local scope
+    # so phrase remains as we set it here.
+    shiver
+    echo $phrase
+end
+avast
+
+# Outputs \(dqAvast, mateys\(dq
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
 When in doubt, use function\-scoped variables. When you need to make a variable accessible everywhere, make it global. When you need to persistently store configuration, make it universal. When you want to use a variable only in a short block, make it local.
 .SS Overriding variables for a single command
 .sp
@@ -3243,7 +3559,7 @@ mp3s=*.mp3 vlc $mp3s
 Unlike other shells, this does \fInot\fP inhibit any lookup (aliases or similar). Calling a command after setting a variable override will result in the exact same command being run.
 .sp
 This syntax is supported since fish 3.1.
-.SS More on universal variables
+.SS Universal Variables
 .sp
 Universal variables are variables that are shared between all the user\(aqs fish sessions on the computer. Fish stores many of its configuration options as universal variables. This means that in order to change fish settings, all you have to do is change the variable value once, and it will be automatically updated for all sessions, and preserved across computer reboots and login/logout.
 .sp
@@ -3252,34 +3568,6 @@ To see universal variables in action, start two fish sessions side by side, and 
 \fI\%Universal variables\fP are stored in the file \fB\&.config/fish/fish_variables\fP\&. Do not edit this file directly, as your edits may be overwritten. Edit the variables through fish scripts or by using fish interactively instead.
 .sp
 Do not append to universal variables in \fI\%config.fish\fP, because these variables will then get longer with each new shell instance. Instead, simply set them once at the command line.
-.SS Variable scope for functions
-.sp
-When calling a function, all current local variables temporarily disappear. This shadowing of the local scope is needed since the variable namespace would become cluttered, making it very easy to accidentally overwrite variables from another function.
-.sp
-For example:
-.INDENT 0.0
-.INDENT 3.5
-.sp
-.nf
-.ft C
-function shiver
-    set phrase \(aqShiver me timbers\(aq
-end
-
-function avast
-    set \-\-local phrase \(aqAvast, mateys\(aq
-    # Calling the shiver function here can not
-    # change any variables in the local scope
-    shiver
-    echo $phrase
-end
-avast
-
-# Outputs \(dqAvast, mateys\(dq
-.ft P
-.fi
-.UNINDENT
-.UNINDENT
 .SS Exporting variables
 .sp
 Variables in fish can be exported, so they will be inherited by any commands started by fish. In particular, this is necessary for variables used to configure external commands like \fBPAGER\fP or \fBGOPATH\fP, but also for variables that contain general system settings like \fBPATH\fP or \fBLANGUAGE\fP\&. If an external command needs to know a variable, it needs to be exported. Exported variables are also often called \(dqenvironment variables\(dq.
@@ -3413,7 +3701,7 @@ apple
 .UNINDENT
 .UNINDENT
 .sp
-As you see, you can use a range of indices, see \fI\%index range expansion\fP for details.
+As you see, you can use a range of indices, see \fI\%slices\fP for details.
 .sp
 All lists are one\-dimensional and can\(aqt contain other lists, although it is possible to fake nested lists using dereferencing \- see \fI\%variable expansion\fP\&.
 .sp
@@ -3622,6 +3910,18 @@ A number of variable starting with the prefixes \fBfish_color\fP and \fBfish_pag
 .UNINDENT
 .INDENT 0.0
 .TP
+.B fish_term24bit
+If this is set to 1, fish will assume the terminal understands 24\-bit RGB color sequences, and won\(aqt translate them to the 256 or 16 color palette.
+This is often detected automatically.
+.UNINDENT
+.INDENT 0.0
+.TP
+.B fish_term256
+If this is set to 1, fish will assume the terminal understands 256 colors, and won\(aqt translate matching colors down to the 16 color palette.
+This is usually autodetected.
+.UNINDENT
+.INDENT 0.0
+.TP
 .B fish_ambiguous_width
 controls the computed width of ambiguous\-width characters. This should be set to 1 if your terminal renders these characters as single\-width (typical), or 2 if double\-width.
 .UNINDENT
@@ -3649,6 +3949,11 @@ the name of the function that sets up the keyboard shortcuts for the \fI\%comman
 .TP
 .B fish_escape_delay_ms
 sets how long fish waits for another key after seeing an escape, to distinguish pressing the escape key from the start of an escape sequence. The default is 30ms. Increasing it increases the latency but allows pressing escape instead of alt for alt+character bindings. For more information, see \fI\%the chapter in the bind documentation\fP\&.
+.UNINDENT
+.INDENT 0.0
+.TP
+.B fish_sequence_key_delay_ms
+sets how long fish waits for another key after seeing a key that is part of a longer sequence, to disambiguate. For instance if you had bound \fB\ecx\ece\fP to open an editor, fish would wait for this long in milliseconds to see a ctrl\-e after a ctrl\-x. If the time elapses, it will handle it as a ctrl\-x (by default this would copy the current commandline to the clipboard). See also \fI\%Key sequences\fP\&.
 .UNINDENT
 .INDENT 0.0
 .TP
@@ -4116,7 +4421,16 @@ Configuration snippets (named \fB*.fish\fP) in the directories:
 .IP \(bu 2
 \fB$__fish_sysconf_dir/conf.d\fP (by default, \fB/etc/fish/conf.d/\fP)
 .IP \(bu 2
-Directories for others to ship configuration snippets for their software. Fish searches the directories under \fB$__fish_user_data_dir\fP (usually \fB~/.local/share/fish\fP, controlled by the \fBXDG_DATA_HOME\fP environment variable) and in the \fBXDG_DATA_DIRS\fP environment variable for a \fBfish/vendor_conf.d\fP directory; if not defined, the default value of \fBXDG_DATA_DIRS\fP is \fB/usr/share/fish/vendor_conf.d\fP and \fB/usr/local/share/fish/vendor_conf.d\fP, unless your distribution customized this.
+Directories for others to ship configuration snippets for their software:
+.INDENT 2.0
+.IP \(bu 2
+the directories under \fB$__fish_user_data_dir\fP (usually \fB~/.local/share/fish\fP, controlled by the \fBXDG_DATA_HOME\fP environment variable)
+.IP \(bu 2
+a \fBfish/vendor_conf.d\fP directory in the directories listed in \fB$XDG_DATA_DIRS\fP (default \fB/usr/share/fish/vendor_conf.d\fP and \fB/usr/local/share/fish/vendor_conf.d\fP)
+.UNINDENT
+.sp
+These directories are also accessible in \fB$__fish_vendor_confdirs\fP\&.
+Note that changing that in a running fish won\(aqt do anything as by that point the directories have already been read.
 .UNINDENT
 .sp
 If there are multiple files with the same name in these directories, only the first will be executed.
@@ -4132,6 +4446,8 @@ User configuration, usually in \fB~/.config/fish/config.fish\fP (controlled by t
 These files are all executed on the startup of every shell. If you want to run a command only on starting an interactive shell, use the exit status of the command \fBstatus \-\-is\-interactive\fP to determine if the shell is interactive. If you want to run a command only when using a login shell, use \fBstatus \-\-is\-login\fP instead. This will speed up the starting of non\-interactive or non\-login shells.
 .sp
 If you are developing another program, you may want to add configuration for all users of fish on a system. This is discouraged; if not carefully written, they may have side\-effects or slow the startup of the shell. Additionally, users of other shells won\(aqt benefit from the fish\-specific configuration. However, if they are required, you can install them to the \(dqvendor\(dq configuration directory. As this path may vary from system to system, \fBpkg\-config\fP should be used to discover it: \fBpkg\-config \-\-variable confdir fish\fP\&.
+.sp
+For system integration, fish also ships a file called \fB__fish_build_paths.fish\fP\&. This can be customized during build, for instance because your system requires special paths to be used.
 .SS Future feature flags
 .sp
 Feature flags are how fish stages changes that might break scripts. Breaking changes are introduced as opt\-in, in a few releases they become opt\-out, and eventually the old behavior is removed.
@@ -4243,7 +4559,7 @@ end
 .UNINDENT
 .UNINDENT
 .sp
-Fish already the following named events for the \fB\-\-on\-event\fP switch:
+Fish already has the following named events for the \fB\-\-on\-event\fP switch:
 .INDENT 0.0
 .IP \(bu 2
 \fBfish_prompt\fP is emitted whenever a new fish prompt is about to be displayed.
@@ -4480,7 +4796,36 @@ An abbreviation may match a literal word, or it may match a pattern given by a r
 .sp
 Combining these features, it is possible to create custom syntaxes, where a regular expression recognizes matching tokens, and the expansion function interprets them. See the \fI\%Examples\fP section.
 .sp
-Abbreviations may be added to \fI\%config.fish\fP\&.
+Changed in version 3.6.0: Previous versions of this allowed saving abbreviations in universal variables.
+That\(aqs no longer possible. Existing variables will still be imported and \fBabbr \-\-erase\fP will also erase the variables.
+We recommend adding abbreviations to \fI\%config.fish\fP by just adding the \fBabbr \-\-add\fP command.
+When you run \fBabbr\fP, you will see output like this
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+> abbr
+abbr \-a \-\- foo bar # imported from a universal variable, see \(gahelp abbr\(ga
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+In that case you should take the part before the \fB#\fP comment and save it in \fI\%config.fish\fP,
+then you can run \fBabbr \-\-erase\fP to remove the universal variable:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+> abbr >> ~/.config/fish/config.fish
+> abbr \-\-erase (abbr \-\-list)
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+
 .SS \(dqadd\(dq subcommand
 .nf
 \fBabbr\fP [\fB\-a\fP | \fB\-\-add\fP] \fINAME\fP [\fB\-\-position\fP \fBcommand\fP | \fBanywhere\fP] [\fB\-r\fP | \fB\-\-regex\fP \fIPATTERN\fP]
@@ -4773,6 +5118,7 @@ The command name for use in error messages. By default the current function name
 .TP
 \fB\-x\fP or \fB\-\-exclusive\fP \fIOPTIONS\fP
 A comma separated list of options that are mutually exclusive. You can use this more than once to define multiple sets of mutually exclusive options.
+You give either the short or long version of each option, and you still need to otherwise define the options.
 .TP
 \fB\-N\fP or \fB\-\-min\-args\fP \fINUMBER\fP
 The minimum number of acceptable non\-option arguments. The default is zero.
@@ -4954,6 +5300,25 @@ These variables are passed to the function as local exported variables.
 The script should write any error messages to stdout, not stderr. It should return a status of zero if the flag value is valid otherwise a non\-zero status to indicate it is invalid.
 .sp
 Fish ships with a \fB_validate_int\fP function that accepts a \fB\-\-min\fP and \fB\-\-max\fP flag. Let\(aqs say your command accepts a \fB\-m\fP or \fB\-\-max\fP flag and the minimum allowable value is zero and the maximum is 5. You would define the option like this: \fBm/max=!_validate_int \-\-min 0 \-\-max 5\fP\&. The default if you just call \fB_validate_int\fP without those flags is to simply check that the value is a valid integer with no limits on the min or max value allowed.
+.sp
+Here are some examples of flag validations:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+# validate that a path is a directory
+argparse \(aqp/path=!test \-d \(dq$_flag_value\(dq\(aq \-\- \-\-path $__fish_config_dir
+# validate that a function does not exist
+argparse \(aqf/func=!not functions \-q \(dq$_flag_value\(dq\(aq \-\- \-f alias
+# validate that a string matches a regex
+argparse \(aqc/color=!string match \-rq \e\(aq^#?[0\-9a\-fA\-F]{6}$\e\(aq \(dq$_flag_value\(dq\(aq \-\- \-c \(aqc0ffee\(aq
+# validate with a validator function
+argparse \(aqn/num=!_validate_int \-\-min 0 \-\-max 99\(aq \-\- \-\-num 42
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
 .SS Example OPTION_SPECs
 .sp
 Some \fIOPTION_SPEC\fP examples:
@@ -4985,6 +5350,57 @@ Some \fIOPTION_SPEC\fP examples:
 After parsing the arguments the \fBargv\fP variable is set with local scope to any values not already consumed during flag processing. If there are no unbound values the variable is set but \fBcount $argv\fP will be zero.
 .sp
 If an error occurs during argparse processing it will exit with a non\-zero status and print error messages to stderr.
+.SS Examples
+.sp
+A simple use:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+argparse h/help \-\- $argv
+or return
+
+if set \-q _flag_help
+    # TODO: Print help here
+    return 0
+end
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+This just wants one option \- \fB\-h\fP / \fB\-\-help\fP\&. Any other option is an error. If it is given it prints help and exits.
+.sp
+How \fI\%fish_add_path \- add to the path\fP parses its args:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+argparse \-x g,U \-x P,U \-x a,p g/global U/universal P/path p/prepend a/append h/help m/move v/verbose n/dry\-run \-\- $argv
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+There are a variety of boolean flags, all with long and short versions. A few of these cannot be used together, and that is what the \fB\-x\fP flag is used for.
+\fB\-x g,U\fP means that \fB\-\-global\fP and \fB\-\-universal\fP or their short equivalents conflict, and if they are used together you get an error.
+In this case you only need to give the short or long flag, not the full option specification.
+.sp
+After this it figures out which variable it should operate on according to the \fB\-\-path\fP flag:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+set \-l var fish_user_paths
+set \-q _flag_path
+and set var PATH
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
 .SS Limitations
 .sp
 One limitation with \fB\-\-ignore\-unknown\fP is that, if an unknown option is given in a group with known options, the entire group will be kept in $argv. \fBargparse\fP will not do any permutations here.
@@ -5235,6 +5651,9 @@ cancel the current commandline and replace it with a new empty one, leaving the 
 .B \fBcapitalize\-word\fP
 make the current word begin with a capital letter
 .TP
+.B \fBclear\-screen\fP
+clears the screen and redraws the prompt. if the terminal doesn\(aqt support clearing the screen it is the same as \fBrepaint\fP\&.
+.TP
 .B \fBcomplete\fP
 guess the remainder of the current token
 .TP
@@ -5290,6 +5709,9 @@ from the current autosuggestion.
 .TP
 .B \fBhistory\-pager\fP
 invoke the searchable pager on history (incremental search); or if the history pager is already active, search further backwards in time.
+.TP
+.B \fBhistory\-pager\-delete\fP
+permanently delete the history item selected in the history pager
 .TP
 .B \fBhistory\-search\-backward\fP
 search the history for the previous match
@@ -5493,6 +5915,9 @@ The escape key can be used standalone, for example, to switch from insertion mod
 Holding alt and something else also typically sends escape, for example holding alt+a will send an escape character and then an \(dqa\(dq.
 .sp
 fish waits for a period after receiving the escape character, to determine whether it is standalone or part of an escape sequence. While waiting, additional key presses make the escape key behave as a meta key. If no other key presses come in, it is handled as a standalone escape. The waiting period is set to 30 milliseconds (0.03 seconds). It can be configured by setting the \fBfish_escape_delay_ms\fP variable to a value between 10 and 5000 ms. This can be a universal variable that you set once from an interactive session.
+So the escape character has its own timeout configured with \fI\%fish_escape_delay_ms\fP\&.
+.sp
+See also \fI\%Key sequences\fP\&.
 .SS block \- temporarily block delivery of events
 .SS Synopsis
 .nf
@@ -5866,6 +6291,10 @@ The following options change the way \fBcommandline\fP prints the current comman
 .TP
 \fB\-c\fP or \fB\-\-cut\-at\-cursor\fP
 Only print selection up until the current cursor position.
+If combined with \fB\-\-tokenize\fP, this will print up until the last completed token \- excluding the token the cursor is in.
+This is typically what you would want for instance in completions.
+To get both, use both \fBcommandline \-\-cut\-at\-cursor \-\-tokenize; commandline \-\-cut\-at\-cursor \-\-current\-token\fP,
+or \fBcommandline \-co; commandline \-ct\fP for short.
 .TP
 \fB\-o\fP or \fB\-\-tokenize\fP
 Tokenize the selection and print one string\-type token per line.
@@ -5917,6 +6346,29 @@ The \fBecho $flounder >&\fP is the first process, \fBless\fP the second and \fBa
 .sp
 \fB$flounder\fP is the current token.
 .sp
+The most common use for something like completions is
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+set \-l tokens (commandline \-opc)
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+which gives the current \fIprocess\fP (what is being completed), tokenized into separate entries, up to but excluding the currently being completed token
+.sp
+If you are then also interested in the in\-progress token, add
+.INDENT 0.0
+.TP
+.B ::
+set \-l current (commandline \-ct)
+.UNINDENT
+.sp
+Note that this makes it easy to render fish\(aqs infix matching moot \- if possible it\(aqs best if the completions just print all possibilities and leave the matching to the current token up to fish\(aqs logic.
+.sp
 More examples:
 .INDENT 0.0
 .INDENT 3.5
@@ -5937,7 +6389,7 @@ echo $flounder >&2 | less
 .fi
 .UNINDENT
 .UNINDENT
-.SS complete \- edit command specific tab\-completions
+.SS complete \- edit command\-specific tab\-completions
 .SS Synopsis
 .nf
 \fBcomplete\fP ((\fB\-c\fP | \fB\-\-command\fP) | (\fB\-p\fP | \fB\-\-path\fP)) \fICOMMAND\fP [\fIOPTIONS\fP]
@@ -6006,7 +6458,7 @@ When used with \fB\-C\fP, escape special characters in completions.
 Displays help about using this command.
 .UNINDENT
 .sp
-Command specific tab\-completions in \fBfish\fP are based on the notion of options and arguments. An option is a parameter which begins with a hyphen, such as \fB\-h\fP, \fB\-help\fP or \fB\-\-help\fP\&. Arguments are parameters that do not begin with a hyphen. Fish recognizes three styles of options, the same styles as the GNU getopt library. These styles are:
+Command\-specific tab\-completions in \fBfish\fP are based on the notion of options and arguments. An option is a parameter which begins with a hyphen, such as \fB\-h\fP, \fB\-help\fP or \fB\-\-help\fP\&. Arguments are parameters that do not begin with a hyphen. Fish recognizes three styles of options, the same styles as the GNU getopt library. These styles are:
 .INDENT 0.0
 .IP \(bu 2
 Short options, like \fB\-a\fP\&. Short options are a single character long, are preceded by a single hyphen and can be grouped together (like \fB\-la\fP, which is equivalent to \fB\-l \-a\fP). Option arguments may be specified by appending the option with the value (\fB\-w32\fP), or, if \fB\-\-require\-parameter\fP is given, in the following parameter (\fB\-w 32\fP).
@@ -7071,6 +7523,32 @@ The \fB\-h\fP or \fB\-\-help\fP option displays help about using this command.
 \fBfish_config prompt save\fP saves the current prompt to an \fI\%autoloaded\fP file.
 .sp
 \fBfish_config prompt save default\fP chooses the default prompt and saves it.
+.SS fish_default_key_bindings \- set emacs key bindings for fish
+.SS Synopsis
+.nf
+\fBfish_default_key_bindings\fP
+.fi
+.sp
+.SS Description
+.sp
+\fBfish_default_key_bindings\fP sets the emacs key bindings for \fBfish\fP shell.
+.sp
+Some of the Emacs key bindings are defined \fI\%here\fP\&.
+.sp
+There are no parameters for \fBfish_default_key_bindings\fP\&.
+.SS Examples
+.sp
+To start using vi key bindings:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+fish_default_key_bindings
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
 .SS fish_delta \- compare functions and completions to the default
 .SS Synopsis
 .nf
@@ -7645,7 +8123,7 @@ bind \ee\e[A \(aqdo something\(aq
 > fish_key_reader \-\-verbose
 Press a key:
 # press alt+enter
-           hex:   1B  char: \ec[  (or \ee)
+           hex:   1B  char: \ee
 (  0.027 ms)  hex:    D  char: \ecM  (or \er)
 bind \ee\er \(aqdo something\(aq
 .ft P
@@ -8153,6 +8631,43 @@ end
 .fi
 .UNINDENT
 .UNINDENT
+.SS fish_vi_key_bindings \- set vi key bindings for fish
+.SS Synopsis
+.nf
+\fBfish_vi_key_bindings\fP
+\fBfish_vi_key_bindings\fP [\fB\-\-no\-erase\fP] [\fIINIT_MODE\fP]
+.fi
+.sp
+.SS Description
+.sp
+\fBfish_vi_key_bindings\fP sets the vi key bindings for \fBfish\fP shell.
+.sp
+If a valid \fIINIT_MODE\fP is provided (insert, default, visual), then that mode will become the default
+\&. If no \fIINIT_MODE\fP is given, the mode defaults to insert mode.
+.sp
+The following parameters are available:
+.INDENT 0.0
+.TP
+\fB\-\-no\-erase\fP
+Does not clear previous set bindings
+.UNINDENT
+.sp
+Further information on how to use \fI\%vi\-mode\fP\&.
+.SS Examples
+.sp
+To start using vi key bindings:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+fish_vi_key_bindings
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+or \fBset \-g fish_key_bindings fish_vi_key_bindings\fP in \fI\%config.fish\fP\&.
 .SS for \- perform a set of commands multiple times
 .SS Synopsis
 .nf
@@ -8303,7 +8818,7 @@ A description of what the function does, suitable as a completion description.
 Inherit completions from the given \fIWRAPPED_COMMAND\fP\&. See the documentation for \fI\%complete\fP for more information.
 .TP
 \fB\-e\fP \fIEVENT_NAME\fP or \fB\-\-on\-event\fP \fIEVENT_NAME\fP
-Run this function when the specified named event is emitted. Fish internally generates named events, for example,when showing the prompt. Custom events can be emitted using the \fI\%emit\fP command.
+Run this function when the specified named event is emitted. Fish internally generates named events, for example, when showing the prompt. Custom events can be emitted using the \fI\%emit\fP command.
 .TP
 \fB\-v\fP \fIVARIABLE_NAME\fP or \fB\-\-on\-variable\fP \fIVARIABLE_NAME\fP
 Run this function when the variable \fIVARIABLE_NAME\fP changes value. Note that \fBfish\fP makes no guarantees on any particular timing or even that the function will be run for every single \fBset\fP\&. Rather it will be run when the variable has been set at least once, possibly skipping some values or being run when the variable has been set to the same value (except for universal variables set in other shells \- only changes in the value will be picked up for those).
@@ -8507,7 +9022,7 @@ The \fB\-h\fP or \fB\-\-help\fP option displays help about using this command.
 .sp
 If the \fI\%BROWSER\fP environment variable is set, it will be used to display the documentation.
 Otherwise, fish will search for a suitable browser.
-To use a different browser than as described above, one can set the \fBfish_help_browser\fP variable.
+To use a different browser than as described above, you can set \fB$fish_help_browser\fP
 This variable may be set as a list, where the first element is the browser command and the rest are browser options.
 .SS Example
 .sp
@@ -8540,7 +9055,7 @@ The following operations (sub\-commands) are available:
 Returns history items matching the search string. If no search string is provided it returns all history items. This is the default operation if no other operation is specified. You only have to explicitly say \fBhistory search\fP if you wish to search for one of the subcommands. The \fB\-\-contains\fP search option will be used if you don\(aqt specify a different search option. Entries are ordered newest to oldest unless you use the \fB\-\-reverse\fP flag. If stdout is attached to a tty the output will be piped through your pager by the history function. The history builtin simply writes the results to stdout.
 .TP
 \fBdelete\fP
-Deletes history items. The \fB\-\-contains\fP search option will be used if you don\(aqt specify a different search option. If you don\(aqt specify \fB\-\-exact\fP a prompt will be displayed before any items are deleted asking you which entries are to be deleted. You can enter the word \(dqall\(dq to delete all matching entries. You can enter a single ID (the number in square brackets) to delete just that single entry. You can enter more than one ID separated by a space to delete multiple entries. Just press [enter] to not delete anything. Note that the interactive delete behavior is a feature of the history function. The history builtin only supports \fB\-\-exact \-\-case\-sensitive\fP deletion.
+Deletes history items. The \fB\-\-contains\fP search option will be used if you don\(aqt specify a different search option. If you don\(aqt specify \fB\-\-exact\fP a prompt will be displayed before any items are deleted asking you which entries are to be deleted. You can enter the word \(dqall\(dq to delete all matching entries. You can enter a single ID (the number in square brackets) to delete just that single entry. You can enter more than one ID, or an ID range separated by a space to delete multiple entries. Just press [enter] to not delete anything. Note that the interactive delete behavior is a feature of the history function. The history builtin only supports \fB\-\-exact \-\-case\-sensitive\fP deletion.
 .TP
 \fBmerge\fP
 Immediately incorporates history changes from other sessions. Ordinarily \fBfish\fP ignores history changes from sessions started after the current one. This command applies those changes immediately.
@@ -8783,8 +9298,9 @@ Job Group   State   Command
 \fBmath\fP performs mathematical calculations.
 It supports simple operations such as addition, subtraction, and so on, as well as functions like \fBabs()\fP, \fBsqrt()\fP and \fBln()\fP\&.
 .sp
-By default, the output is a floating\-point number with trailing zeroes trimmed.
-To get a fixed representation, the \fB\-\-scale\fP option can be used, including \fB\-\-scale=0\fP for integer output.
+By default, the output shows up to 6 decimal places.
+To change the number of decimal places, use the \fB\-\-scale\fP option, including \fB\-\-scale=0\fP for integer output.
+Trailing zeroes will always be trimmed.
 .sp
 Keep in mind that parameter expansion happens before expressions are evaluated.
 This can be very useful in order to perform calculations involving shell variables or the output of command substitutions, but it also means that parenthesis (\fB()\fP) and the asterisk (\fB*\fP) glob character have to be escaped or quoted.
@@ -10299,7 +10815,7 @@ echo hello|read foo
 .UNINDENT
 .UNINDENT
 .sp
-While this is a neat way to handle command output line\-by\-line:
+The \fI\%while\fP command is a neat way to handle command output line\-by\-line:
 .INDENT 0.0
 .INDENT 3.5
 .sp
@@ -10338,7 +10854,7 @@ echo \(aqa\e b\(aq | read \-t first second
 echo $first # outputs \(dqa b\(dq, $second is empty
 
 echo \(aqa\(dqfoo bar\(dqb (command echo wurst)*\(dq \(dq{a,b}\(aq | read \-lt \-l a b c
-echo $a # outputs \(aqafoo bar\(aq (without the quotes)
+echo $a # outputs \(aqafoo barb\(aq (without the quotes)
 echo $b # outputs \(aq(command echo wurst)* {a,b}\(aq (without the quotes)
 echo $c # nothing
 .ft P
@@ -10426,7 +10942,7 @@ If both \fINAME\fP and \fIVALUE\fP are provided, \fBset\fP assigns any values to
 Variables in fish are \fI\%lists\fP, multiple values are allowed.
 One or more variable \fIINDEX\fP can be specified including ranges (not for all options.)
 .sp
-If no \fIVALUE\fP is given, the variable will be set to the empty list i.e. \fB\(aq\(aq\fP\&.
+If no \fIVALUE\fP is given, the variable will be set to the empty list.
 .sp
 If \fBset\fP is ran without arguments, it prints the names and values of all shell variables in sorted order.
 Passing \fI\%scope\fP or \fI\%export\fP flags allows filtering this to only matching variables, so \fBset \-\-local\fP would only show local variables.
@@ -10435,12 +10951,12 @@ With \fB\-\-erase\fP and optionally a scope flag \fBset\fP will erase the matchi
 .sp
 With \fB\-\-show\fP, \fBset\fP will describe the given variable names, explaining how they have been defined \- in which scope with which values and options.
 .sp
-The following scope control variable scope:
+The following options control variable scope:
 .INDENT 0.0
 .TP
 \fB\-U\fP or \fB\-\-universal\fP
 Sets a universal variable.
-The variable will be immediately available to all the user\(aqs \fBfish\fP instances on the machine, and will be persist across restarts of the shell.
+The variable will be immediately available to all the user\(aqs \fBfish\fP instances on the machine, and will be persisted across restarts of the shell.
 .TP
 \fB\-f\fP or \fB\-\-function\fP
 Sets a variable scoped to the executing function.
@@ -10453,8 +10969,8 @@ Outside of a block, this is the same as \fB\-\-function\fP\&.
 .TP
 \fB\-g\fP or \fB\-\-global\fP
 Sets a globally\-scoped variable.
-Global variables don\(aqt disappear and are available to all functions running in the same shell.
-They can even be modified.
+Global variables are available to all functions running in the same shell.
+They can be modified or erased.
 .UNINDENT
 .sp
 These options modify how variables operate:
@@ -10467,10 +10983,10 @@ Causes the specified shell variable to be exported to child processes (making it
 Causes the specified shell variable to NOT be exported to child processes.
 .TP
 \fB\-\-path\fP
-Treat specified variable as a \fI\%path variable\fP; variable will be split on colons (\fB:\fP) and will be displayed joined by colons colons when quoted (\fBecho \(dq$PATH\(dq\fP) or exported.
+Treat specified variable as a \fI\%path variable\fP; variable will be split on colons (\fB:\fP) and will be displayed joined by colons when quoted (\fBecho \(dq$PATH\(dq\fP) or exported.
 .TP
 \fB\-\-unpath\fP
-Causes variable to no longer be tred as a \fI\%path variable\fP\&.
+Causes variable to no longer be treated as a \fI\%path variable\fP\&.
 Note: variables ending in \(dqPATH\(dq are automatically path variables.
 .UNINDENT
 .sp
@@ -10612,7 +11128,7 @@ Remove _$smurf_ from the scope:
 .UNINDENT
 .UNINDENT
 .sp
-Remove _$smurf_ from the global and universal scoeps:
+Remove _$smurf_ from the global and universal scopes:
 .INDENT 0.0
 .INDENT 3.5
 .sp
@@ -10798,7 +11314,7 @@ Detect support for italics, dim, reverse and other modes.
 .sp
 If terminfo reports 256 color support for a terminal, 256 color support will always be enabled.
 .sp
-To force true\-color support on or off, set \fBfish_term24bit\fP to \(dq1\(dq for on and 0 for off \- \fBset \-g fish_term24bit 1\fP\&.
+To force true\-color support on or off, set \fI\%fish_term24bit\fP to \(dq1\(dq for on and 0 for off \- \fBset \-g fish_term24bit 1\fP\&.
 .sp
 To debug color palette problems, \fBtput colors\fP may be useful to see the number of colors in terminfo for a terminal. Fish launched as \fBfish \-d term_support\fP will include diagnostic messages that indicate the color support mode in use.
 .sp
@@ -11179,6 +11695,12 @@ axxb
 >_ string match \-i \(aqa??B\(aq Axxb
 Axxb
 
+>_ string match \-\- \(aq\-*\(aq \-h foo \-\-version bar
+# To match things that look like options, we need a \(ga\-\-\(ga
+# to tell string its options end there.
+\-h
+\-\-version
+
 >_ echo \(aqok?\(aq | string match \(aq*\e?\(aq
 ok?
 
@@ -11214,6 +11736,12 @@ cat3
 dog3
 cat4
 dog4
+
+>_ string match \-r \-\- \(aq\-.*\(aq \-h foo \-\-version bar
+# To match things that look like options, we need a \(ga\-\-\(ga
+# to tell string its options end there.
+\-h
+\-\-version
 
 >_ string match \-r \(aq(\ed\ed?):(\ed\ed):(\ed\ed)\(aq 2:34:56
 2:34:56
@@ -11938,6 +12466,12 @@ axxb
 >_ string match \-i \(aqa??B\(aq Axxb
 Axxb
 
+>_ string match \-\- \(aq\-*\(aq \-h foo \-\-version bar
+# To match things that look like options, we need a \(ga\-\-\(ga
+# to tell string its options end there.
+\-h
+\-\-version
+
 >_ echo \(aqok?\(aq | string match \(aq*\e?\(aq
 ok?
 
@@ -11973,6 +12507,12 @@ cat3
 dog3
 cat4
 dog4
+
+>_ string match \-r \-\- \(aq\-.*\(aq \-h foo \-\-version bar
+# To match things that look like options, we need a \(ga\-\-\(ga
+# to tell string its options end there.
+\-h
+\-\-version
 
 >_ string match \-r \(aq(\ed\ed?):(\ed\ed):(\ed\ed)\(aq 2:34:56
 2:34:56
@@ -12495,7 +13035,7 @@ Note that \fI\%break\fP cannot be used to exit a case/switch block early like in
 Note that command substitutions in a case statement will be evaluated even if its body is not taken. All substitutions, including command substitutions, must be performed before the value can be compared against the parameter.
 .SS Example
 .sp
-If the variable \fBanimal\fP contains the name of an animal, the following code would attempt to classify it:
+If the variable \fB$animal\fP contains the name of an animal, the following code would attempt to classify it:
 .INDENT 0.0
 .INDENT 3.5
 .sp
@@ -15119,7 +15659,110 @@ complete \-c myprog \-s o \-l output \-a \(dqyes no\(dq
 .UNINDENT
 .UNINDENT
 .sp
-There are also special switches for specifying that a switch requires an argument, to disable filename completion, to create completions that are only available in some combinations, etc..  For a complete description of the various switches accepted by the \fBcomplete\fP command, see the documentation for the \fI\%complete\fP builtin, or write \fBcomplete \-\-help\fP inside the \fBfish\fP shell.
+In the complete call above, the \fB\-a\fP arguments apply when the option \-o/\-\-output has been given, so this offers them for:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+> myprog \-o<TAB>
+> myprog \-\-output=<TAB>
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+By default, option arguments are \fIoptional\fP, so the candidates are only offered directly attached like that, so they aren\(aqt given in this case:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+> myprog \-o <TAB>
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+Usually options \fIrequire\fP a parameter, so you would give \fB\-\-require\-parameter\fP / \fB\-r\fP:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+complete \-c myprog \-s o \-l output \-ra \(dqyes no\(dq
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+which offers yes/no in these cases:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+> myprog \-o<TAB>
+> myprog \-\-output=<TAB>
+> myprog \-o <TAB>
+> myprog \-\-output <TAB>
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+In the latter two cases, files will also be offered because file completion is enabled by default.
+.sp
+You would either inhibit file completion for a single option:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+complete \-c myprog \-s o \-l output \-\-no\-files \-ra \(dqyes no\(dq
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+or with a specific condition:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+complete \-c myprog \-f \-\-condition \(aq__fish_seen_subcommand_from somesubcommand\(aq
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+or you can disable file completions globally for the command:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+complete \-c myprog \-f
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+If you have disabled them globally, you can enable them just for a specific condition or option with the \fB\-\-force\-files\fP / \fB\-F\fP option:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+# Disable files by default
+complete \-c myprog \-f
+# but reenable them for \-\-config\-file
+complete \-c myprog \-l config\-file \-\-force\-files \-r
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
 .sp
 As a more comprehensive example, here\(aqs a commented excerpt of the completions for systemd\(aqs \fBtimedatectl\fP:
 .INDENT 0.0
@@ -15187,7 +15830,7 @@ complete \-c timedatectl \-l no\-pager \-d \(aqDo not pipe output into a pager\(
 For examples of how to write your own complex completions, study the completions in \fB/usr/share/fish/completions\fP\&. (The exact path depends on your chosen installation prefix and may be slightly different)
 .SS Useful functions for writing completions
 .sp
-\fBfish\fP ships with several functions that are very useful when writing command specific completions. Most of these functions name begins with the string \fB__fish_\fP\&. Such functions are internal to \fBfish\fP and their name and interface may change in future fish versions. Still, some of them may be very useful when writing completions. A few of these functions are described here. Be aware that they may be removed or changed in future versions of fish.
+\fBfish\fP ships with several functions that may be useful when writing command\-specific completions. Most of these function names begin with the string \fB__fish_\fP\&. Such functions are internal to \fBfish\fP and their name and interface may change in future fish versions. A few of these functions are described here.
 .sp
 Functions beginning with the string \fB__fish_print_\fP print a newline separated list of strings. For example, \fB__fish_print_filesystems\fP prints a list of all known file systems. Functions beginning with \fB__fish_complete_\fP print out a newline separated list of completions with descriptions. The description is separated from the completion by a tab character.
 .INDENT 0.0
@@ -15236,9 +15879,285 @@ These paths are controlled by parameters set at build, install, or run time, and
 .sp
 This wide search may be confusing. If you are unsure, your completions probably belong in \fB~/.config/fish/completions\fP\&.
 .sp
-If you have written new completions for a common Unix command, please consider sharing your work by submitting it via the instructions in \fI\%Further help and development\fP
+If you have written new completions for a common Unix command, please consider sharing your work by submitting it via the instructions in \fI\%Further help and development\fP\&.
 .sp
 If you are developing another program and would like to ship completions with your program, install them to the \(dqvendor\(dq completions directory. As this path may vary from system to system, the \fBpkgconfig\fP framework should be used to discover this path with the output of \fBpkg\-config \-\-variable completionsdir fish\fP\&.
+.SS Writing your own prompt
+.sp
+\fBWARNING:\fP
+.INDENT 0.0
+.INDENT 3.5
+This document uses formatting to show what a prompt would look like. If you are viewing this in the man page,
+you probably want to switch to looking at the html version instead. Run \fBhelp custom\-prompt\fP to view it in a web browser.
+.UNINDENT
+.UNINDENT
+.sp
+Fish ships a number of prompts that you can view with the \fI\%fish_config\fP command, and many users have shared their prompts online.
+.sp
+However, you can also write your own, or adjust an existing prompt. This is a good way to get used to fish\(aqs \fI\%scripting language\fP\&.
+.sp
+Unlike other shells, fish\(aqs prompt is built by running a function \- \fI\%fish_prompt\fP\&. Or, more specifically, three functions:
+.INDENT 0.0
+.IP \(bu 2
+\fI\%fish_prompt\fP, which is the main prompt function
+.IP \(bu 2
+\fI\%fish_right_prompt\fP, which is shown on the right side of the terminal.
+.IP \(bu 2
+\fI\%fish_mode_prompt\fP, which is shown if \fI\%vi\-mode\fP is used.
+.UNINDENT
+.sp
+These functions are run, and whatever they print is displayed as the prompt (minus one trailing newline).
+.sp
+Here, we will just be writing a simple fish_prompt.
+.SS Our first prompt
+.sp
+Let\(aqs look at a very simple example:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+function fish_prompt
+    echo $PWD \(aq>\(aq
+end
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+This prints the current working directory (\fI\%PWD\fP) and a \fB>\fP symbol to show where the prompt ends. The \fB>\fP is \fI\%quoted\fP because otherwise it would signify a \fI\%redirection\fP\&.
+.sp
+Because we\(aqve used \fI\%echo\fP, it adds spaces between the two so it ends up looking like (assuming \fB_\fP is your cursor):
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+/home/tutorial >_
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.SS Formatting
+.sp
+\fBecho\fP adds spaces between its arguments. If you don\(aqt want those, you can use \fI\%string join\fP like this:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+function fish_prompt
+    string join \(aq\(aq \-\- $PWD \(aq>\(aq
+end
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+The \fB\-\-\fP indicates to \fBstring\fP that no options can come after it, in case we extend this with something that can start with a \fB\-\fP\&.
+.sp
+There are other ways to remove the space, including \fBecho \-s\fP and \fI\%printf\fP\&.
+.SS Adding colo(u)r
+.sp
+This prompt is functional, but a bit boring. We could add some color.
+.sp
+Fortunately, fish offers the \fI\%set_color\fP command, so you can do:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+echo (set_color red)foo
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+\fBset_color\fP can also handle RGB colors like \fBset_color 23b455\fP, and other formatting options including bold and italics.
+.sp
+So, taking our previous prompt and adding some color:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+function fish_prompt
+    string join \(aq\(aq \-\- (set_color green) $PWD (set_color normal) \(aq>\(aq
+end
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+A \(dqnormal\(dq color tells the terminal to go back to its normal formatting options.
+.sp
+What \fBset_color\fP does internally is to print an escape sequence that tells the terminal to change color. So if you see something like:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+echo \ee\e[31mfoo
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+that could just be \fBset_color red\fP\&.
+.SS Shortening the working directory
+.sp
+This is fine, but our \fI\%PWD\fP can be a bit long, and we are typically only interested in the last few directories. We can shorten this with the \fI\%prompt_pwd\fP helper that will give us a shortened working directory:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+function fish_prompt
+    string join \(aq\(aq \-\- (set_color green) (prompt_pwd) (set_color normal) \(aq>\(aq
+end
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+\fBprompt_pwd\fP takes options to control how much to shorten. For instance, if we want to display the last two directories, we\(aqd use \fBprompt_pwd \-\-full\-length\-dirs 2\fP:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+function fish_prompt
+    string join \(aq\(aq \-\- (set_color green) (prompt_pwd \-\-full\-length\-dirs 2) (set_color normal) \(aq>\(aq
+end
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+With a current directory of \(dq/home/tutorial/Music/Lena Raine/Oneknowing\(dq, this would print
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+~/M/Lena Raine/Oneknowing>_
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.SS Status
+.sp
+One important bit of information that every command returns is the \fI\%status\fP\&. This is a whole number from 0 to 255, and usually it is used as an error code \- 0 if the command returned successfully, or a number from 1 to 255 if not.
+.sp
+It\(aqs useful to display this in your prompt, but showing it when it\(aqs 0 seems kind of wasteful.
+.sp
+First of all, since every command (except for \fI\%set\fP) changes the status, you need to store it for later use as the first thing in your prompt. Use a \fI\%local variable\fP so it will be confined to your prompt function:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+set \-l last_status $status
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+And after that, you can set a string if it not zero:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+# Prompt status only if it\(aqs not 0
+set \-l stat
+if test $last_status \-ne 0
+    set stat (set_color red)\(dq[$last_status]\(dq(set_color normal)
+end
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+And to print it, we add it to our \fBstring join\fP:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+string join \(aq\(aq \-\- (set_color green) (prompt_pwd) (set_color normal) $stat \(aq>\(aq
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+If \fB$last_status\fP was 0, \fB$stat\fP is empty, and so it will simply disappear.
+.sp
+So our entire prompt is now:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+function fish_prompt
+    set \-l last_status $status
+    # Prompt status only if it\(aqs not 0
+    set \-l stat
+    if test $last_status \-ne 0
+        set stat (set_color red)\(dq[$last_status]\(dq(set_color normal)
+    end
+
+    string join \(aq\(aq \-\- (set_color green) (prompt_pwd) (set_color normal) $stat \(aq>\(aq
+end
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+And it looks like:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+~/M/L/Oneknowing[1]>_
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+after we run \fBfalse\fP (which returns 1).
+.SS Where to go from here?
+.sp
+We have now built a simple but working and usable prompt, but of course more can be done.
+.INDENT 0.0
+.IP \(bu 2
+Fish offers more helper functions:
+\- \fBprompt_login\fP to describe the user/hostname/container or \fBprompt_hostname\fP to describe just the host
+\- \fBfish_is_root_user\fP to help with changing the symbol for root.
+\- \fBfish_vcs_prompt\fP to show version control information (or \fBfish_git_prompt\fP / \fBfish_hg_prompt\fP / \fBfish_svn_prompt\fP to limit it to specific systems)
+.IP \(bu 2
+You can add a right prompt by changing \fI\%fish_right_prompt\fP or a vi\-mode prompt by changing \fI\%fish_mode_prompt\fP\&.
+.IP \(bu 2
+Some prompts have interesting or advanced features
+\- Add the time when the prompt was printed
+\- Show various integrations like python\(aqs venv
+\- Color the parts differently.
+.UNINDENT
+.sp
+You can look at fish\(aqs sample prompts for inspiration. Open up \fI\%fish_config\fP, find one you like and pick it. For example:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+fish_config prompt show # <\- shows all the sample prompts
+fish_config prompt choose disco # <\- this picks the \(dqdisco\(dq prompt for this session
+funced fish_prompt # <\- opens fish_prompt in your editor, and reloads it once the editor exits
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
 .SS Design
 .sp
 This is a description of the design principles that have been used to design fish. The fish design has three high level goals. These are:
@@ -15339,6 +16258,408 @@ The help manual should be easy to read, easily available from the shell, complet
 The language should be uniform, so that once the user understands the command/argument syntax, they will know the whole language, and be able to use tab\-completion to discover new features.
 .UNINDENT
 .SS Release notes
+.SS fish 3.7.1 (released March 19, 2024)
+.sp
+This release of fish fixes the following problems identified in fish 3.7.0:
+.INDENT 0.0
+.IP \(bu 2
+Deleting the last history entry via \fBhistory delete\fP works again (\fI\%#10190\fP).
+.IP \(bu 2
+Wildcards (\fB*\fP) will no longer sometimes generate paths that did not exist (\fI\%#10205\fP).
+.UNINDENT
+.sp
+This release also contains some improvements:
+.INDENT 0.0
+.IP \(bu 2
+A crash when trying to run an ELF program with a missing interpreter has been fixed. This crashed in the process after fork, so did not affect the fish process that tried to start the program (\fI\%#10199\fP).
+.IP \(bu 2
+\fBfunced\fP will now always \fBsource\fP the file after it has written it, even if the contents did not change. This prevents issues if the file was otherwise modified (\fI\%#10318\fP).
+.IP \(bu 2
+The warning for when a builtin returns a negative exit code was improved, now mentioning the original status (\fI\%#10187\fP).
+.IP \(bu 2
+Added completions for
+.INDENT 2.0
+.IP \(bu 2
+\fBcobra\-cli\fP (\fI\%#10293\fP)
+.IP \(bu 2
+\fBdmidecode\fP (\fI\%#10368\fP)
+.IP \(bu 2
+\fBmycli\fP (\fI\%#10309\fP)
+.IP \(bu 2
+\fBollama\fP (\fI\%#10327\fP)
+.IP \(bu 2
+\fBpstree\fP (\fI\%#10317\fP)
+.UNINDENT
+.IP \(bu 2
+Some improvements to documentation and completions.
+.UNINDENT
+
+.sp
+.ce
+----
+
+.ce 0
+.sp
+.SS fish 3.7.0 (released January 1, 2024)
+.sp
+This release of fish includes a number of improvements over fish 3.6.4, detailed below. Although work continues on the porting of fish internals to the Rust programming language, that work is not included in this release. fish 3.7.0 and any future releases in the 3.7 series remain C++ programs.
+.SS Notable improvements and fixes
+.INDENT 0.0
+.IP \(bu 2
+Improvements to the history pager, including:
+.INDENT 2.0
+.IP \(bu 2
+The history pager will now also attempt subsequence matches (\fI\%#9476\fP), so you can find a command line like \fBgit log 3.6.1..Integration_3.7.0\fP by searching for \fBgitInt\fP\&.
+.IP \(bu 2
+Opening the history pager will now fill the search field with a search string if you\(aqre already in a search (\fI\%#10005\fP). This makes it nicer to search something with \fB↑\fP and then later decide to switch to the full pager.
+.IP \(bu 2
+Closing the history pager with enter will now copy the search text to the commandline if there was no match, so you can continue editing the command you tried to find right away (\fI\%#9934\fP).
+.UNINDENT
+.IP \(bu 2
+Performance improvements for command completions and globbing, where supported by the operating system, especially on slow filesystems such as NFS (\fI\%#9891\fP, \fI\%#9931\fP, \fI\%#10032\fP, \fI\%#10052\fP).
+.IP \(bu 2
+fish can now be configured to wait a specified amount of time for a multi\-key sequence to be completed,  instead of waiting indefinitely. For example, this makes binding \fBkj\fP to switching modes in vi mode possible.
+The timeout can be set via the new \fI\%fish_sequence_key_delay_ms\fP variable (\fI\%#7401\fP), and may be set by default in future versions.
+.UNINDENT
+.SS Deprecations and removed features
+.INDENT 0.0
+.IP \(bu 2
+\fBLS_COLORS\fP is no longer set automatically by the \fBls\fP function (\fI\%#10080\fP). Users
+that set \fB\&.dircolors\fP should manually import it using other means. Typically this would be \fBset \-gx LS_COLORS (dircolors \-c .dircolors | string split \(aq \(aq)[3]\fP
+.UNINDENT
+.SS Scripting improvements
+.INDENT 0.0
+.IP \(bu 2
+Running \fBexit\fP with a negative number no longer crashes fish (\fI\%#9659\fP).
+.IP \(bu 2
+\fBfish \-\-command\fP will now return a non\-zero status if parsing failed (\fI\%#9888\fP).
+.IP \(bu 2
+The \fBjobs\fP builtin will now escape the commands it prints (\fI\%#9808\fP).
+.IP \(bu 2
+\fBstring repeat\fP no longer overflows if the count is a multiple of the chunk size (\fI\%#9900\fP).
+.IP \(bu 2
+The \fBbuiltin\fP builtin will now properly error out with invalid arguments instead of doing nothing and returning true (\fI\%#9942\fP).
+.IP \(bu 2
+\fBcommand time\fP in a pipeline is allowed again, as is \fBcommand and\fP and \fBcommand or\fP (\fI\%#9985\fP).
+.IP \(bu 2
+\fBexec\fP will now also apply variable overrides, so \fBFOO=bar exec\fP will now set \fB$FOO\fP correctly (\fI\%#9995\fP).
+.IP \(bu 2
+\fBumask\fP will now handle empty symbolic modes correctly, like \fBumask u=,g=rwx,o=\fP (\fI\%#10177\fP).
+.IP \(bu 2
+Improved error messages for errors occurring in command substitutions (\fI\%#10054\fP).
+.UNINDENT
+.SS Interactive improvements
+.INDENT 0.0
+.IP \(bu 2
+\fBread\fP no longer enables bracketed paste so it doesn\(aqt stay enabled in combined commandlines like \fBmysql \-p(read \-\-silent)\fP (\fI\%#8285\fP).
+.IP \(bu 2
+Vi mode now uses \fBfish_cursor_external\fP to set the cursor shape for external commands (\fI\%#4656\fP).
+.IP \(bu 2
+Opening the history search in vi mode switches to insert mode correctly (\fI\%#10141\fP).
+.IP \(bu 2
+Vi mode cursor shaping is now enabled in iTerm2 (\fI\%#9698\fP).
+.IP \(bu 2
+Working directory reporting is enabled for iTerm2 (\fI\%#9955\fP).
+.IP \(bu 2
+Completing commands as root includes commands not owned by root, fixing a regression introduced in fish 3.2.0 (\fI\%#9699\fP).
+.IP \(bu 2
+Selection uses \fBfish_color_selection\fP for the foreground and background colors, as intended, rather than just the background (\fI\%#9717\fP).
+.IP \(bu 2
+The completion pager will no longer sometimes skip the last entry when moving through a long list (\fI\%#9833\fP).
+.IP \(bu 2
+The interactive \fBhistory delete\fP interface now allows specifying index ranges like \(dq1..5\(dq (\fI\%#9736\fP), and \fBhistory delete \-\-exact\fP now properly saves the history (\fI\%#10066\fP).
+.IP \(bu 2
+Command completion will now call the stock \fBmanpath\fP on macOS, instead of a potential Homebrew version. This prevents awkward error messages (\fI\%#9817\fP).
+.IP \(bu 2
+A new bind function \fBhistory\-pager\-delete\fP, bound to \fBShift\fP + \fBDelete\fP by default, will delete the currently\-selected history pager item from history (\fI\%#9454\fP).
+.IP \(bu 2
+\fBfish_key_reader\fP will now use printable characters as\-is, so pressing \(dqö\(dq no longer leads to it telling you to bind \fB\eu00F6\fP (\fI\%#9986\fP).
+.IP \(bu 2
+\fBopen\fP can be used to launch terminal programs again, as an \fBxdg\-open\fP bug has been fixed and a workaround has been removed  (\fI\%#10045\fP).
+.IP \(bu 2
+The \fBrepaint\-mode\fP binding will now only move the cursor if there is repainting to be done. This fixes \fBAlt\fP combination bindings in vi mode (\fI\%#7910\fP).
+.IP \(bu 2
+A new \fBclear\-screen\fP bind function is used for \fBCtrl\fP + \fBl\fP by default. This clears the screen and repaints the existing prompt at first,
+so it eliminates visible flicker unless the terminal is very slow (\fI\%#10044\fP).
+.IP \(bu 2
+The \fBalias\fP convenience function has better support for commands with unusual characters, like \fB+\fP (\fI\%#8720\fP).
+.IP \(bu 2
+A longstanding issue where items in the pager would sometimes display without proper formatting has been fixed (\fI\%#9617\fP).
+.IP \(bu 2
+The \fBAlt\fP + \fBl\fP binding, which lists the directory of the token under the cursor, correctly expands tilde (\fB~\fP) to the home directory (\fI\%#9954\fP).
+.IP \(bu 2
+Various fish utilities that use an external pager will now try a selection of common pagers if the \fBPAGER\fP environment variable is not set, or write the output to the screen without a pager if there is not one available (\fI\%#10074\fP).
+.IP \(bu 2
+Command\-specific tab completions may now offer results whose first character is a period. For example, it is now possible to tab\-complete \fBgit add\fP for files with leading periods. The default file completions hide these files, unless the token itself has a leading period (\fI\%#3707\fP).
+.UNINDENT
+.SS Improved prompts
+.INDENT 0.0
+.IP \(bu 2
+The default theme now only uses named colors, so it will track the terminal\(aqs palette (\fI\%#9913\fP).
+.IP \(bu 2
+The Dracula theme has now been synced with upstream (\fI\%#9807\fP); use \fBfish_config\fP to re\-apply it to pick up the changes.
+.IP \(bu 2
+\fBfish_vcs_prompt\fP now also supports fossil (\fI\%#9497\fP).
+.IP \(bu 2
+Prompts which display the working directory using the \fBprompt_pwd\fP function correctly display directories beginning with dashes (\fI\%#10169\fP).
+.UNINDENT
+.SS Completions
+.INDENT 0.0
+.IP \(bu 2
+Added completions for:
+.INDENT 2.0
+.IP \(bu 2
+\fBage\fP and \fBage\-keygen\fP (\fI\%#9813\fP)
+.IP \(bu 2
+\fBairmon\-ng\fP (\fI\%#10116\fP)
+.IP \(bu 2
+\fBar\fP (\fI\%#9720\fP)
+.IP \(bu 2
+\fBblender\fP (\fI\%#9905\fP)
+.IP \(bu 2
+\fBbws\fP (\fI\%#10165\fP)
+.IP \(bu 2
+\fBcalendar\fP (\fI\%#10138\fP)
+.IP \(bu 2
+\fBcheckinstall\fP (\fI\%#10106\fP)
+.IP \(bu 2
+\fBcrc\fP (\fI\%#10034\fP)
+.IP \(bu 2
+\fBdoctl\fP
+.IP \(bu 2
+\fBgimp\fP (\fI\%#9904\fP)
+.IP \(bu 2
+\fBgojq\fP (\fI\%#9740\fP)
+.IP \(bu 2
+\fBhorcrux\fP (\fI\%#9922\fP)
+.IP \(bu 2
+\fBibmcloud\fP (\fI\%#10004\fP)
+.IP \(bu 2
+\fBiwctl\fP (\fI\%#6884\fP)
+.IP \(bu 2
+\fBjava_home\fP (\fI\%#9998\fP)
+.IP \(bu 2
+\fBkrita\fP (\fI\%#9903\fP)
+.IP \(bu 2
+\fBoc\fP (\fI\%#10034\fP)
+.IP \(bu 2
+\fBqjs\fP (\fI\%#9723\fP)
+.IP \(bu 2
+\fBqjsc\fP (\fI\%#9731\fP)
+.IP \(bu 2
+\fBrename\fP (\fI\%#10136\fP)
+.IP \(bu 2
+\fBrpm\-ostool\fP (\fI\%#9669\fP)
+.IP \(bu 2
+\fBsmerge\fP (\fI\%#10135\fP)
+.IP \(bu 2
+\fBuserdel\fP (\fI\%#10056\fP)
+.IP \(bu 2
+\fBwatchexec\fP (\fI\%#10027\fP)
+.IP \(bu 2
+\fBwpctl\fP (\fI\%#10043\fP)
+.IP \(bu 2
+\fBxxd\fP (\fI\%#10137\fP)
+.IP \(bu 2
+\fBzabbix\fP (\fI\%#9647\fP)
+.UNINDENT
+.IP \(bu 2
+The \fBzfs\fP completions no longer print errors about setting a read\-only variable (\fI\%#9705\fP).
+.IP \(bu 2
+The \fBkitty\fP completions have been removed in favor of keeping them upstream (\fI\%#9750\fP).
+.IP \(bu 2
+\fBgit\fP completions now support aliases that reference other aliases (\fI\%#9992\fP).
+.IP \(bu 2
+The \fBgw\fP and \fBgradlew\fP completions are loaded properly (\fI\%#10127\fP).
+.IP \(bu 2
+Improvements to many other completions.
+.IP \(bu 2
+Improvements to the manual page completion generator (\fI\%#9787\fP, \fI\%#9814\fP, \fI\%#9961\fP).
+.UNINDENT
+.SS Other improvements
+.INDENT 0.0
+.IP \(bu 2
+Improvements and corrections to the documentation.
+.IP \(bu 2
+The Web\-based configuration now uses a more readable style when printed, such as for a keybinding reference (\fI\%#9828\fP).
+.IP \(bu 2
+Updates to the German translations (\fI\%#9824\fP).
+.IP \(bu 2
+The colors of the Nord theme better match their official style (\fI\%#10168\fP).
+.UNINDENT
+.SS For distributors
+.INDENT 0.0
+.IP \(bu 2
+The licensing information for some of the derived code distributed with fish was incomplete. Though the license information was present in the source distribution, it was not present in the documentation. This has been corrected (\fI\%#10162\fP).
+.IP \(bu 2
+The CMake configure step will now also look for libterminfo as an alternative name for libtinfo, as used in NetBSD curses (\fI\%#9794\fP).
+.UNINDENT
+
+.sp
+.ce
+----
+
+.ce 0
+.sp
+.SS fish 3.6.4 (released December 5, 2023)
+.sp
+This release contains a complete fix for the test suite failure in fish 3.6.2 and 3.6.3.
+
+.sp
+.ce
+----
+
+.ce 0
+.sp
+.SS fish 3.6.3 (released December 4, 2023)
+.sp
+This release contains a fix for a test suite failure in fish 3.6.2.
+
+.sp
+.ce
+----
+
+.ce 0
+.sp
+.SS fish 3.6.2 (released December 4, 2023)
+.sp
+This release of fish contains a security fix for CVE\-2023\-49284, a minor security problem identified
+in fish 3.6.1 and previous versions (thought to affect all released versions of fish).
+.sp
+fish uses certain Unicode non\-characters internally for marking wildcards and expansions. It
+incorrectly allowed these markers to be read on command substitution output, rather than
+transforming them into a safe internal representation.
+.sp
+For example, \fBecho \eUFDD2HOME\fP has the same output as \fBecho $HOME\fP\&.
+.sp
+While this may cause unexpected behavior with direct input, this may become a minor security problem
+if the output is being fed from an external program into a command substitution where this output
+may not be expected.
+
+.sp
+.ce
+----
+
+.ce 0
+.sp
+.SS fish 3.6.1 (released March 25, 2023)
+.sp
+This release of fish contains a number of fixes for problems identified in fish 3.6.1, as well as some enhancements.
+.SS Notable improvements and fixes
+.INDENT 0.0
+.IP \(bu 2
+.INDENT 2.0
+.TP
+.B \fBabbr \-\-erase\fP now also erases the universal variables used by the old abbr function. That means::
+abbr \-\-erase (abbr \-\-list)
+.UNINDENT
+.sp
+can now be used to clean out all old abbreviations (\fI\%#9468\fP).
+.IP \(bu 2
+\fBabbr \-\-add \-\-universal\fP now warns about \fB\-\-universal\fP being non\-functional, to make it easier to detect old\-style \fBabbr\fP calls (\fI\%#9475\fP).
+.UNINDENT
+.SS Deprecations and removed features
+.INDENT 0.0
+.IP \(bu 2
+The Web\-based configuration for abbreviations has been removed, as it was not functional with the changes abbreviations introduced in 3.6.0 (\fI\%#9460\fP).
+.UNINDENT
+.SS Scripting improvements
+.INDENT 0.0
+.IP \(bu 2
+\fBabbr \-\-list\fP no longer escapes the abbr name, which is necessary to be able to pass it to \fBabbr \-\-erase\fP (\fI\%#9470\fP).
+.IP \(bu 2
+\fBread\fP will now print an error if told to set a read\-only variable, instead of silently doing nothing (\fI\%#9346\fP).
+.IP \(bu 2
+\fBset_color \-v\fP no longer crashes fish (\fI\%#9640\fP).
+.UNINDENT
+.SS Interactive improvements
+.INDENT 0.0
+.IP \(bu 2
+Using \fBfish_vi_key_bindings\fP in combination with fish\(aqs \fB\-\-no\-config\fP mode works without locking up the shell (\fI\%#9443\fP).
+.IP \(bu 2
+The history pager now uses more screen space, usually half the screen (\fI\%#9458\fP)
+.IP \(bu 2
+Variables that were set while the locale was C (the default ASCII\-only locale) will now properly be encoded if the locale is switched (\fI\%#2613\fP, \fI\%#9473\fP).
+.IP \(bu 2
+Escape during history search restores the original command line again (fixing a regression in 3.6.0).
+.IP \(bu 2
+Using \fB\-\-help\fP on builtins now respects the \fB$MANPAGER\fP variable, in preference to \fB$PAGER\fP (\fI\%#9488\fP).
+.IP \(bu 2
+\fBControl\-G\fP closes the history pager, like other shells (\fI\%#9484\fP).
+.IP \(bu 2
+The documentation for the \fB:\fP, \fB[\fP and \fB\&.\fP builtin commands can now be looked up with \fBman\fP (\fI\%#9552\fP).
+.IP \(bu 2
+fish no longer crashes when searching history for non\-ASCII codepoints case\-insensitively (\fI\%#9628\fP).
+.IP \(bu 2
+The \fBAlt\-S\fP binding will now also use \fBplease\fP if available (\fI\%#9635\fP).
+.IP \(bu 2
+Themes that don\(aqt specify every color option can be installed correctly in the Web\-based configuration (\fI\%#9590\fP).
+.IP \(bu 2
+Compatibility with Midnight Commander\(aqs prompt integration has been improved (\fI\%#9540\fP).
+.IP \(bu 2
+A spurious error, noted when using fish in Google Drive directories under WSL 2, has been silenced (\fI\%#9550\fP).
+.IP \(bu 2
+Using \fBread\fP in \fBfish_greeting\fP or similar functions will not trigger an infinite loop (\fI\%#9564\fP).
+.IP \(bu 2
+Compatibility when upgrading from old versions of fish (before 3.4.0) has been improved (\fI\%#9569\fP).
+.UNINDENT
+.SS Improved prompts
+.INDENT 0.0
+.IP \(bu 2
+The git prompt will compute the stash count to be used independently of the informative status (\fI\%#9572\fP).
+.UNINDENT
+.SS Completions
+.INDENT 0.0
+.IP \(bu 2
+Added completions for:
+.INDENT 2.0
+.IP \(bu 2
+\fBapkanalyzer\fP (\fI\%#9558\fP)
+.IP \(bu 2
+\fBneovim\fP (\fI\%#9543\fP)
+.IP \(bu 2
+\fBotool\fP
+.IP \(bu 2
+\fBpre\-commit\fP (\fI\%#9521\fP)
+.IP \(bu 2
+\fBproxychains\fP (\fI\%#9486\fP)
+.IP \(bu 2
+\fBscrypt\fP (\fI\%#9583\fP)
+.IP \(bu 2
+\fBstow\fP (\fI\%#9571\fP)
+.IP \(bu 2
+\fBtrash\fP and helper utilities \fBtrash\-empty\fP, \fBtrash\-list\fP, \fBtrash\-put\fP, \fBtrash\-restore\fP (\fI\%#9560\fP)
+.IP \(bu 2
+\fBssh\-copy\-id\fP (\fI\%#9675\fP)
+.UNINDENT
+.IP \(bu 2
+Improvements to many completions, including the speed of completing directories in WSL 2 (\fI\%#9574\fP).
+.IP \(bu 2
+Completions using \fB__fish_complete_suffix\fP are now offered in the correct order, fixing a regression in 3.6.0 (\fI\%#8924\fP).
+.IP \(bu 2
+\fBgit\fP completions for \fBgit\-foo\fP\-style commands was restored, fixing a regression in 3.6.0 (\fI\%#9457\fP).
+.IP \(bu 2
+File completion now offers \fB\&../\fP and \fB\&./\fP again, fixing a regression in 3.6.0 (\fI\%#9477\fP).
+.IP \(bu 2
+The behaviour of completions using \fB__fish_complete_path\fP matches standard path completions (\fI\%#9285\fP).
+.UNINDENT
+.SS Other improvements
+.INDENT 0.0
+.IP \(bu 2
+Improvements and corrections to the documentation.
+.UNINDENT
+.SS For distributors
+.INDENT 0.0
+.IP \(bu 2
+fish 3.6.1 builds correctly on Cygwin (\fI\%#9502\fP).
+.UNINDENT
+
+.sp
+.ce
+----
+
+.ce 0
+.sp
 .SS fish 3.6.0 (released January 7, 2023)
 .SS Notable improvements and fixes
 .INDENT 0.0
@@ -20782,6 +22103,104 @@ products or services of Licensee, or any third party.
 8. By copying, installing or otherwise using Python, Licensee
 agrees to be bound by the terms and conditions of this License
 Agreement.
+.SS License for CMake
+.sp
+The \fBfish\fP source code contains files from [CMake](\fI\%https://cmake.org\fP) to support the build system.
+This code is distributed under the terms of a BSD\-style license. Copyright 2000\-2017 Kitware, Inc.
+and Contributors.
+.sp
+The BSD license for CMake follows.
+.sp
+CMake \- Cross Platform Makefile Generator
+Copyright 2000\-2017 Kitware, Inc. and Contributors
+All rights reserved.
+.sp
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions
+are met:
+.INDENT 0.0
+.IP \(bu 2
+Redistributions of source code must retain the above copyright
+notice, this list of conditions and the following disclaimer.
+.IP \(bu 2
+Redistributions in binary form must reproduce the above copyright
+notice, this list of conditions and the following disclaimer in the
+documentation and/or other materials provided with the distribution.
+.IP \(bu 2
+Neither the name of Kitware, Inc. nor the names of Contributors
+may be used to endorse or promote products derived from this
+software without specific prior written permission.
+.UNINDENT
+.sp
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+\(dqAS IS\(dq AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+.SS License for code derived from tmux
+.sp
+\fBfish\fP contains code from [tmux](\fI\%http://tmux.sourceforge.net\fP), copyrighted by Nicholas Marriott <\fI\%nicm@users.sourceforge.net\fP> (2007), and made available under the OpenBSD license.
+.sp
+The OpenBSD license is included below.
+.sp
+Permission to use, copy, modify, and distribute this software for any purpose with or without fee is hereby granted, provided that the above copyright notice and this permission notice appear in all copies.
+.sp
+THE SOFTWARE IS PROVIDED \(dqAS IS\(dq AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+.SS License for UTF8
+.sp
+\fBfish\fP also contains small amounts of code under the ISC license, namely the UTF\-8 conversion functions. This code is copyright © 2007 Alexey Vatchenko <\fI\%av@bsdua.org\fP>.
+.sp
+The ISC license agreement follows.
+.sp
+Permission to use, copy, modify, and/or distribute this software for any purpose with or without fee is hereby granted, provided that the above copyright notice and this permission notice appear in all copies.
+.sp
+THE SOFTWARE IS PROVIDED \(dqAS IS\(dq AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+.SS License for flock
+.sp
+\fBfish\fP also contains small amounts of code from NetBSD, namely the \fBflock\fP fallback function. This code is copyright 2001 The NetBSD Foundation, Inc., and derived from software contributed to The NetBSD Foundation by Todd Vierling.
+.sp
+The NetBSD license follows.
+.sp
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+.INDENT 0.0
+.IP 1. 3
+Redistributions of source code must retain the above copyright
+notice, this list of conditions and the following disclaimer.
+.IP 2. 3
+Redistributions in binary form must reproduce the above copyright
+notice, this list of conditions and the following disclaimer in the
+documentation and/or other materials provided with the distribution.
+.UNINDENT
+.sp
+THIS SOFTWARE IS PROVIDED BY THE NETBSD FOUNDATION, INC. AND CONTRIBUTORS
+\(dqAS IS\(dq AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
+TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE FOUNDATION OR CONTRIBUTORS
+BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+POSSIBILITY OF SUCH DAMAGE.
+.SS MIT License
+.sp
+\fBfish\fP includes a copy of AngularJS, which is copyright 2010\-2012 Google, Inc. and licensed under the MIT License. It also includes the Dracula theme, which is copyright 2018 Dracula Team, and the Nord theme, which is copyright 2016\-present Sven Greb. These themes are also used under the MIT license.
+.sp
+The MIT license follows.
+.sp
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the \(dqSoftware\(dq), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+.sp
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+.sp
+THE SOFTWARE IS PROVIDED \(dqAS IS\(dq, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 .SH AUTHOR
 fish-shell developers
 .SH COPYRIGHT

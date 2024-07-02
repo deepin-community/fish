@@ -27,9 +27,9 @@ level margin: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .\" new: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .in \\n[rst2man-indent\\n[rst2man-indent-level]]u
 ..
-.TH "COMPLETE" "1" "Jan 07, 2023" "3.6" "fish-shell"
+.TH "COMPLETE" "1" "Mar 19, 2024" "3.7" "fish-shell"
 .SH NAME
-complete \- edit command specific tab-completions
+complete \- edit command-specific tab-completions
 .SH SYNOPSIS
 .nf
 \fBcomplete\fP ((\fB\-c\fP | \fB\-\-command\fP) | (\fB\-p\fP | \fB\-\-path\fP)) \fICOMMAND\fP [\fIOPTIONS\fP]
@@ -98,7 +98,7 @@ When used with \fB\-C\fP, escape special characters in completions.
 Displays help about using this command.
 .UNINDENT
 .sp
-Command specific tab\-completions in \fBfish\fP are based on the notion of options and arguments. An option is a parameter which begins with a hyphen, such as \fB\-h\fP, \fB\-help\fP or \fB\-\-help\fP\&. Arguments are parameters that do not begin with a hyphen. Fish recognizes three styles of options, the same styles as the GNU getopt library. These styles are:
+Command\-specific tab\-completions in \fBfish\fP are based on the notion of options and arguments. An option is a parameter which begins with a hyphen, such as \fB\-h\fP, \fB\-help\fP or \fB\-\-help\fP\&. Arguments are parameters that do not begin with a hyphen. Fish recognizes three styles of options, the same styles as the GNU getopt library. These styles are:
 .INDENT 0.0
 .IP \(bu 2
 Short options, like \fB\-a\fP\&. Short options are a single character long, are preceded by a single hyphen and can be grouped together (like \fB\-la\fP, which is equivalent to \fB\-l \-a\fP). Option arguments may be specified by appending the option with the value (\fB\-w32\fP), or, if \fB\-\-require\-parameter\fP is given, in the following parameter (\fB\-w 32\fP).

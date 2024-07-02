@@ -1,18 +1,17 @@
-
 <!DOCTYPE html>
 
-<html lang="en">
+<html lang="en" data-content_root="../">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="generator" content="Docutils 0.19: https://docutils.sourceforge.io/" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>read - read line of input into variables &#8212; fish-shell 3.6.0 documentation</title>
-    <link rel="stylesheet" type="text/css" href="../_static/pygments.css" />
-    <link rel="stylesheet" type="text/css" href="../_static/pydoctheme.css" />
+    <title>read - read line of input into variables &#8212; fish-shell 3.7.1 documentation</title>
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=a864bcb0" />
+    <link rel="stylesheet" type="text/css" href="../_static/pydoctheme.css?v=4e2636db" />
     <link rel="stylesheet" type="text/css" href="/docs/shared/style.css" />
-    <script data-url_root="../" id="documentation_options" src="../_static/documentation_options.js"></script>
-    <script src="../_static/doctools.js"></script>
-    <script src="../_static/sphinx_highlight.js"></script>
+    <script src="../_static/documentation_options.js?v=5c477e40"></script>
+    <script src="../_static/doctools.js?v=888ff710"></script>
+    <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
     <link rel="next" title="realpath - convert a path to an absolute path without symlinks" href="realpath.html" />
@@ -28,7 +27,7 @@
              style="width: 80px; height: 80px; vertical-align: middle; margin-top: -1px"/></li>
     <li><a href="https://fishshell.com/">fish-shell</a> &#187;</li>
     
-    <a href="../index.html">fish-shell 3.6.0 documentation</a> &#187;
+    <a href="../index.html">fish-shell 3.7.1 documentation</a> &#187;
     
 
           <li class="nav-item nav-item-1"><a href="../commands.html" accesskey="U">Commands</a> &#187;</li>
@@ -69,6 +68,7 @@
 <li class="toctree-l1"><a class="reference internal" href="../fish_for_bash_users.html">Fish for bash users</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../tutorial.html">Tutorial</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../completions.html">Writing your own completions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../prompt.html">Writing your own prompt</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../design.html">Design</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../relnotes.html">Release notes</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../license.html">License</a></li>
@@ -104,15 +104,15 @@
           <div class="body" role="main">
             
   <section id="read-read-line-of-input-into-variables">
-<span id="cmd-read"></span><h1>read - read line of input into variables<a class="headerlink" href="#read-read-line-of-input-into-variables" title="Permalink to this heading">¶</a></h1>
+<span id="cmd-read"></span><h1>read - read line of input into variables<a class="headerlink" href="#read-read-line-of-input-into-variables" title="Link to this heading">¶</a></h1>
 <section id="synopsis">
-<h2>Synopsis<a class="headerlink" href="#synopsis" title="Permalink to this heading">¶</a></h2>
+<h2>Synopsis<a class="headerlink" href="#synopsis" title="Link to this heading">¶</a></h2>
 <div class="highlight-fish-synopsis notranslate"><div class="highlight"><pre><span></span><span class="nf">read</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">OPTIONS</span><span class="g g-Other">]</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">VARIABLE</span><span class="w"> </span><span class="g g-Other">...]</span>
 </pre></div>
 </div>
 </section>
 <section id="description">
-<h2>Description<a class="headerlink" href="#description" title="Permalink to this heading">¶</a></h2>
+<h2>Description<a class="headerlink" href="#description" title="Link to this heading">¶</a></h2>
 <p><code class="docutils literal notranslate"><span class="pre">read</span></code> reads from standard input and either writes the result back to standard output (for use in command substitution), or stores the result in one or more shell variables. By default, <code class="docutils literal notranslate"><span class="pre">read</span></code> reads a single line and splits it into variables on spaces or tabs. Alternatively, a null character or a maximum number of characters can be used to terminate the input, and other delimiters can be given. Unlike other shells, there is no default variable (such as <span class="target" id="index-0"></span><code class="xref std std-envvar docutils literal notranslate"><span class="pre">REPLY</span></code>) for storing the result - instead, it is printed on standard output.</p>
 <p>The following options are available:</p>
 <dl class="simple">
@@ -171,13 +171,13 @@ is set to empty and the exit status is set to 122. This limit can be altered wit
 <span class="target" id="index-2"></span><a class="reference internal" href="../language.html#envvar-fish_read_limit"><code class="xref std std-envvar docutils literal notranslate"><span class="pre">fish_read_limit</span></code></a> variable. If set to 0 (zero), the limit is removed.</p>
 </section>
 <section id="example">
-<h2>Example<a class="headerlink" href="#example" title="Permalink to this heading">¶</a></h2>
+<h2>Example<a class="headerlink" href="#example" title="Link to this heading">¶</a></h2>
 <p><code class="docutils literal notranslate"><span class="pre">read</span></code> has a few separate uses.</p>
 <p>The following code stores the value ‘hello’ in the shell variable <span class="target" id="index-3"></span><code class="xref std std-envvar docutils literal notranslate"><span class="pre">foo</span></code>.</p>
 <div class="highlight-fish-docs-samples notranslate"><div class="highlight"><pre><span></span><span class="nf">echo</span><span class="w"> </span><span class="no">hello</span><span class="p">|</span><span class="nf">read</span><span class="w"> </span><span class="no">foo</span>
 </pre></div>
 </div>
-<p>While this is a neat way to handle command output line-by-line:</p>
+<p>The <a class="reference internal" href="while.html"><span class="doc">while</span></a> command is a neat way to handle command output line-by-line:</p>
 <div class="highlight-fish-docs-samples notranslate"><div class="highlight"><pre><span></span><span class="nf">printf</span><span class="w"> </span><span class="s1">&#39;%s\n&#39;</span><span class="w"> </span><span class="no">line1</span><span class="w"> </span><span class="no">line2</span><span class="w"> </span><span class="no">line3</span><span class="w"> </span><span class="no">line4</span><span class="w"> </span><span class="p">|</span><span class="w"> </span><span class="nf">while</span><span class="w"> </span><span class="nf">read</span><span class="w"> </span><span class="no">-l</span><span class="w"> </span><span class="no">foo</span>
 <span class="w">                  </span><span class="nf">echo</span><span class="w"> </span><span class="s2">&quot;This is another line: </span><span class="o">$foo</span><span class="s2">&quot;</span>
 <span class="w">              </span><span class="nf">end</span>
@@ -195,7 +195,7 @@ is set to empty and the exit status is set to 122. This limit can be altered wit
 <span class="nf">echo</span><span class="w"> </span><span class="o">$first</span><span class="w"> </span><span class="c"># outputs &quot;a b&quot;, $second is empty</span>
 
 <span class="nf">echo</span><span class="w"> </span><span class="s1">&#39;a&quot;foo bar&quot;b (command echo wurst)*&quot; &quot;{a,b}&#39;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span><span class="nf">read</span><span class="w"> </span><span class="no">-lt</span><span class="w"> </span><span class="no">-l</span><span class="w"> </span><span class="no">a</span><span class="w"> </span><span class="no">b</span><span class="w"> </span><span class="no">c</span>
-<span class="nf">echo</span><span class="w"> </span><span class="o">$a</span><span class="w"> </span><span class="c"># outputs &#39;afoo bar&#39; (without the quotes)</span>
+<span class="nf">echo</span><span class="w"> </span><span class="o">$a</span><span class="w"> </span><span class="c"># outputs &#39;afoo barb&#39; (without the quotes)</span>
 <span class="nf">echo</span><span class="w"> </span><span class="o">$b</span><span class="w"> </span><span class="c"># outputs &#39;(command echo wurst)* {a,b}&#39; (without the quotes)</span>
 <span class="nf">echo</span><span class="w"> </span><span class="o">$c</span><span class="w"> </span><span class="c"># nothing</span>
 </pre></div>
@@ -218,7 +218,7 @@ is set to empty and the exit status is set to 122. This limit can be altered wit
              style="width: 80px; height: 80px; vertical-align: middle; margin-top: -1px"/></li>
     <li><a href="https://fishshell.com/">fish-shell</a> &#187;</li>
     
-    <a href="../index.html">fish-shell 3.6.0 documentation</a> &#187;
+    <a href="../index.html">fish-shell 3.7.1 documentation</a> &#187;
     
 
           <li class="nav-item nav-item-1"><a href="../commands.html" >Commands</a> &#187;</li>
@@ -250,12 +250,12 @@ is set to empty and the exit status is set to 122. This limit can be altered wit
     <a href="https://github.com/fish-shell/fish-shell/issues">Found a bug</a>?
     <br />
 
-    Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 6.0.0.
+    Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 7.2.6.
     </div>
 </div>
 
 <script type="text/javascript">
- FISH_DOCS_VERSION = "3.6";
+ FISH_DOCS_VERSION = "3.7";
 
  function copy_to_clipboard(it) {
      // Find the pre tag we're interested in.

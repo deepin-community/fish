@@ -125,6 +125,7 @@ Variable                                          Meaning
 .. envvar:: fish_color_status                     the last command's nonzero exit code in the default prompt
 .. envvar:: fish_color_cancel                     the '^C' indicator on a canceled command
 .. envvar:: fish_color_search_match               history search matches and selected pager items (background only)
+.. envvar:: fish_color_history_current            the current position in the history for commands like ``dirh`` and ``cdh``
 
 ==========================================        =====================================================================
 
@@ -235,7 +236,21 @@ The output of the former is displayed on the left and the latter's output on the
 Configurable greeting
 ---------------------
 
-When it is started interactively, fish tries to run the :doc:`fish_greeting <cmds/fish_greeting>` function. The default fish_greeting prints a simple greeting. You can change its text by changing the ``$fish_greeting`` variable.
+When it is started interactively, fish tries to run the :doc:`fish_greeting <cmds/fish_greeting>` function. The default fish_greeting prints a simple greeting. You can change its text by changing the ``$fish_greeting`` variable, for instance using a :ref:`universal variable <variables-universal>`::
+
+  set -U fish_greeting
+
+or you can set it :ref:`globally <variables-scope>` in :ref:`config.fish <configuration>`::
+
+  set -g fish_greeting 'Hey, stranger!'
+
+or you can script it by changing the function::
+
+  function fish_greeting
+      random choice "Hello!" "Hi" "G'day" "Howdy"
+  end
+
+save this in config.fish or :ref:`a function file <syntax-function-autoloading>`. You can also use :doc:`funced <cmds/funced>` and :doc:`funcsave <cmds/funcsave>` to edit it easily.
 
 .. _private-mode:
 
@@ -255,7 +270,7 @@ Command line editor
 
 The fish editor features copy and paste, a :ref:`searchable history <history-search>` and many editor functions that can be bound to special keyboard shortcuts.
 
-Like bash and other shells, fish includes two sets of keyboard shortcuts (or key bindings): one inspired by the Emacs text editor, and one by the Vi text editor. The default editing mode is Emacs. You can switch to Vi mode by running ``fish_vi_key_bindings`` and switch back with ``fish_default_key_bindings``. You can also make your own key bindings by creating a function and setting the ``fish_key_bindings`` variable to its name. For example::
+Like bash and other shells, fish includes two sets of keyboard shortcuts (or key bindings): one inspired by the Emacs text editor, and one by the Vi text editor. The default editing mode is Emacs. You can switch to Vi mode by running :doc:`fish_vi_key_bindings <cmds/fish_vi_key_bindings>` and switch back with :doc:`fish_default_key_bindings <cmds/fish_default_key_bindings>`. You can also make your own key bindings by creating a function and setting the ``fish_key_bindings`` variable to its name. For example::
 
 
     function fish_hybrid_key_bindings --description \
@@ -331,7 +346,7 @@ Some bindings are common across Emacs and Vi mode, because they aren't text edit
 Emacs mode commands
 ^^^^^^^^^^^^^^^^^^^
 
-To enable emacs mode, use ``fish_default_key_bindings``. This is also the default.
+To enable emacs mode, use :doc:`fish_default_key_bindings <cmds/fish_default_key_bindings>`. This is also the default.
 
 - :kbd:`Home` or :kbd:`Control`\ +\ :kbd:`A` moves the cursor to the beginning of the line.
 
@@ -348,6 +363,8 @@ To enable emacs mode, use ``fish_default_key_bindings``. This is also the defaul
 - :kbd:`Alt`\ +\ :kbd:`<` moves to the beginning of the commandline, :kbd:`Alt`\ +\ :kbd:`>` moves to the end.
 
 - :kbd:`Control`\ +\ :kbd:`K` deletes from the cursor to the end of line (moving it to the :ref:`killring`).
+
+- :kbd:`Escape` and :kbd:`Control`\ +\ :kbd:`G` cancel the current operation. Immediately after an unambiguous completion this undoes it.
 
 - :kbd:`Alt`\ +\ :kbd:`C` capitalizes the current word.
 
@@ -374,8 +391,7 @@ Vi mode commands
 
 Vi mode allows for the use of Vi-like commands at the prompt. Initially, :ref:`insert mode <vi-mode-insert>` is active. :kbd:`Escape` enters :ref:`command mode <vi-mode-command>`. The commands available in command, insert and visual mode are described below. Vi mode shares :ref:`some bindings <shared-binds>` with :ref:`Emacs mode <emacs-mode>`.
 
-To enable vi mode, use ``fish_vi_key_bindings``.
-
+To enable vi mode, use :doc:`fish_vi_key_bindings <cmds/fish_vi_key_bindings>`.
 It is also possible to add all emacs-mode bindings to vi-mode by using something like::
 
 
@@ -402,13 +418,19 @@ The ``fish_vi_cursor`` function will be used to change the cursor's shape depend
    set fish_cursor_default block
    # Set the insert mode cursor to a line
    set fish_cursor_insert line
-   # Set the replace mode cursor to an underscore
+   # Set the replace mode cursors to an underscore
    set fish_cursor_replace_one underscore
+   set fish_cursor_replace underscore
+   # Set the external cursor to a line. The external cursor appears when a command is started. 
+   # The cursor shape takes the value of fish_cursor_default when fish_cursor_external is not specified.
+   set fish_cursor_external line
    # The following variable can be used to configure cursor shape in
    # visual mode, but due to fish_cursor_default, is redundant here
    set fish_cursor_visual block
 
 Additionally, ``blink`` can be added after each of the cursor shape parameters to set a blinking cursor in the specified shape.
+
+Fish knows the shapes "block", "line" and "underscore", other values will be ignored.
 
 If the cursor shape does not appear to be changing after setting the above variables, it's likely your terminal emulator does not support the capabilities necessary to do this. It may also be the case, however, that ``fish_vi_cursor`` has not detected your terminal's features correctly (for example, if you are using ``tmux``). If this is the case, you can force ``fish_vi_cursor`` to set the cursor shape by setting ``$fish_vi_force_cursor`` in ``config.fish``. You'll have to restart fish for any changes to take effect. If cursor shape setting remains broken after this, it's almost certainly an issue with your terminal emulator, and not fish.
 
@@ -427,13 +449,17 @@ Command mode is also known as normal mode.
 
 - :kbd:`i` enters :ref:`insert mode <vi-mode-insert>` at the current cursor position.
 
-- :kbd:`Shift`\ +\ :kbd:`R` enters :ref:`insert mode <vi-mode-insert>` at the beginning of the line.
+- :kbd:`Shift`\ +\ :kbd:`I` enters :ref:`insert mode <vi-mode-insert>` at the beginning of the line.
 
 - :kbd:`v` enters :ref:`visual mode <vi-mode-visual>` at the current cursor position.
 
 - :kbd:`a` enters :ref:`insert mode <vi-mode-insert>` after the current cursor position.
 
 - :kbd:`Shift`\ +\ :kbd:`A` enters :ref:`insert mode <vi-mode-insert>` at the end of the line.
+
+- :kbd:`o` inserts a new line under the current one and enters :ref:`insert mode <vi-mode-insert>`
+
+- :kbd:`O` (capital-"o") inserts a new line above the current one and enters :ref:`insert mode <vi-mode-insert>`
 
 - :kbd:`0` (zero) moves the cursor to beginning of line (remaining in command mode).
 
@@ -444,12 +470,17 @@ Command mode is also known as normal mode.
 - :kbd:`p` pastes text from the :ref:`killring`.
 
 - :kbd:`u` undoes the most recent edit of the command line.
+- :kbd:`Control`\ +\ :kbd:`R` redoes the most recent edit.
 
 - :kbd:`[` and :kbd:`]` search the command history for the previous/next token containing the token under the cursor before the search was started. See the :ref:`history <history-search>` section for more information on history searching.
 
 - :kbd:`/` opens the history in a pager. This will show history entries matching the search, a few at a time. Pressing it again will search older entries, pressing :kbd:`Control`\ +\ :kbd:`S` (that otherwise toggles pager search) will go to newer entries. The search bar will always be selected.
 
 - :kbd:`Backspace` moves the cursor left.
+
+- :kbd:`g` / :kbd:`G` moves the cursor to the beginning/end of the commandline, respectively.
+
+- :kbd:`:q` exits fish.
 
 .. _vi-mode-insert:
 
@@ -503,7 +534,24 @@ In addition to the standard bindings listed here, you can also define your own w
 
 Put ``bind`` statements into :ref:`config.fish <configuration>` or a function called ``fish_user_key_bindings``.
 
-The key sequence (the ``\cc``) here depends on your setup, in particular the terminal. To find out what the terminal sends use :doc:`fish_key_reader <cmds/fish_key_reader>`::
+If you change your mind on a binding and want to go back to fish's default, you can simply erase it again::
+
+  bind --erase \cc
+
+Fish remembers its preset bindings and so it will take effect again. This saves you from having to remember what it was before and add it again yourself.
+
+If you use :ref:`vi bindings <vi-mode>`, note that ``bind`` will by default bind keys in :ref:`command mode <vi-mode-command>`. To bind something in :ref:`insert mode <vi-mode-insert>`::
+
+  bind --mode insert \cc 'commandline -r ""'
+
+.. _interactive-key-sequences:
+
+Key sequences
+"""""""""""""
+
+The terminal tells fish which keys you pressed by sending some sequences of bytes to describe that key. For some keys, this is easy - pressing :kbd:`a` simply means the terminal sends "a". In others it's more complicated and terminals disagree on which they send.
+
+In these cases, :doc:`fish_key_reader <cmds/fish_key_reader>` can tell you how to write the key sequence for your terminal. Just start it and press the keys you are interested in::
 
   > fish_key_reader # pressing control-c
   Press a key:
@@ -514,13 +562,24 @@ The key sequence (the ``\cc``) here depends on your setup, in particular the ter
   Press a key:
   bind \e\[C 'do something'
 
-Note that some key combinations are indistinguishable or unbindable. For instance control-i *is the same* as the tab key. This is a terminal limitation that fish can't do anything about.
+Note that some key combinations are indistinguishable or unbindable. For instance control-i *is the same* as the tab key. This is a terminal limitation that fish can't do anything about. When ``fish_key_reader`` prints the same sequence for two different keys, then that is because your terminal sends the same sequence for them.
 
-Also, :kbd:`Escape` is the same thing as :kbd:`Alt` in a terminal. To distinguish between pressing :kbd:`Escape` and then another key, and pressing :kbd:`Alt` and that key (or an escape sequence the key sends), fish waits for a certain time after seeing an escape character. This is configurable via the ``fish_escape_delay_ms`` variable.
+Also, :kbd:`Escape` is the same thing as :kbd:`Alt` in a terminal. To distinguish between pressing :kbd:`Escape` and then another key, and pressing :kbd:`Alt` and that key (or an escape sequence the key sends), fish waits for a certain time after seeing an escape character. This is configurable via the :envvar:`fish_escape_delay_ms` variable.
 
 If you want to be able to press :kbd:`Escape` and then a character and have it count as :kbd:`Alt`\ +\ that character, set it to a higher value, e.g.::
 
   set -g fish_escape_delay_ms 100
+
+Similarly, to disambiguate *other* keypresses where you've bound a subsequence and a longer sequence, fish has :envvar:`fish_sequence_key_delay_ms`::
+
+  # This binds "jk" to switch to normal mode in vi-mode.
+  # If you kept it like that, every time you press "j",
+  # fish would wait for a "k" or other key to disambiguate
+  bind -M insert -m default jk cancel repaint-mode
+
+  # After setting this, fish only waits 200ms for the "k",
+  # or decides to treat the "j" as a separate sequence, inserting it.
+  set -g fish_sequence_key_delay_ms 200
 
 .. _killring:
 

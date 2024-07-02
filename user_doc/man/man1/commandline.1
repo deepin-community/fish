@@ -27,7 +27,7 @@ level margin: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .\" new: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .in \\n[rst2man-indent\\n[rst2man-indent-level]]u
 ..
-.TH "COMMANDLINE" "1" "Jan 07, 2023" "3.6" "fish-shell"
+.TH "COMMANDLINE" "1" "Mar 19, 2024" "3.7" "fish-shell"
 .SH NAME
 commandline \- set or get the current command line buffer
 .SH SYNOPSIS
@@ -105,6 +105,10 @@ The following options change the way \fBcommandline\fP prints the current comman
 .TP
 \fB\-c\fP or \fB\-\-cut\-at\-cursor\fP
 Only print selection up until the current cursor position.
+If combined with \fB\-\-tokenize\fP, this will print up until the last completed token \- excluding the token the cursor is in.
+This is typically what you would want for instance in completions.
+To get both, use both \fBcommandline \-\-cut\-at\-cursor \-\-tokenize; commandline \-\-cut\-at\-cursor \-\-current\-token\fP,
+or \fBcommandline \-co; commandline \-ct\fP for short.
 .TP
 \fB\-o\fP or \fB\-\-tokenize\fP
 Tokenize the selection and print one string\-type token per line.
@@ -155,6 +159,29 @@ The \fBecho $flounder >&\fP is the first process, \fBless\fP the second and \fBa
 \fBecho $flounder >&2 | less\fP is the first job, \fBand echo $catfish\fP the second.
 .sp
 \fB$flounder\fP is the current token.
+.sp
+The most common use for something like completions is
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+set \-l tokens (commandline \-opc)
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+which gives the current \fIprocess\fP (what is being completed), tokenized into separate entries, up to but excluding the currently being completed token
+.sp
+If you are then also interested in the in\-progress token, add
+.INDENT 0.0
+.TP
+.B ::
+set \-l current (commandline \-ct)
+.UNINDENT
+.sp
+Note that this makes it easy to render fish\(aqs infix matching moot \- if possible it\(aqs best if the completions just print all possibilities and leave the matching to the current token up to fish\(aqs logic.
 .sp
 More examples:
 .INDENT 0.0

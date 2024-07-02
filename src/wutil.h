@@ -171,12 +171,15 @@ enum class dir_entry_type_t : uint8_t {
 /// symlink, or if the caller asks for the stat buffer.
 /// Symlinks are followed.
 class dir_iter_t : noncopyable_t {
+   private:
+    /// Whether this dir_iter considers the "." and ".." filesystem entries.
+    bool withdot_{false};
    public:
     struct entry_t;
 
     /// Open a directory at a given path. On failure, \p error() will return the error code.
     /// Note opendir is guaranteed to set close-on-exec by POSIX (hooray).
-    explicit dir_iter_t(const wcstring &path);
+    explicit dir_iter_t(const wcstring &path, bool withdot = false);
 
     /// Advance this iterator.
     /// \return a pointer to the entry, or nullptr if the entry is finished, or an error occurred.
@@ -218,6 +221,9 @@ class dir_iter_t : noncopyable_t {
         /// \return whether this is a directory. This may call stat().
         bool is_dir() const { return check_type() == dir_entry_type_t::dir; }
 
+        /// \return false if we know this can't be a link via d_type, true if it could be.
+        maybe_t<bool> is_possible_link() const { return possible_link_; }
+
         /// \return the stat buff for this entry, invoking stat() if necessary.
         const maybe_t<struct stat> &stat() const;
 
@@ -235,6 +241,9 @@ class dir_iter_t : noncopyable_t {
         // on some filesystems, or later via stat(). If stat() fails, the error is silently ignored
         // and the type is left as none(). Note this is an unavoidable race.
         mutable maybe_t<dir_entry_type_t> type_{};
+
+        /// whether this entry could be a link, false if we know definitively it isn't.
+        mutable maybe_t<bool> possible_link_{};
 
         // fd of the DIR*, used for fstatat().
         int dirfd_{-1};

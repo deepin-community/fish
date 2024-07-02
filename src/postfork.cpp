@@ -453,6 +453,7 @@ void safe_report_exec_error(int err, const char *actual_cmd, const char *const *
             break;
         }
 
+        case EACCES:
         case ENOENT: {
             // ENOENT is returned by exec() when the path fails, but also returned by posix_spawn if
             // an open file action fails. These cases appear to be impossible to distinguish. We
@@ -461,7 +462,9 @@ void safe_report_exec_error(int err, const char *actual_cmd, const char *const *
             char interpreter_buff[128] = {};
             const char *interpreter =
                 get_interpreter(actual_cmd, interpreter_buff, sizeof interpreter_buff);
-            if (interpreter && 0 != access(interpreter, X_OK)) {
+            struct stat buf;
+            auto statret = !interpreter || stat(interpreter, &buf);
+            if (interpreter && (0 != statret || access(interpreter, X_OK))) {
                 // Detect Windows line endings and complain specifically about them.
                 auto len = strlen(interpreter);
                 if (len && interpreter[len - 1] == '\r') {
@@ -476,27 +479,29 @@ void safe_report_exec_error(int err, const char *actual_cmd, const char *const *
                                "executable command.",
                                actual_cmd, interpreter);
                 }
+            } else if (interpreter && S_ISDIR(buf.st_mode)) {
+                FLOGF_SAFE(exec,
+                           "Failed to execute process '%s': The file specified the interpreter "
+                           "'%s', which is a directory.",
+                           actual_cmd, interpreter);
             } else if (access(actual_cmd, X_OK) == 0) {
                 FLOGF_SAFE(exec,
                            "Failed to execute process '%s': The file exists and is executable. "
                            "Check the interpreter or linker?",
                            actual_cmd);
-            } else {
+            } else if (err == ENOENT) {
                 FLOGF_SAFE(exec,
                            "Failed to execute process '%s': The file does not exist or could not "
                            "be executed.",
                            actual_cmd);
+            } else {
+                FLOGF_SAFE(exec, "Failed to execute process '%s': The file could not be accessed.",
+                           actual_cmd);
             }
             break;
         }
-
         case ENOMEM: {
             FLOGF_SAFE(exec, "Out of memory");
-            break;
-        }
-        case EACCES: {
-            FLOGF_SAFE(exec, "Failed to execute process '%s': The file could not be accessed.",
-                       actual_cmd);
             break;
         }
         case ETXTBSY: {

@@ -27,7 +27,409 @@ level margin: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .\" new: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .in \\n[rst2man-indent\\n[rst2man-indent-level]]u
 ..
-.TH "FISH-RELEASENOTES" "1" "Jan 07, 2023" "3.6" "fish-shell"
+.TH "FISH-RELEASENOTES" "1" "Mar 19, 2024" "3.7" "fish-shell"
+.SH FISH 3.7.1 (RELEASED MARCH 19, 2024)
+.sp
+This release of fish fixes the following problems identified in fish 3.7.0:
+.INDENT 0.0
+.IP \(bu 2
+Deleting the last history entry via \fBhistory delete\fP works again (\fI\%#10190\fP).
+.IP \(bu 2
+Wildcards (\fB*\fP) will no longer sometimes generate paths that did not exist (\fI\%#10205\fP).
+.UNINDENT
+.sp
+This release also contains some improvements:
+.INDENT 0.0
+.IP \(bu 2
+A crash when trying to run an ELF program with a missing interpreter has been fixed. This crashed in the process after fork, so did not affect the fish process that tried to start the program (\fI\%#10199\fP).
+.IP \(bu 2
+\fBfunced\fP will now always \fBsource\fP the file after it has written it, even if the contents did not change. This prevents issues if the file was otherwise modified (\fI\%#10318\fP).
+.IP \(bu 2
+The warning for when a builtin returns a negative exit code was improved, now mentioning the original status (\fI\%#10187\fP).
+.IP \(bu 2
+Added completions for
+.INDENT 2.0
+.IP \(bu 2
+\fBcobra\-cli\fP (\fI\%#10293\fP)
+.IP \(bu 2
+\fBdmidecode\fP (\fI\%#10368\fP)
+.IP \(bu 2
+\fBmycli\fP (\fI\%#10309\fP)
+.IP \(bu 2
+\fBollama\fP (\fI\%#10327\fP)
+.IP \(bu 2
+\fBpstree\fP (\fI\%#10317\fP)
+.UNINDENT
+.IP \(bu 2
+Some improvements to documentation and completions.
+.UNINDENT
+
+.sp
+.ce
+----
+
+.ce 0
+.sp
+.SH FISH 3.7.0 (RELEASED JANUARY 1, 2024)
+.sp
+This release of fish includes a number of improvements over fish 3.6.4, detailed below. Although work continues on the porting of fish internals to the Rust programming language, that work is not included in this release. fish 3.7.0 and any future releases in the 3.7 series remain C++ programs.
+.SS Notable improvements and fixes
+.INDENT 0.0
+.IP \(bu 2
+Improvements to the history pager, including:
+.INDENT 2.0
+.IP \(bu 2
+The history pager will now also attempt subsequence matches (\fI\%#9476\fP), so you can find a command line like \fBgit log 3.6.1..Integration_3.7.0\fP by searching for \fBgitInt\fP\&.
+.IP \(bu 2
+Opening the history pager will now fill the search field with a search string if you\(aqre already in a search (\fI\%#10005\fP). This makes it nicer to search something with \fB↑\fP and then later decide to switch to the full pager.
+.IP \(bu 2
+Closing the history pager with enter will now copy the search text to the commandline if there was no match, so you can continue editing the command you tried to find right away (\fI\%#9934\fP).
+.UNINDENT
+.IP \(bu 2
+Performance improvements for command completions and globbing, where supported by the operating system, especially on slow filesystems such as NFS (\fI\%#9891\fP, \fI\%#9931\fP, \fI\%#10032\fP, \fI\%#10052\fP).
+.IP \(bu 2
+fish can now be configured to wait a specified amount of time for a multi\-key sequence to be completed,  instead of waiting indefinitely. For example, this makes binding \fBkj\fP to switching modes in vi mode possible.
+The timeout can be set via the new \fI\%fish_sequence_key_delay_ms\fP variable (\fI\%#7401\fP), and may be set by default in future versions.
+.UNINDENT
+.SS Deprecations and removed features
+.INDENT 0.0
+.IP \(bu 2
+\fBLS_COLORS\fP is no longer set automatically by the \fBls\fP function (\fI\%#10080\fP). Users
+that set \fB\&.dircolors\fP should manually import it using other means. Typically this would be \fBset \-gx LS_COLORS (dircolors \-c .dircolors | string split \(aq \(aq)[3]\fP
+.UNINDENT
+.SS Scripting improvements
+.INDENT 0.0
+.IP \(bu 2
+Running \fBexit\fP with a negative number no longer crashes fish (\fI\%#9659\fP).
+.IP \(bu 2
+\fBfish \-\-command\fP will now return a non\-zero status if parsing failed (\fI\%#9888\fP).
+.IP \(bu 2
+The \fBjobs\fP builtin will now escape the commands it prints (\fI\%#9808\fP).
+.IP \(bu 2
+\fBstring repeat\fP no longer overflows if the count is a multiple of the chunk size (\fI\%#9900\fP).
+.IP \(bu 2
+The \fBbuiltin\fP builtin will now properly error out with invalid arguments instead of doing nothing and returning true (\fI\%#9942\fP).
+.IP \(bu 2
+\fBcommand time\fP in a pipeline is allowed again, as is \fBcommand and\fP and \fBcommand or\fP (\fI\%#9985\fP).
+.IP \(bu 2
+\fBexec\fP will now also apply variable overrides, so \fBFOO=bar exec\fP will now set \fB$FOO\fP correctly (\fI\%#9995\fP).
+.IP \(bu 2
+\fBumask\fP will now handle empty symbolic modes correctly, like \fBumask u=,g=rwx,o=\fP (\fI\%#10177\fP).
+.IP \(bu 2
+Improved error messages for errors occurring in command substitutions (\fI\%#10054\fP).
+.UNINDENT
+.SS Interactive improvements
+.INDENT 0.0
+.IP \(bu 2
+\fBread\fP no longer enables bracketed paste so it doesn\(aqt stay enabled in combined commandlines like \fBmysql \-p(read \-\-silent)\fP (\fI\%#8285\fP).
+.IP \(bu 2
+Vi mode now uses \fBfish_cursor_external\fP to set the cursor shape for external commands (\fI\%#4656\fP).
+.IP \(bu 2
+Opening the history search in vi mode switches to insert mode correctly (\fI\%#10141\fP).
+.IP \(bu 2
+Vi mode cursor shaping is now enabled in iTerm2 (\fI\%#9698\fP).
+.IP \(bu 2
+Working directory reporting is enabled for iTerm2 (\fI\%#9955\fP).
+.IP \(bu 2
+Completing commands as root includes commands not owned by root, fixing a regression introduced in fish 3.2.0 (\fI\%#9699\fP).
+.IP \(bu 2
+Selection uses \fBfish_color_selection\fP for the foreground and background colors, as intended, rather than just the background (\fI\%#9717\fP).
+.IP \(bu 2
+The completion pager will no longer sometimes skip the last entry when moving through a long list (\fI\%#9833\fP).
+.IP \(bu 2
+The interactive \fBhistory delete\fP interface now allows specifying index ranges like \(dq1..5\(dq (\fI\%#9736\fP), and \fBhistory delete \-\-exact\fP now properly saves the history (\fI\%#10066\fP).
+.IP \(bu 2
+Command completion will now call the stock \fBmanpath\fP on macOS, instead of a potential Homebrew version. This prevents awkward error messages (\fI\%#9817\fP).
+.IP \(bu 2
+A new bind function \fBhistory\-pager\-delete\fP, bound to \fBShift\fP + \fBDelete\fP by default, will delete the currently\-selected history pager item from history (\fI\%#9454\fP).
+.IP \(bu 2
+\fBfish_key_reader\fP will now use printable characters as\-is, so pressing \(dqö\(dq no longer leads to it telling you to bind \fB\eu00F6\fP (\fI\%#9986\fP).
+.IP \(bu 2
+\fBopen\fP can be used to launch terminal programs again, as an \fBxdg\-open\fP bug has been fixed and a workaround has been removed  (\fI\%#10045\fP).
+.IP \(bu 2
+The \fBrepaint\-mode\fP binding will now only move the cursor if there is repainting to be done. This fixes \fBAlt\fP combination bindings in vi mode (\fI\%#7910\fP).
+.IP \(bu 2
+A new \fBclear\-screen\fP bind function is used for \fBCtrl\fP + \fBl\fP by default. This clears the screen and repaints the existing prompt at first,
+so it eliminates visible flicker unless the terminal is very slow (\fI\%#10044\fP).
+.IP \(bu 2
+The \fBalias\fP convenience function has better support for commands with unusual characters, like \fB+\fP (\fI\%#8720\fP).
+.IP \(bu 2
+A longstanding issue where items in the pager would sometimes display without proper formatting has been fixed (\fI\%#9617\fP).
+.IP \(bu 2
+The \fBAlt\fP + \fBl\fP binding, which lists the directory of the token under the cursor, correctly expands tilde (\fB~\fP) to the home directory (\fI\%#9954\fP).
+.IP \(bu 2
+Various fish utilities that use an external pager will now try a selection of common pagers if the \fBPAGER\fP environment variable is not set, or write the output to the screen without a pager if there is not one available (\fI\%#10074\fP).
+.IP \(bu 2
+Command\-specific tab completions may now offer results whose first character is a period. For example, it is now possible to tab\-complete \fBgit add\fP for files with leading periods. The default file completions hide these files, unless the token itself has a leading period (\fI\%#3707\fP).
+.UNINDENT
+.SS Improved prompts
+.INDENT 0.0
+.IP \(bu 2
+The default theme now only uses named colors, so it will track the terminal\(aqs palette (\fI\%#9913\fP).
+.IP \(bu 2
+The Dracula theme has now been synced with upstream (\fI\%#9807\fP); use \fBfish_config\fP to re\-apply it to pick up the changes.
+.IP \(bu 2
+\fBfish_vcs_prompt\fP now also supports fossil (\fI\%#9497\fP).
+.IP \(bu 2
+Prompts which display the working directory using the \fBprompt_pwd\fP function correctly display directories beginning with dashes (\fI\%#10169\fP).
+.UNINDENT
+.SS Completions
+.INDENT 0.0
+.IP \(bu 2
+Added completions for:
+.INDENT 2.0
+.IP \(bu 2
+\fBage\fP and \fBage\-keygen\fP (\fI\%#9813\fP)
+.IP \(bu 2
+\fBairmon\-ng\fP (\fI\%#10116\fP)
+.IP \(bu 2
+\fBar\fP (\fI\%#9720\fP)
+.IP \(bu 2
+\fBblender\fP (\fI\%#9905\fP)
+.IP \(bu 2
+\fBbws\fP (\fI\%#10165\fP)
+.IP \(bu 2
+\fBcalendar\fP (\fI\%#10138\fP)
+.IP \(bu 2
+\fBcheckinstall\fP (\fI\%#10106\fP)
+.IP \(bu 2
+\fBcrc\fP (\fI\%#10034\fP)
+.IP \(bu 2
+\fBdoctl\fP
+.IP \(bu 2
+\fBgimp\fP (\fI\%#9904\fP)
+.IP \(bu 2
+\fBgojq\fP (\fI\%#9740\fP)
+.IP \(bu 2
+\fBhorcrux\fP (\fI\%#9922\fP)
+.IP \(bu 2
+\fBibmcloud\fP (\fI\%#10004\fP)
+.IP \(bu 2
+\fBiwctl\fP (\fI\%#6884\fP)
+.IP \(bu 2
+\fBjava_home\fP (\fI\%#9998\fP)
+.IP \(bu 2
+\fBkrita\fP (\fI\%#9903\fP)
+.IP \(bu 2
+\fBoc\fP (\fI\%#10034\fP)
+.IP \(bu 2
+\fBqjs\fP (\fI\%#9723\fP)
+.IP \(bu 2
+\fBqjsc\fP (\fI\%#9731\fP)
+.IP \(bu 2
+\fBrename\fP (\fI\%#10136\fP)
+.IP \(bu 2
+\fBrpm\-ostool\fP (\fI\%#9669\fP)
+.IP \(bu 2
+\fBsmerge\fP (\fI\%#10135\fP)
+.IP \(bu 2
+\fBuserdel\fP (\fI\%#10056\fP)
+.IP \(bu 2
+\fBwatchexec\fP (\fI\%#10027\fP)
+.IP \(bu 2
+\fBwpctl\fP (\fI\%#10043\fP)
+.IP \(bu 2
+\fBxxd\fP (\fI\%#10137\fP)
+.IP \(bu 2
+\fBzabbix\fP (\fI\%#9647\fP)
+.UNINDENT
+.IP \(bu 2
+The \fBzfs\fP completions no longer print errors about setting a read\-only variable (\fI\%#9705\fP).
+.IP \(bu 2
+The \fBkitty\fP completions have been removed in favor of keeping them upstream (\fI\%#9750\fP).
+.IP \(bu 2
+\fBgit\fP completions now support aliases that reference other aliases (\fI\%#9992\fP).
+.IP \(bu 2
+The \fBgw\fP and \fBgradlew\fP completions are loaded properly (\fI\%#10127\fP).
+.IP \(bu 2
+Improvements to many other completions.
+.IP \(bu 2
+Improvements to the manual page completion generator (\fI\%#9787\fP, \fI\%#9814\fP, \fI\%#9961\fP).
+.UNINDENT
+.SS Other improvements
+.INDENT 0.0
+.IP \(bu 2
+Improvements and corrections to the documentation.
+.IP \(bu 2
+The Web\-based configuration now uses a more readable style when printed, such as for a keybinding reference (\fI\%#9828\fP).
+.IP \(bu 2
+Updates to the German translations (\fI\%#9824\fP).
+.IP \(bu 2
+The colors of the Nord theme better match their official style (\fI\%#10168\fP).
+.UNINDENT
+.SS For distributors
+.INDENT 0.0
+.IP \(bu 2
+The licensing information for some of the derived code distributed with fish was incomplete. Though the license information was present in the source distribution, it was not present in the documentation. This has been corrected (\fI\%#10162\fP).
+.IP \(bu 2
+The CMake configure step will now also look for libterminfo as an alternative name for libtinfo, as used in NetBSD curses (\fI\%#9794\fP).
+.UNINDENT
+
+.sp
+.ce
+----
+
+.ce 0
+.sp
+.SH FISH 3.6.4 (RELEASED DECEMBER 5, 2023)
+.sp
+This release contains a complete fix for the test suite failure in fish 3.6.2 and 3.6.3.
+
+.sp
+.ce
+----
+
+.ce 0
+.sp
+.SH FISH 3.6.3 (RELEASED DECEMBER 4, 2023)
+.sp
+This release contains a fix for a test suite failure in fish 3.6.2.
+
+.sp
+.ce
+----
+
+.ce 0
+.sp
+.SH FISH 3.6.2 (RELEASED DECEMBER 4, 2023)
+.sp
+This release of fish contains a security fix for CVE\-2023\-49284, a minor security problem identified
+in fish 3.6.1 and previous versions (thought to affect all released versions of fish).
+.sp
+fish uses certain Unicode non\-characters internally for marking wildcards and expansions. It
+incorrectly allowed these markers to be read on command substitution output, rather than
+transforming them into a safe internal representation.
+.sp
+For example, \fBecho \eUFDD2HOME\fP has the same output as \fBecho $HOME\fP\&.
+.sp
+While this may cause unexpected behavior with direct input, this may become a minor security problem
+if the output is being fed from an external program into a command substitution where this output
+may not be expected.
+
+.sp
+.ce
+----
+
+.ce 0
+.sp
+.SH FISH 3.6.1 (RELEASED MARCH 25, 2023)
+.sp
+This release of fish contains a number of fixes for problems identified in fish 3.6.1, as well as some enhancements.
+.SS Notable improvements and fixes
+.INDENT 0.0
+.IP \(bu 2
+.INDENT 2.0
+.TP
+.B \fBabbr \-\-erase\fP now also erases the universal variables used by the old abbr function. That means::
+abbr \-\-erase (abbr \-\-list)
+.UNINDENT
+.sp
+can now be used to clean out all old abbreviations (\fI\%#9468\fP).
+.IP \(bu 2
+\fBabbr \-\-add \-\-universal\fP now warns about \fB\-\-universal\fP being non\-functional, to make it easier to detect old\-style \fBabbr\fP calls (\fI\%#9475\fP).
+.UNINDENT
+.SS Deprecations and removed features
+.INDENT 0.0
+.IP \(bu 2
+The Web\-based configuration for abbreviations has been removed, as it was not functional with the changes abbreviations introduced in 3.6.0 (\fI\%#9460\fP).
+.UNINDENT
+.SS Scripting improvements
+.INDENT 0.0
+.IP \(bu 2
+\fBabbr \-\-list\fP no longer escapes the abbr name, which is necessary to be able to pass it to \fBabbr \-\-erase\fP (\fI\%#9470\fP).
+.IP \(bu 2
+\fBread\fP will now print an error if told to set a read\-only variable, instead of silently doing nothing (\fI\%#9346\fP).
+.IP \(bu 2
+\fBset_color \-v\fP no longer crashes fish (\fI\%#9640\fP).
+.UNINDENT
+.SS Interactive improvements
+.INDENT 0.0
+.IP \(bu 2
+Using \fBfish_vi_key_bindings\fP in combination with fish\(aqs \fB\-\-no\-config\fP mode works without locking up the shell (\fI\%#9443\fP).
+.IP \(bu 2
+The history pager now uses more screen space, usually half the screen (\fI\%#9458\fP)
+.IP \(bu 2
+Variables that were set while the locale was C (the default ASCII\-only locale) will now properly be encoded if the locale is switched (\fI\%#2613\fP, \fI\%#9473\fP).
+.IP \(bu 2
+Escape during history search restores the original command line again (fixing a regression in 3.6.0).
+.IP \(bu 2
+Using \fB\-\-help\fP on builtins now respects the \fB$MANPAGER\fP variable, in preference to \fB$PAGER\fP (\fI\%#9488\fP).
+.IP \(bu 2
+\fBControl\-G\fP closes the history pager, like other shells (\fI\%#9484\fP).
+.IP \(bu 2
+The documentation for the \fB:\fP, \fB[\fP and \fB\&.\fP builtin commands can now be looked up with \fBman\fP (\fI\%#9552\fP).
+.IP \(bu 2
+fish no longer crashes when searching history for non\-ASCII codepoints case\-insensitively (\fI\%#9628\fP).
+.IP \(bu 2
+The \fBAlt\-S\fP binding will now also use \fBplease\fP if available (\fI\%#9635\fP).
+.IP \(bu 2
+Themes that don\(aqt specify every color option can be installed correctly in the Web\-based configuration (\fI\%#9590\fP).
+.IP \(bu 2
+Compatibility with Midnight Commander\(aqs prompt integration has been improved (\fI\%#9540\fP).
+.IP \(bu 2
+A spurious error, noted when using fish in Google Drive directories under WSL 2, has been silenced (\fI\%#9550\fP).
+.IP \(bu 2
+Using \fBread\fP in \fBfish_greeting\fP or similar functions will not trigger an infinite loop (\fI\%#9564\fP).
+.IP \(bu 2
+Compatibility when upgrading from old versions of fish (before 3.4.0) has been improved (\fI\%#9569\fP).
+.UNINDENT
+.SS Improved prompts
+.INDENT 0.0
+.IP \(bu 2
+The git prompt will compute the stash count to be used independently of the informative status (\fI\%#9572\fP).
+.UNINDENT
+.SS Completions
+.INDENT 0.0
+.IP \(bu 2
+Added completions for:
+.INDENT 2.0
+.IP \(bu 2
+\fBapkanalyzer\fP (\fI\%#9558\fP)
+.IP \(bu 2
+\fBneovim\fP (\fI\%#9543\fP)
+.IP \(bu 2
+\fBotool\fP
+.IP \(bu 2
+\fBpre\-commit\fP (\fI\%#9521\fP)
+.IP \(bu 2
+\fBproxychains\fP (\fI\%#9486\fP)
+.IP \(bu 2
+\fBscrypt\fP (\fI\%#9583\fP)
+.IP \(bu 2
+\fBstow\fP (\fI\%#9571\fP)
+.IP \(bu 2
+\fBtrash\fP and helper utilities \fBtrash\-empty\fP, \fBtrash\-list\fP, \fBtrash\-put\fP, \fBtrash\-restore\fP (\fI\%#9560\fP)
+.IP \(bu 2
+\fBssh\-copy\-id\fP (\fI\%#9675\fP)
+.UNINDENT
+.IP \(bu 2
+Improvements to many completions, including the speed of completing directories in WSL 2 (\fI\%#9574\fP).
+.IP \(bu 2
+Completions using \fB__fish_complete_suffix\fP are now offered in the correct order, fixing a regression in 3.6.0 (\fI\%#8924\fP).
+.IP \(bu 2
+\fBgit\fP completions for \fBgit\-foo\fP\-style commands was restored, fixing a regression in 3.6.0 (\fI\%#9457\fP).
+.IP \(bu 2
+File completion now offers \fB\&../\fP and \fB\&./\fP again, fixing a regression in 3.6.0 (\fI\%#9477\fP).
+.IP \(bu 2
+The behaviour of completions using \fB__fish_complete_path\fP matches standard path completions (\fI\%#9285\fP).
+.UNINDENT
+.SS Other improvements
+.INDENT 0.0
+.IP \(bu 2
+Improvements and corrections to the documentation.
+.UNINDENT
+.SS For distributors
+.INDENT 0.0
+.IP \(bu 2
+fish 3.6.1 builds correctly on Cygwin (\fI\%#9502\fP).
+.UNINDENT
+
+.sp
+.ce
+----
+
+.ce 0
+.sp
 .SH FISH 3.6.0 (RELEASED JANUARY 7, 2023)
 .SS Notable improvements and fixes
 .INDENT 0.0

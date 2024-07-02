@@ -27,7 +27,7 @@ level margin: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .\" new: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .in \\n[rst2man-indent\\n[rst2man-indent-level]]u
 ..
-.TH "ARGPARSE" "1" "Jan 07, 2023" "3.6" "fish-shell"
+.TH "ARGPARSE" "1" "Mar 19, 2024" "3.7" "fish-shell"
 .SH NAME
 argparse \- parse options passed to a fish script or function
 .SH SYNOPSIS
@@ -54,6 +54,7 @@ The command name for use in error messages. By default the current function name
 .TP
 \fB\-x\fP or \fB\-\-exclusive\fP \fIOPTIONS\fP
 A comma separated list of options that are mutually exclusive. You can use this more than once to define multiple sets of mutually exclusive options.
+You give either the short or long version of each option, and you still need to otherwise define the options.
 .TP
 \fB\-N\fP or \fB\-\-min\-args\fP \fINUMBER\fP
 The minimum number of acceptable non\-option arguments. The default is zero.
@@ -235,6 +236,25 @@ These variables are passed to the function as local exported variables.
 The script should write any error messages to stdout, not stderr. It should return a status of zero if the flag value is valid otherwise a non\-zero status to indicate it is invalid.
 .sp
 Fish ships with a \fB_validate_int\fP function that accepts a \fB\-\-min\fP and \fB\-\-max\fP flag. Let\(aqs say your command accepts a \fB\-m\fP or \fB\-\-max\fP flag and the minimum allowable value is zero and the maximum is 5. You would define the option like this: \fBm/max=!_validate_int \-\-min 0 \-\-max 5\fP\&. The default if you just call \fB_validate_int\fP without those flags is to simply check that the value is a valid integer with no limits on the min or max value allowed.
+.sp
+Here are some examples of flag validations:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+# validate that a path is a directory
+argparse \(aqp/path=!test \-d \(dq$_flag_value\(dq\(aq \-\- \-\-path $__fish_config_dir
+# validate that a function does not exist
+argparse \(aqf/func=!not functions \-q \(dq$_flag_value\(dq\(aq \-\- \-f alias
+# validate that a string matches a regex
+argparse \(aqc/color=!string match \-rq \e\(aq^#?[0\-9a\-fA\-F]{6}$\e\(aq \(dq$_flag_value\(dq\(aq \-\- \-c \(aqc0ffee\(aq
+# validate with a validator function
+argparse \(aqn/num=!_validate_int \-\-min 0 \-\-max 99\(aq \-\- \-\-num 42
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
 .SH EXAMPLE OPTION_SPECS
 .sp
 Some \fIOPTION_SPEC\fP examples:
@@ -266,6 +286,57 @@ Some \fIOPTION_SPEC\fP examples:
 After parsing the arguments the \fBargv\fP variable is set with local scope to any values not already consumed during flag processing. If there are no unbound values the variable is set but \fBcount $argv\fP will be zero.
 .sp
 If an error occurs during argparse processing it will exit with a non\-zero status and print error messages to stderr.
+.SH EXAMPLES
+.sp
+A simple use:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+argparse h/help \-\- $argv
+or return
+
+if set \-q _flag_help
+    # TODO: Print help here
+    return 0
+end
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+This just wants one option \- \fB\-h\fP / \fB\-\-help\fP\&. Any other option is an error. If it is given it prints help and exits.
+.sp
+How \fI\%fish_add_path \- add to the path\fP parses its args:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+argparse \-x g,U \-x P,U \-x a,p g/global U/universal P/path p/prepend a/append h/help m/move v/verbose n/dry\-run \-\- $argv
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+There are a variety of boolean flags, all with long and short versions. A few of these cannot be used together, and that is what the \fB\-x\fP flag is used for.
+\fB\-x g,U\fP means that \fB\-\-global\fP and \fB\-\-universal\fP or their short equivalents conflict, and if they are used together you get an error.
+In this case you only need to give the short or long flag, not the full option specification.
+.sp
+After this it figures out which variable it should operate on according to the \fB\-\-path\fP flag:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+set \-l var fish_user_paths
+set \-q _flag_path
+and set var PATH
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
 .SH LIMITATIONS
 .sp
 One limitation with \fB\-\-ignore\-unknown\fP is that, if an unknown option is given in a group with known options, the entire group will be kept in $argv. \fBargparse\fP will not do any permutations here.

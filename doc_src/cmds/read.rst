@@ -106,7 +106,7 @@ The following code stores the value 'hello' in the shell variable :envvar:`foo`.
 
     echo hello|read foo
 
-While this is a neat way to handle command output line-by-line::
+The :doc:`while <while>` command is a neat way to handle command output line-by-line::
 
     printf '%s\n' line1 line2 line3 line4 | while read -l foo
                       echo "This is another line: $foo"
@@ -125,7 +125,7 @@ Delimiters given via "-d" are taken as one string::
     echo $first # outputs "a b", $second is empty
 
     echo 'a"foo bar"b (command echo wurst)*" "{a,b}' | read -lt -l a b c
-    echo $a # outputs 'afoo bar' (without the quotes)
+    echo $a # outputs 'afoo barb' (without the quotes)
     echo $b # outputs '(command echo wurst)* {a,b}' (without the quotes)
     echo $c # nothing
 

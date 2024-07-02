@@ -27,7 +27,7 @@ level margin: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .\" new: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .in \\n[rst2man-indent\\n[rst2man-indent-level]]u
 ..
-.TH "STRING" "1" "Jan 07, 2023" "3.6" "fish-shell"
+.TH "STRING" "1" "Mar 19, 2024" "3.7" "fish-shell"
 .SH NAME
 string \- manipulate strings
 .SH SYNOPSIS
@@ -270,6 +270,12 @@ axxb
 >_ string match \-i \(aqa??B\(aq Axxb
 Axxb
 
+>_ string match \-\- \(aq\-*\(aq \-h foo \-\-version bar
+# To match things that look like options, we need a \(ga\-\-\(ga
+# to tell string its options end there.
+\-h
+\-\-version
+
 >_ echo \(aqok?\(aq | string match \(aq*\e?\(aq
 ok?
 
@@ -305,6 +311,12 @@ cat3
 dog3
 cat4
 dog4
+
+>_ string match \-r \-\- \(aq\-.*\(aq \-h foo \-\-version bar
+# To match things that look like options, we need a \(ga\-\-\(ga
+# to tell string its options end there.
+\-h
+\-\-version
 
 >_ string match \-r \(aq(\ed\ed?):(\ed\ed):(\ed\ed)\(aq 2:34:56
 2:34:56

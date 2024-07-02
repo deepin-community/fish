@@ -428,8 +428,15 @@ class reader_history_search_t {
         const wcstring &needle = search_string();
         if (mode_ == line || mode_ == prefix) {
             size_t offset = find(text, needle);
-            assert(offset != wcstring::npos && "Should have found a match in the search result");
-            add_if_new({std::move(text), offset});
+            // FIXME: Previous versions asserted out if this wasn't true.
+            // This could be hit with a needle of "ö" and haystack of "echo Ö"
+            // I'm not sure why - this points to a bug in ifind (probably wrong locale?)
+            // However, because the user experience of having it crash is horrible,
+            // and the worst thing that can otherwise happen here is that a search is unsuccessful,
+            // we just check it instead.
+            if (offset != wcstring::npos) {
+                add_if_new({std::move(text), offset});
+            }
         } else if (mode_ == token) {
             tokenizer_t tok(text.c_str(), TOK_ACCEPT_UNFINISHED);
 
@@ -719,6 +726,8 @@ class reader_data_t : public std::enable_shared_from_this<reader_data_t> {
     reader_history_search_t history_search{};
     /// Whether the in-pager history search is active.
     bool history_pager_active{false};
+    /// The direction of the last successful history pager search.
+    history_search_direction_t history_pager_direction{};
     /// The range in history covered by the history pager's current page.
     size_t history_pager_history_index_start{static_cast<size_t>(-1)};
     size_t history_pager_history_index_end{static_cast<size_t>(-1)};
@@ -782,8 +791,14 @@ class reader_data_t : public std::enable_shared_from_this<reader_data_t> {
     /// Do what we need to do whenever our command line changes.
     void command_line_changed(const editable_line_t *el);
     void maybe_refilter_pager(const editable_line_t *el);
-    void fill_history_pager(bool new_search, history_search_direction_t direction =
-                                                 history_search_direction_t::backward);
+    enum class history_pager_invocation_t {
+        anew,
+        advance,
+        refresh,
+    };
+    void fill_history_pager(
+        history_pager_invocation_t why,
+        history_search_direction_t direction = history_search_direction_t::backward);
 
     /// Do what we need to do whenever our pager selection changes.
     void pager_selection_changed();
@@ -1205,7 +1220,7 @@ void reader_data_t::paint_layout(const wchar_t *reason) {
 
     // Apply any selection.
     if (data.selection.has_value()) {
-        highlight_spec_t selection_color = {highlight_role_t::normal, highlight_role_t::selection};
+        highlight_spec_t selection_color = {highlight_role_t::selection, highlight_role_t::selection};
         auto end = std::min(selection->stop, colors.size());
         for (size_t i = data.selection->start; i < end; i++) {
             colors.at(i) = selection_color;
@@ -1257,7 +1272,8 @@ void reader_data_t::command_line_changed(const editable_line_t *el) {
         s_generation.store(1 + read_generation_count(), std::memory_order_relaxed);
     } else if (el == &this->pager.search_field_line) {
         if (history_pager_active) {
-            fill_history_pager(true, history_search_direction_t::backward);
+            fill_history_pager(history_pager_invocation_t::anew,
+                               history_search_direction_t::backward);
             return;
         }
         this->pager.refilter_completions();
@@ -1277,17 +1293,32 @@ static history_pager_result_t history_pager_search(const std::shared_ptr<history
                                                    history_search_direction_t direction,
                                                    size_t history_index,
                                                    const wcstring &search_string) {
-    // Use a small page size because we don't always offer practical ways to select a item from
-    // a large page (since we don't support subsequence filtering here).
-    constexpr size_t page_size = 12;
+    // Limit the number of elements to half the screen like we do for completions
+    // Note that this is imperfect because we could have a multi-column layout.
+    //
+    // We can still push fish further upward in case the first entry is multiline,
+    // but that can't really be helped.
+    // (subtract 2 for the search line and the prompt)
+    size_t page_size = std::max(termsize_last().height / 2 - 2, 12);
+
     completion_list_t completions;
     history_search_t search{history, search_string, history_search_type_t::contains,
                             smartcase_flags(search_string), history_index};
-    while (completions.size() < page_size && search.go_to_next_match(direction)) {
+    bool next_match_found = search.go_to_next_match(direction);
+    if (!next_match_found) {
+        // If there were no matches, try again with subsequence search
+        search =
+            history_search_t{history, search_string, history_search_type_t::contains_subsequence,
+                             smartcase_flags(search_string), history_index};
+        next_match_found = search.go_to_next_match(direction);
+    }
+    while (completions.size() < page_size && next_match_found) {
         const history_item_t &item = search.current_item();
         completions.push_back(completion_t{
             item.str(), L"", string_fuzzy_match_t::exact_match(),
             COMPLETE_REPLACES_COMMANDLINE | COMPLETE_DONT_ESCAPE | COMPLETE_DONT_SORT});
+
+        next_match_found = search.go_to_next_match(direction);
     }
     size_t last_index = search.current_index();
     if (direction == history_search_direction_t::forward)
@@ -1295,16 +1326,29 @@ static history_pager_result_t history_pager_search(const std::shared_ptr<history
     return {completions, last_index, search.go_to_next_match(direction)};
 }
 
-void reader_data_t::fill_history_pager(bool new_search, history_search_direction_t direction) {
-    assert(!new_search || direction == history_search_direction_t::backward);
-    size_t index;
-    if (new_search) {
-        index = 0;
-    } else if (direction == history_search_direction_t::forward) {
-        index = history_pager_history_index_start;
-    } else {
-        assert(direction == history_search_direction_t::backward);
-        index = history_pager_history_index_end;
+void reader_data_t::fill_history_pager(history_pager_invocation_t why,
+                                       history_search_direction_t direction) {
+    size_t index = -1;
+    maybe_t<size_t> old_pager_index;
+    switch (why) {
+        case history_pager_invocation_t::anew:
+            assert(direction == history_search_direction_t::backward);
+            index = 0;
+            break;
+        case history_pager_invocation_t::advance:
+            if (direction == history_search_direction_t::forward) {
+                index = history_pager_history_index_start;
+            } else {
+                assert(direction == history_search_direction_t::backward);
+                index = history_pager_history_index_end;
+            }
+            break;
+        case history_pager_invocation_t::refresh:
+            // Redo the previous search previous direction.
+            direction = history_pager_direction;
+            index = history_pager_history_index_start;
+            old_pager_index = pager.selected_completion_index();
+            break;
     }
     const wcstring &search_term = pager.search_field_line.text();
     auto shared_this = this->shared_from_this();
@@ -1313,11 +1357,12 @@ void reader_data_t::fill_history_pager(bool new_search, history_search_direction
         [=](const history_pager_result_t &result) {
             if (search_term != shared_this->pager.search_field_line.text())
                 return;  // Stale request.
-            if (result.matched_commands.empty() && !new_search) {
+            if (result.matched_commands.empty() && why == history_pager_invocation_t::advance) {
                 // No more matches, keep the existing ones and flash.
                 shared_this->flash();
                 return;
             }
+            history_pager_direction = direction;
             if (direction == history_search_direction_t::forward) {
                 shared_this->history_pager_history_index_start = result.final_index;
                 shared_this->history_pager_history_index_end = index;
@@ -1328,7 +1373,12 @@ void reader_data_t::fill_history_pager(bool new_search, history_search_direction
             shared_this->pager.extra_progress_text =
                 result.have_more_results ? _(L"Search again for more results") : L"";
             shared_this->pager.set_completions(result.matched_commands);
-            shared_this->select_completion_in_direction(selection_motion_t::next, true);
+            if (why == history_pager_invocation_t::refresh) {
+                pager.set_selected_completion_index(*old_pager_index);
+                pager_selection_changed();
+            } else {
+                shared_this->select_completion_in_direction(selection_motion_t::next, true);
+            }
             shared_this->super_highlight_me_plenty();
             shared_this->layout_and_repaint(L"history-pager");
         });
@@ -3477,8 +3527,10 @@ void reader_data_t::handle_readline_command(readline_cmd_t c, readline_loop_stat
             parser().libdata().is_repaint = true;
             exec_mode_prompt();
             if (!mode_prompt_buff.empty()) {
-                screen.reset_line(true /* redraw prompt */);
-                if (this->is_repaint_needed()) this->layout_and_repaint(L"mode");
+                if (this->is_repaint_needed()) {
+                    screen.reset_line(true /* redraw prompt */);
+                    this->layout_and_repaint(L"mode");
+                }
                 parser().libdata().is_repaint = false;
                 break;
             }
@@ -3516,7 +3568,8 @@ void reader_data_t::handle_readline_command(readline_cmd_t c, readline_loop_stat
         }
         case rl::pager_toggle_search: {
             if (history_pager_active) {
-                fill_history_pager(false, history_search_direction_t::forward);
+                fill_history_pager(history_pager_invocation_t::advance,
+                                   history_search_direction_t::forward);
                 break;
             }
             if (!pager.empty()) {
@@ -3730,7 +3783,8 @@ void reader_data_t::handle_readline_command(readline_cmd_t c, readline_loop_stat
         }
         case rl::history_pager: {
             if (history_pager_active) {
-                fill_history_pager(false, history_search_direction_t::backward);
+                fill_history_pager(history_pager_invocation_t::advance,
+                                   history_search_direction_t::backward);
                 break;
             }
 
@@ -3745,7 +3799,27 @@ void reader_data_t::handle_readline_command(readline_cmd_t c, readline_loop_stat
             pager.set_search_field_shown(true);
             pager.set_prefix(MB_CUR_MAX > 1 ? L"► " : L"> ", false /* highlight */);
             // Update the search field, which triggers the actual history search.
-            insert_string(&pager.search_field_line, command_line.text());
+            if (!history_search.active() || history_search.search_string().empty()) {
+                insert_string(&pager.search_field_line, command_line.text());
+            } else {
+                // If we have an actual history search already going, reuse that term
+                // - this is if the user looks around a bit and decides to switch to the pager.
+                insert_string(&pager.search_field_line, history_search.search_string());
+            }
+            break;
+        }
+        case rl::history_pager_delete: {
+            if (!history_pager_active) {
+                inputter.function_set_status(false);
+                break;
+            }
+            inputter.function_set_status(true);
+            if (auto completion = pager.selected_completion(current_page_rendering)) {
+                history->remove(completion->completion);
+                history->save();
+                fill_history_pager(history_pager_invocation_t::refresh,
+                                   history_search_direction_t::backward);
+            }
             break;
         }
         case rl::backward_char: {
@@ -4223,6 +4297,27 @@ void reader_data_t::handle_readline_command(readline_cmd_t c, readline_loop_stat
             outp.writestr(L"\x1B[?1000l");
             break;
         }
+        case rl::clear_screen_and_repaint: {
+            parser().libdata().is_repaint = true;
+            auto clear = screen_clear();
+            if (!clear.empty()) {
+                // Clear the screen if we can.
+                // This is subtle: We first clear, draw the old prompt,
+                // and *then* reexecute the prompt and overdraw it.
+                // This removes the flicker,
+                // while keeping the prompt up-to-date.
+                outputter_t &outp = outputter_t::stdoutput();
+                outp.writestr(clear.c_str());
+                screen.reset_line(true /* redraw prompt */);
+                this->layout_and_repaint(L"readline");
+            }
+            exec_prompt();
+            screen.reset_line(true /* redraw prompt */);
+            this->layout_and_repaint(L"readline");
+            force_exec_prompt_and_repaint = false;
+            parser().libdata().is_repaint = false;
+            break;
+        }
         // Some commands should have been handled internally by inputter_t::readch().
         case rl::self_insert:
         case rl::self_insert_notfirst:
@@ -4294,6 +4389,13 @@ bool reader_data_t::handle_execute(readline_loop_state_t &rls) {
     // using a backslash, insert a newline.
     // If the user hits return while navigating the pager, it only clears the pager.
     if (is_navigating_pager_contents()) {
+        if (this->history_pager_active &&
+            this->pager.selected_completion_index() == PAGER_SELECTION_NONE) {
+            command_line.push_edit(
+                edit_t{0, command_line.size(), this->pager.search_field_line.text()},
+                /* allow_coalesce */ false);
+            command_line.set_position(this->pager.search_field_line.position());
+        }
         clear_pager();
         return true;
     }
@@ -4477,7 +4579,8 @@ maybe_t<wcstring> reader_data_t::readline(int nchars_or_0) {
 
             // Clear the pager if necessary.
             bool focused_on_search_field = (active_edit_line() == &pager.search_field_line);
-            if (command_ends_paging(readline_cmd, focused_on_search_field)) {
+            if (!history_search.active() &&
+                command_ends_paging(readline_cmd, focused_on_search_field)) {
                 clear_pager();
             }
 

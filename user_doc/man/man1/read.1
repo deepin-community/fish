@@ -27,7 +27,7 @@ level margin: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .\" new: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .in \\n[rst2man-indent\\n[rst2man-indent-level]]u
 ..
-.TH "READ" "1" "Jan 07, 2023" "3.6" "fish-shell"
+.TH "READ" "1" "Mar 19, 2024" "3.7" "fish-shell"
 .SH NAME
 read \- read line of input into variables
 .SH SYNOPSIS
@@ -144,7 +144,7 @@ echo hello|read foo
 .UNINDENT
 .UNINDENT
 .sp
-While this is a neat way to handle command output line\-by\-line:
+The \fI\%while\fP command is a neat way to handle command output line\-by\-line:
 .INDENT 0.0
 .INDENT 3.5
 .sp
@@ -183,7 +183,7 @@ echo \(aqa\e b\(aq | read \-t first second
 echo $first # outputs \(dqa b\(dq, $second is empty
 
 echo \(aqa\(dqfoo bar\(dqb (command echo wurst)*\(dq \(dq{a,b}\(aq | read \-lt \-l a b c
-echo $a # outputs \(aqafoo bar\(aq (without the quotes)
+echo $a # outputs \(aqafoo barb\(aq (without the quotes)
 echo $b # outputs \(aq(command echo wurst)* {a,b}\(aq (without the quotes)
 echo $c # nothing
 .ft P

@@ -14,7 +14,10 @@ function fish_default_key_bindings -d "emacs-like key binds"
             # This triggers the handler, which calls us again and ensures the user_key_bindings
             # are executed.
             set fish_key_bindings fish_default_key_bindings
-            return
+            # unless the handler somehow doesn't exist, which would leave us without bindings.
+            # this happens in no-config mode.
+            functions -q __fish_reload_key_bindings
+            and return
         end
     end
 
@@ -48,7 +51,6 @@ function fish_default_key_bindings -d "emacs-like key binds"
 
     bind --preset $argv -k home beginning-of-line
     bind --preset $argv -k end end-of-line
-    bind --preset $argv -k sdc backward-delete-char # shifted delete
 
     bind --preset $argv \ca beginning-of-line
     bind --preset $argv \ce end-of-line
@@ -58,6 +60,7 @@ function fish_default_key_bindings -d "emacs-like key binds"
     bind --preset $argv \cf forward-char
     bind --preset $argv \cb backward-char
     bind --preset $argv \ct transpose-chars
+    bind --preset $argv \cg cancel
     bind --preset $argv \c_ undo
     bind --preset $argv \cz undo
     bind --preset $argv \e/ redo

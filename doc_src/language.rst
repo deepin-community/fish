@@ -69,29 +69,31 @@ Here we define some of the terms used on this page and throughout the rest of th
 Quotes
 ------
 
-Sometimes features like :ref:`parameter expansion <expand>` and :ref:`character escapes <escapes>` get in the way. When that happens, you can use quotes, either single (``'``) or double (``"``). Between single quotes, fish performs no expansions. Between double quotes, fish only performs :ref:`variable expansion <expand-variable>`. No other kind of expansion (including :ref:`brace expansion <expand-brace>` or parameter expansion) is performed, and escape sequences (for example, ``\n``) are ignored. Within quotes, whitespace is not used to separate arguments, allowing quoted arguments to contain spaces.
+Sometimes you want to give a command an argument that contains characters special to fish, like spaces or ``$`` or ``*``. To do that, you can use quotes::
+
+    rm "my file.txt"
+
+to remove a file called ``my file.txt`` instead of trying to remove two files, ``my`` and ``file.txt``.
+
+Fish understands two kinds of quotes: Single (``'``) and double (``"``), and both work slightly differently.
+
+Between single quotes, fish performs no expansions. Between double quotes, fish only performs :ref:`variable expansion <expand-variable>` and :ref:`command substitution <expand-command-substitution>` in the ``$(command)``. No other kind of expansion (including :ref:`brace expansion <expand-brace>` or parameter expansion) is performed, and escape sequences (for example, ``\n``) are ignored. Within quotes, whitespace is not used to separate arguments, allowing quoted arguments to contain spaces.
 
 The only meaningful escape sequences in single quotes are ``\'``, which escapes a single quote and ``\\``, which escapes the backslash symbol. The only meaningful escapes in double quotes are ``\"``, which escapes a double quote, ``\$``, which escapes a dollar character, ``\`` followed by a newline, which deletes the backslash and the newline, and ``\\``, which escapes the backslash symbol.
 
 Single quotes have no special meaning within double quotes and vice versa.
 
-Example::
-
-    rm "cumbersome filename.txt"
-
-removes the file ``cumbersome filename.txt``, while
-
-::
-
-    rm cumbersome filename.txt
-
-removes two files, ``cumbersome`` and ``filename.txt``.
-
-Another example::
+More examples::
 
     grep 'enabled)$' foo.txt
 
 searches for lines ending in ``enabled)`` in ``foo.txt`` (the ``$`` is special to ``grep``: it matches the end of the line).
+
+::
+
+    apt install "postgres-*"
+
+installs all packages with a name starting with "postgres-", instead of looking through the current directory for files named "postgres-something".
 
 .. _escapes:
 
@@ -236,12 +238,43 @@ As a convenience, the pipe ``&|`` redirects both stdout and stderr to the same p
 
 .. [#] A "pager" here is a program that takes output and "paginates" it. ``less`` doesn't just do pages, it allows arbitrary scrolling (even back!).
 
+
+Combining pipes and redirections
+--------------------------------
+
+It is possible to use multiple redirections and a pipe at the same time. In that case, they are read in this order:
+
+1. First the pipe is set up.
+2. Then the redirections are evaluated from left-to-right.
+
+This is important when any redirections reference other file descriptors with the ``&N`` syntax. When you say ``>&2``, that will redirect stdout to where stderr is pointing to *at that time*.
+
+Consider this helper function::
+
+  # Just make a function that prints something to stdout and stderr
+  function print
+      echo out
+      echo err >&2
+  end
+
+Now let's see a few cases::
+
+  # Redirect both stderr and stdout to less
+  # (can also be spelt as `&|`)
+  print 2>&1 | less
+
+  # Show the "out" on stderr, silence the "err"
+  print >&2 2>/dev/null
+
+  # Silence both
+  print >/dev/null 2>&1
+
 .. _syntax-job-control:
 
 Job control
 -----------
 
-When you start a job in fish, fish itself will pause, and give control of the terminal to the program just started. Sometimes, you want to continue using the commandline, and have the job run in the background. To create a background job, append an \& (ampersand) to your command. This will tell fish to run the job in the background. Background jobs are very useful when running programs that have a graphical user interface.
+When you start a job in fish, fish itself will pause, and give control of the terminal to the program just started. Sometimes, you want to continue using the commandline, and have the job run in the background. To create a background job, append an ``&`` (ampersand) to your command. This will tell fish to run the job in the background. Background jobs are very useful when running programs that have a graphical user interface.
 
 Example::
 
@@ -377,31 +410,80 @@ Comments can also appear after a line like so::
 Conditions
 ----------
 
-Fish has some builtins that let you execute commands only if a specific criterion is met: :doc:`if <cmds/if>`, :doc:`switch <cmds/switch>`, :doc:`and <cmds/and>` and :doc:`or <cmds/or>`, and also the familiar :ref:`&&/|| <tut-combiners>` syntax.
+Fish has some builtins that let you execute commands only if a specific criterion is met: :doc:`if <cmds/if>`, :doc:`switch <cmds/switch>`, :doc:`and <cmds/and>` and :doc:`or <cmds/or>`, and also the familiar :ref:`&&/|| <syntax-combiners>` syntax.
 
-The :doc:`switch <cmds/switch>` command is used to execute one of possibly many blocks of commands depending on the value of a string. See the documentation for :doc:`switch <cmds/switch>` for more information.
+.. _syntax-if:
 
-The other conditionals use the :ref:`exit status <variables-status>` of a command to decide if a command or a block of commands should be executed.
+The ``if`` statement
+^^^^^^^^^^^^^^^^^^^^
 
-Unlike programming languages you might know, :doc:`if <cmds/if>` doesn't take a *condition*, it takes a *command*. If that command returned a successful :ref:`exit status <variables-status>` (that's 0), the ``if`` branch is taken, otherwise the :doc:`else <cmds/else>` branch.
+The :doc:`if <cmds/if>` statement runs a block of commands if the condition was true.
 
-To check a condition, there is the :doc:`test <cmds/test>` command::
+Like other shells, but unlike typical programming languages you might know, the condition here is a *command*. Fish runs it, and if it returns a true :ref:`exit status <variables-status>` (that's 0), the if-block is run. For example::
 
-  if test 5 -gt 2
-      echo Yes, five is greater than two
+  if test -e /etc/os-release
+      cat /etc/os-release
   end
 
-Some examples::
+This uses the :doc:`test <cmds/test>` command to see if the file /etc/os-release exists. If it does, it runs ``cat``, which prints it on the screen.
+
+Unlike other shells, the condition command just ends after the first job, there is no ``then`` here. Combiners like ``and`` and ``or`` extend the condition.
+
+``if`` is commonly used with the :doc:`test <cmds/test>` command that can check conditions.::
+
+  if test 5 -gt 2
+      echo "Yes, 5 is greater than 2"
+  end
+
+``if`` can also take ``else if`` clauses with additional conditions and an  :doc:`else <cmds/else>` clause that is executed when everything else was false::
+
+  if test "$number" -gt 10
+     echo Your number was greater than 10
+  else if test "$number" -gt 5
+     echo Your number was greater than 5
+  else if test "$number" -gt 1
+     echo Your number was greater than 1
+  else
+     echo Your number was smaller or equal to 1
+  end
+
+The :doc:`not <cmds/not>` keyword can be used to invert the status::
 
   # Just see if the file contains the string "fish" anywhere.
   # This executes the `grep` command, which searches for a string,
   # and if it finds it returns a status of 0.
+  # The `not` then turns 0 into 1 or anything else into 0.
   # The `-q` switch stops it from printing any matches.
-  if grep -q fish myanimals
-      echo "You have fish!"
-  else
+  if not grep -q fish myanimals
       echo "You don't have fish!"
+  else
+      echo "You have fish!"
   end
+
+The ``switch`` statement
+^^^^^^^^^^^^^^^^^^^^^^^^
+
+The :doc:`switch <cmds/switch>` command is used to execute one of possibly many blocks of commands depending on the value of a string. It can take multiple :doc:`case <cmds/case>` blocks that are executed when the string matches. They can take :ref:`wildcards <expand-wildcard>`. For example::
+
+  switch (uname)
+  case Linux
+      echo Hi Tux!
+  case Darwin
+      echo Hi Hexley!
+  case DragonFly '*BSD'
+      echo Hi Beastie! # this also works for FreeBSD and NetBSD
+  case '*'
+      echo Hi, stranger!
+  end
+
+Unlike other shells or programming languages, there is no fallthrough - the first matching ``case`` block is executed and then control jumps out of the ``switch``.
+
+.. _syntax-combiners:
+
+Combiners (``and`` / ``or`` / ``&&`` / ``||``)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+For simple checks, you can use combiners. :doc:`and <cmds/and>` or ``&&`` run the second command if the first succeeded, while :doc:`or <cmds/or>` or ``||`` run it if the first failed. For example::
 
   # $XDG_CONFIG_HOME is a standard place to store configuration.
   # If it's not set applications should use ~/.config.
@@ -422,7 +504,7 @@ and::
       echo 'How did I get here? This should be impossible'
   end
 
-These do essentially the same thing, but the former takes 2 seconds longer because the ``sleep`` always needs to run. So, in cases like these, the ordering is quite important for performance.
+These do essentially the same thing, but the former takes 2 seconds longer because the ``sleep`` always needs to run.
 
 Or you can have a case where it is necessary to stop early::
 
@@ -430,7 +512,20 @@ Or you can have a case where it is necessary to stop early::
 
 If this went on after seeing that the command "foo" doesn't exist, it would try to run ``foo`` and error because it wasn't found!
 
-For more, see the documentation for the builtins or the :ref:`Conditionals <tut-conditionals>` section of the tutorial.
+Combiners really just execute step-by-step, so it isn't recommended to build longer chains of them because they might do something you don't want. Consider::
+
+  test -e /etc/my.config
+  or echo "OH NO WE NEED A CONFIG FILE"
+  and return 1
+
+This will execute ``return 1`` also if the ``test`` succeeded. This is because fish runs ``test -e /etc/my.config``, sets $status to 0, then skips the ``echo``, keeps $status at 0, and then executes the ``return 1`` because $status is still 0.
+
+So if you have more complex conditions or want to run multiple things after something failed, consider using an :ref:`if <syntax-if>`. Here that would be::
+
+  if not test -e /etc/my.config
+      echo "OH NO WE NEED A CONFIG FILE"
+      return 1
+  end
 
 .. _syntax-loops-and-blocks:
 
@@ -638,17 +733,21 @@ When using this feature together with list brackets, the brackets will be used f
 Command substitution
 ^^^^^^^^^^^^^^^^^^^^
 
-The output of a command (or an entire :ref:`pipeline <pipes>`) can be used as the arguments to another command.
+A ``command substitution`` is an expansion that uses the *output* of a command as the arguments to another. For example::
 
-When you write a command in parentheses like ``outercommand (innercommand)``, fish first runs ``innercommand``, and then uses each line of its output as a separate argument to ``outercommand``, which will then be executed. Unlike other shells, the value of ``$IFS`` is not used [#]_, fish splits on newlines.
+  echo (pwd)
 
-A command substitution can have a dollar sign before the opening parenthesis like ``outercommand $(innercommand)``. This variant is also allowed inside double quotes. When using double quotes, the command output is not split up by lines, but trailing empty lines are still removed.
+This executes the :doc:`pwd <cmds/pwd>` command, takes its output (more specifically what it wrote to the standard output "stdout" stream) and uses it as arguments to :doc:`echo <cmds/echo>`. So the inner command (the ``pwd``) is run first and has to complete before the outer command can even be started.
+
+If the inner command prints multiple lines, fish will use each separate line as a separate argument to the outer command. Unlike other shells, the value of ``$IFS`` is not used [#]_, fish splits on newlines.
+
+A command substitution can also be spelled with a dollar sign like ``outercommand $(innercommand)``. This variant is also allowed inside double quotes. When using double quotes, the command output is not split up by lines, but trailing empty lines are still removed.
 
 If the output is piped to :doc:`string split or string split0 <cmds/string-split>` as the last step, those splits are used as they appear instead of splitting lines.
 
 The exit status of the last run command substitution is available in the :ref:`status <variables-status>` variable if the substitution happens in the context of a :doc:`set <cmds/set>` command (so ``if set -l (something)`` checks if ``something`` returned true).
 
-To use only some lines of the output, refer to :ref:`index range expansion <expand-index-range>`.
+To use only some lines of the output, refer to :ref:`slices <expand-slices>`.
 
 Examples::
 
@@ -665,7 +764,6 @@ Examples::
 
     # Set ``$data`` to the contents of data, splitting on NUL-bytes.
     set data (cat data | string split0)
-
 
 Sometimes you want to pass the output of a command to another command that only accepts files. If it's just one file, you can usually just pass it via a pipe, like::
 
@@ -791,10 +889,10 @@ This can be quite useful. For example, if you want to go through all the files i
 
 Because :envvar:`PATH` is a list, this expands to all the files in all the directories in it. And if there are no directories in :envvar:`PATH`, the right answer here is to expand to no files.
 
-.. _expand-index-range:
+.. _expand-slices:
 
-Index range expansion
-^^^^^^^^^^^^^^^^^^^^^
+Slices
+^^^^^^
 
 Sometimes it's necessary to access only some of the elements of a :ref:`list <variables-lists>` (all fish variables are lists), or some of the lines a :ref:`command substitution <expand-command-substitution>` outputs. Both are possible in fish by writing a set of indices in brackets, like::
 
@@ -814,7 +912,7 @@ If a list has 5 elements the indices go from 1 to 5, so a range of ``2..16`` wil
 If the end is negative the range always goes up, so ``2..-2`` will go from element 2 to 4, and ``2..-16`` won't go anywhere because there is no way to go from the second element to one that doesn't exist, while going up.
 If the start is negative the range always goes down, so ``-2..1`` will go from element 4 to 1, and ``-16..2`` won't go anywhere because there is no way to go from an element that doesn't exist to the second element, while going down.
 
-A missing starting index in a range defaults to 1. This is allowed if the range is the first index expression of the sequence. Similarly, a missing ending index, defaulting to -1 is allowed for the last index range in the sequence.
+A missing starting index in a range defaults to 1. This is allowed if the range is the first index expression of the sequence. Similarly, a missing ending index, defaulting to -1 is allowed for the last index in the sequence.
 
 Multiple ranges are also possible, separated with a space.
 
@@ -944,8 +1042,8 @@ Variable Scope
 
 There are four kinds of variables in fish: universal, global, function and local variables.
 
-- Universal variables are shared between all fish sessions a user is running on one computer.
-- Global variables are specific to the current fish session, and will never be erased unless explicitly requested by using ``set -e``.
+- Universal variables are shared between all fish sessions a user is running on one computer. They are stored on disk and persist even after reboot.
+- Global variables are specific to the current fish session. They can be erased by explicitly requesting ``set -e``.
 - Function variables are specific to the currently executing function. They are erased ("go out of scope") when the current function ends. Outside of a function, they don't go out of scope.
 - Local variables are specific to the current block of commands, and automatically erased when a specific block goes out of scope. A block of commands is a series of commands that begins with one of the commands ``for``, ``while`` , ``if``, ``function``, ``begin`` or ``switch``, and ends with the command ``end``. Outside of a block, this is the same as the function scope.
 
@@ -1021,6 +1119,24 @@ Here is an example of local vs function-scoped variables::
       # Will output Sir Terry's wisdom.
   end
 
+When a function calls another, local variables aren't visible::
+
+    function shiver
+        set phrase 'Shiver me timbers'
+    end
+
+    function avast
+        set --local phrase 'Avast, mateys'
+        # Calling the shiver function here can not
+        # change any variables in the local scope
+        # so phrase remains as we set it here.
+        shiver
+        echo $phrase
+    end
+    avast
+
+    # Outputs "Avast, mateys"
+
 When in doubt, use function-scoped variables. When you need to make a variable accessible everywhere, make it global. When you need to persistently store configuration, make it universal. When you want to use a variable only in a short block, make it local.
 
 .. _variables-override:
@@ -1056,8 +1172,8 @@ This syntax is supported since fish 3.1.
 
 .. _variables-universal:
 
-More on universal variables
-^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Universal Variables
+^^^^^^^^^^^^^^^^^^^
 
 Universal variables are variables that are shared between all the user's fish sessions on the computer. Fish stores many of its configuration options as universal variables. This means that in order to change fish settings, all you have to do is change the variable value once, and it will be automatically updated for all sessions, and preserved across computer reboots and login/logout.
 
@@ -1066,30 +1182,6 @@ To see universal variables in action, start two fish sessions side by side, and 
 :ref:`Universal variables <variables-universal>` are stored in the file ``.config/fish/fish_variables``. Do not edit this file directly, as your edits may be overwritten. Edit the variables through fish scripts or by using fish interactively instead.
 
 Do not append to universal variables in :ref:`config.fish <configuration>`, because these variables will then get longer with each new shell instance. Instead, simply set them once at the command line.
-
-.. _variables-functions:
-
-Variable scope for functions
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-When calling a function, all current local variables temporarily disappear. This shadowing of the local scope is needed since the variable namespace would become cluttered, making it very easy to accidentally overwrite variables from another function.
-
-For example::
-
-    function shiver
-        set phrase 'Shiver me timbers'
-    end
-
-    function avast
-        set --local phrase 'Avast, mateys'
-        # Calling the shiver function here can not
-        # change any variables in the local scope
-        shiver
-        echo $phrase
-    end
-    avast
-
-    # Outputs "Avast, mateys"
 
 .. _variables-export:
 
@@ -1175,7 +1267,7 @@ If you specify a negative index when expanding or assigning to a list variable, 
     orange
     apple
 
-As you see, you can use a range of indices, see :ref:`index range expansion <expand-index-range>` for details.
+As you see, you can use a range of indices, see :ref:`slices <expand-slices>` for details.
 
 All lists are one-dimensional and can't contain other lists, although it is possible to fake nested lists using dereferencing - see :ref:`variable expansion <expand-variable>`.
 
@@ -1323,6 +1415,16 @@ You can change the settings of fish by changing the values of certain variables.
 
    A number of variable starting with the prefixes ``fish_color`` and ``fish_pager_color``. See :ref:`Variables for changing highlighting colors <variables-color>` for more information.
 
+.. envvar:: fish_term24bit
+
+   If this is set to 1, fish will assume the terminal understands 24-bit RGB color sequences, and won't translate them to the 256 or 16 color palette.
+   This is often detected automatically.
+
+.. envvar:: fish_term256
+
+   If this is set to 1, fish will assume the terminal understands 256 colors, and won't translate matching colors down to the 16 color palette.
+   This is usually autodetected.
+
 .. envvar:: fish_ambiguous_width
 
    controls the computed width of ambiguous-width characters. This should be set to 1 if your terminal renders these characters as single-width (typical), or 2 if double-width.
@@ -1346,6 +1448,10 @@ You can change the settings of fish by changing the values of certain variables.
 .. envvar:: fish_escape_delay_ms
 
    sets how long fish waits for another key after seeing an escape, to distinguish pressing the escape key from the start of an escape sequence. The default is 30ms. Increasing it increases the latency but allows pressing escape instead of alt for alt+character bindings. For more information, see :ref:`the chapter in the bind documentation <cmd-bind-escape>`.
+
+.. envvar:: fish_sequence_key_delay_ms
+
+   sets how long fish waits for another key after seeing a key that is part of a longer sequence, to disambiguate. For instance if you had bound ``\cx\ce`` to open an editor, fish would wait for this long in milliseconds to see a ctrl-e after a ctrl-x. If the time elapses, it will handle it as a ctrl-x (by default this would copy the current commandline to the clipboard). See also :ref:`Key sequences <interactive-key-sequences>`.
 
 .. envvar:: fish_complete_path
 
@@ -1730,7 +1836,13 @@ Configuration files are run in the following order:
 
   - ``$__fish_config_dir/conf.d`` (by default, ``~/.config/fish/conf.d/``)
   - ``$__fish_sysconf_dir/conf.d`` (by default, ``/etc/fish/conf.d/``)
-  - Directories for others to ship configuration snippets for their software. Fish searches the directories under ``$__fish_user_data_dir`` (usually ``~/.local/share/fish``, controlled by the ``XDG_DATA_HOME`` environment variable) and in the ``XDG_DATA_DIRS`` environment variable for a ``fish/vendor_conf.d`` directory; if not defined, the default value of ``XDG_DATA_DIRS`` is ``/usr/share/fish/vendor_conf.d`` and ``/usr/local/share/fish/vendor_conf.d``, unless your distribution customized this.
+  - Directories for others to ship configuration snippets for their software:
+
+    - the directories under ``$__fish_user_data_dir`` (usually ``~/.local/share/fish``, controlled by the ``XDG_DATA_HOME`` environment variable)
+    - a ``fish/vendor_conf.d`` directory in the directories listed in ``$XDG_DATA_DIRS`` (default ``/usr/share/fish/vendor_conf.d`` and ``/usr/local/share/fish/vendor_conf.d``)
+
+    These directories are also accessible in ``$__fish_vendor_confdirs``.
+    Note that changing that in a running fish won't do anything as by that point the directories have already been read.
 
   If there are multiple files with the same name in these directories, only the first will be executed.
   They are executed in order of their filename, sorted (like globs) in a natural order (i.e. "01" sorts before "2").
@@ -1743,6 +1855,8 @@ Configuration files are run in the following order:
 These files are all executed on the startup of every shell. If you want to run a command only on starting an interactive shell, use the exit status of the command ``status --is-interactive`` to determine if the shell is interactive. If you want to run a command only when using a login shell, use ``status --is-login`` instead. This will speed up the starting of non-interactive or non-login shells.
 
 If you are developing another program, you may want to add configuration for all users of fish on a system. This is discouraged; if not carefully written, they may have side-effects or slow the startup of the shell. Additionally, users of other shells won't benefit from the fish-specific configuration. However, if they are required, you can install them to the "vendor" configuration directory. As this path may vary from system to system, ``pkg-config`` should be used to discover it: ``pkg-config --variable confdir fish``.
+
+For system integration, fish also ships a file called ``__fish_build_paths.fish``. This can be customized during build, for instance because your system requires special paths to be used.
 
 .. _featureflags:
 
@@ -1811,7 +1925,7 @@ To specify a signal handler for the WINCH signal, write::
         echo Got WINCH signal!
     end
 
-Fish already the following named events for the ``--on-event`` switch:
+Fish already has the following named events for the ``--on-event`` switch:
 
 - ``fish_prompt`` is emitted whenever a new fish prompt is about to be displayed.
 

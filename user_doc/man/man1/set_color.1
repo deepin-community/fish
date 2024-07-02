@@ -27,7 +27,7 @@ level margin: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .\" new: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .in \\n[rst2man-indent\\n[rst2man-indent-level]]u
 ..
-.TH "SET_COLOR" "1" "Jan 07, 2023" "3.6" "fish-shell"
+.TH "SET_COLOR" "1" "Mar 19, 2024" "3.7" "fish-shell"
 .SH NAME
 set_color \- set the terminal color
 .SH SYNOPSIS
@@ -127,7 +127,7 @@ Detect support for italics, dim, reverse and other modes.
 .sp
 If terminfo reports 256 color support for a terminal, 256 color support will always be enabled.
 .sp
-To force true\-color support on or off, set \fBfish_term24bit\fP to \(dq1\(dq for on and 0 for off \- \fBset \-g fish_term24bit 1\fP\&.
+To force true\-color support on or off, set \fI\%fish_term24bit\fP to \(dq1\(dq for on and 0 for off \- \fBset \-g fish_term24bit 1\fP\&.
 .sp
 To debug color palette problems, \fBtput colors\fP may be useful to see the number of colors in terminfo for a terminal. Fish launched as \fBfish \-d term_support\fP will include diagnostic messages that indicate the color support mode in use.
 .sp

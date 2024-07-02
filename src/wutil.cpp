@@ -161,23 +161,30 @@ void dir_iter_t::entry_t::do_stat() const {
             case ENOENT:
             case ENOTDIR:
             case ENAMETOOLONG:
+            case ENODEV:
                 // These are "expected" errors.
                 this->type_ = none();
                 break;
 
             default:
-                wperror(L"fstatat");
+                this->type_ = none();
+                // This used to print an error, but given that we have seen
+                // both ENODEV (above) and ENOTCONN,
+                // and that the error isn't actionable and shows up while typing,
+                // let's not do that.
+                // wperror(L"fstatat");
                 break;
         }
     }
 }
 
-dir_iter_t::dir_iter_t(const wcstring &path) {
+dir_iter_t::dir_iter_t(const wcstring &path, bool withdot) {
     dir_.reset(wopendir(path));
     if (!dir_) {
         error_ = errno;
         return;
     }
+    withdot_ = withdot;
     entry_.dirfd_ = dirfd(&*dir_);
 }
 
@@ -211,8 +218,9 @@ const dir_iter_t::entry_t *dir_iter_t::next() {
         error_ = errno;
         return nullptr;
     }
-    // Skip . and ..
-    if (!strcmp(dent->d_name, ".") || !strcmp(dent->d_name, "..")) {
+    // Skip . and ..,
+    // unless we've been told not to.
+    if (!withdot_ && (!strcmp(dent->d_name, ".") || !strcmp(dent->d_name, ".."))) {
         return next();
     }
     entry_.reset();
@@ -220,9 +228,17 @@ const dir_iter_t::entry_t *dir_iter_t::next() {
     entry_.inode = dent->d_ino;
 #ifdef HAVE_STRUCT_DIRENT_D_TYPE
     auto type = dirent_type_to_entry_type(dent->d_type);
-    // Do not store symlinks as we will need to resolve them.
+    // Do not store symlinks as type as we will need to resolve them.
     if (type != dir_entry_type_t::lnk) {
         entry_.type_ = type;
+    } else {
+        entry_.type_ = none();
+    }
+    // This entry could be a link if it is a link or unknown.
+    if (type.has_value()) {
+        entry_.possible_link_ = type == dir_entry_type_t::lnk;
+    } else {
+        entry_.possible_link_ = none();
     }
 #endif
     return &entry_;

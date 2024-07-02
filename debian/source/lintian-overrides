@@ -1,3 +1,2 @@
-fish source: source-is-missing share/tools/web_config/js/angular.js
-fish source: source-is-missing share/tools/web_config/js/angular-route.js
-fish source: source-is-missing share/tools/web_config/js/angular-sanitize.js
+# source is in doc_src/ directory.
+source-is-missing [*]

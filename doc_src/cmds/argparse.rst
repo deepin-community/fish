@@ -32,6 +32,7 @@ The following ``argparse`` options are available. They must appear before all *O
 
 **-x** or **--exclusive** *OPTIONS*
     A comma separated list of options that are mutually exclusive. You can use this more than once to define multiple sets of mutually exclusive options.
+    You give either the short or long version of each option, and you still need to otherwise define the options.
 
 **-N** or **--min-args** *NUMBER*
     The minimum number of acceptable non-option arguments. The default is zero.
@@ -163,6 +164,17 @@ The script should write any error messages to stdout, not stderr. It should retu
 
 Fish ships with a ``_validate_int`` function that accepts a ``--min`` and ``--max`` flag. Let's say your command accepts a ``-m`` or ``--max`` flag and the minimum allowable value is zero and the maximum is 5. You would define the option like this: ``m/max=!_validate_int --min 0 --max 5``. The default if you just call ``_validate_int`` without those flags is to simply check that the value is a valid integer with no limits on the min or max value allowed.
 
+Here are some examples of flag validations::
+
+  # validate that a path is a directory
+  argparse 'p/path=!test -d "$_flag_value"' -- --path $__fish_config_dir
+  # validate that a function does not exist
+  argparse 'f/func=!not functions -q "$_flag_value"' -- -f alias
+  # validate that a string matches a regex
+  argparse 'c/color=!string match -rq \'^#?[0-9a-fA-F]{6}$\' "$_flag_value"' -- -c 'c0ffee'
+  # validate with a validator function
+  argparse 'n/num=!_validate_int --min 0 --max 99' -- --num 42
+
 Example OPTION_SPECs
 --------------------
 
@@ -193,6 +205,37 @@ Some *OPTION_SPEC* examples:
 After parsing the arguments the ``argv`` variable is set with local scope to any values not already consumed during flag processing. If there are no unbound values the variable is set but ``count $argv`` will be zero.
 
 If an error occurs during argparse processing it will exit with a non-zero status and print error messages to stderr.
+
+Examples
+---------
+
+A simple use::
+
+    argparse h/help -- $argv
+    or return
+
+    if set -q _flag_help
+        # TODO: Print help here
+        return 0
+    end
+
+This just wants one option - ``-h`` / ``--help``. Any other option is an error. If it is given it prints help and exits.
+
+How :doc:`fish_add_path` parses its args::
+
+  argparse -x g,U -x P,U -x a,p g/global U/universal P/path p/prepend a/append h/help m/move v/verbose n/dry-run -- $argv
+
+There are a variety of boolean flags, all with long and short versions. A few of these cannot be used together, and that is what the ``-x`` flag is used for.
+``-x g,U`` means that ``--global`` and ``--universal`` or their short equivalents conflict, and if they are used together you get an error.
+In this case you only need to give the short or long flag, not the full option specification.
+
+After this it figures out which variable it should operate on according to the ``--path`` flag::
+
+    set -l var fish_user_paths
+    set -q _flag_path
+    and set var PATH
+
+
 
 Limitations
 -----------
