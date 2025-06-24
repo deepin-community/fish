@@ -1,0 +1,41 @@
+From 0ff1e50a33cc494ee2cd5f1490008e3e3e94e5df Mon Sep 17 00:00:00 2001
+From: Fabian Boehm <FHomborg@gmail.com>
+Date: Tue, 19 Mar 2024 16:49:46 +0100
+Subject: [PATCH] rustc: Protect against lines starting with `-`
+
+Fixes #10379
+---
+ share/completions/rustc.fish | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/share/completions/rustc.fish b/share/completions/rustc.fish
+index 0378b925fed7..0eb5bd6cb692 100644
+--- a/share/completions/rustc.fish
++++ b/share/completions/rustc.fish
+@@ -26,7 +26,7 @@ set -l rust_docs (rustc -C help 2>/dev/null \
+     | string match -r '^.*[^:]$')
+ 
+ for line in $rust_docs
+-    set -l docs (string split -m 1 ' ' $line)
++    set -l docs (string split -m 1 ' ' -- $line)
+     set -l flag (string replace -r '^([a-z\-]+\=|[a-z\-]+)(.*)' '$1' \
+                                 $docs[1])
+     complete -c rustc -x -s C -l codegen -a (string escape -- "$flag") -d "$docs[2]"
+@@ -40,7 +40,7 @@ if rustc +nightly >/dev/null 2>&1
+         | string match -r '^.*[^:]$')
+ 
+     for line in $rust_docs
+-        set -l docs (string split -m 1 ' ' $line)
++        set -l docs (string split -m 1 ' ' -- $line)
+         set -l flag (string replace -r '^([a-z\-]+\=|[a-z\-]+)(.*)' '$1' \
+                                        $docs[1])
+         complete -c rustc -x -s Z -a (string escape -- "$flag") -d "$docs[2]"
+@@ -57,7 +57,7 @@ set -l rust_docs (rustc -W help 2>/dev/null  \
+     | string match -r -v '^([a-z\-]+)(\s+)(allow|warn|deny|forbid)')
+ 
+ for line in $rust_docs
+-    set -l docs (string split -m 1 ' ' $line)
++    set -l docs (string split -m 1 ' ' -- $line)
+     complete -c rustc -x -s W -l warn -a (string escape -- "$docs[1]") -d "$docs[2]"
+     complete -c rustc -x -s A -l allow -a (string escape -- "$docs[1]") -d "$docs[2]"
+     complete -c rustc -x -s D -l deny -a (string escape -- "$docs[1]") -d "$docs[2]"
