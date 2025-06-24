@@ -1,3 +1,10 @@
+fish (3.7.1-1deepin1) unstable; urgency=medium
+
+  * rustc: Protect against lines starting with - Fixes
+    https://github.com/fish-shell/fish-shell/issues/10379
+
+ -- Tianyu Chen <sweetyfish@deepin.org>  Wed, 25 Jun 2025 00:36:25 +0800
+
 fish (3.7.1-1) unstable; urgency=medium
 
   * New upstream version 3.7.1
