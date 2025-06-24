@@ -22,6 +22,7 @@ Synopsis
                [STRING ...]
     string repeat [(-n | --count) COUNT] [(-m | --max) MAX] [-N | --no-newline]
                   [-q | --quiet] [STRING ...]
+    string repeat [-N | --no-newline] [-q | --quiet] COUNT [STRING ...]
     string replace [-a | --all] [-f | --filter] [-i | --ignore-case]
                    [-r | --regex] [-q | --quiet] PATTERN REPLACE [STRING ...]
     string shorten [(-c | --char) CHARS] [(-m | --max) INTEGER]
@@ -154,8 +155,8 @@ Examples
    :start-after: BEGIN EXAMPLES
    :end-before: END EXAMPLES
 
-"pad" and "shorten" subcommands
----------------------------------
+"pad" subcommand
+----------------
 
 .. include:: string-pad.rst
    :start-after: BEGIN SYNOPSIS
@@ -165,9 +166,21 @@ Examples
    :start-after: BEGIN DESCRIPTION
    :end-before: END DESCRIPTION
 
+Examples
+^^^^^^^^
+
 .. include:: string-pad.rst
    :start-after: BEGIN EXAMPLES
    :end-before: END EXAMPLES
+
+See also
+^^^^^^^^
+
+.. include:: string-pad.rst
+   :start-after: BEGIN SEEALSO
+
+"shorten" subcommand
+--------------------
 
 .. include:: string-shorten.rst
    :start-after: BEGIN SYNOPSIS
@@ -177,9 +190,18 @@ Examples
    :start-after: BEGIN DESCRIPTION
    :end-before: END DESCRIPTION
 
+Examples
+^^^^^^^^
+
 .. include:: string-shorten.rst
    :start-after: BEGIN EXAMPLES
    :end-before: END EXAMPLES
+
+See also
+^^^^^^^^
+
+.. include:: string-shorten.rst
+   :start-after: BEGIN SEEALSO
 
 "repeat" subcommand
 -------------------

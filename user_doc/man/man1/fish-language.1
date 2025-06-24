@@ -27,7 +27,7 @@ level margin: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .\" new: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .in \\n[rst2man-indent\\n[rst2man-indent-level]]u
 ..
-.TH "FISH-LANGUAGE" "1" "Mar 19, 2024" "3.7" "fish-shell"
+.TH "FISH-LANGUAGE" "1" "Apr 20, 2025" "4.0" "fish-shell"
 .sp
 This document is a comprehensive overview of fish\(aqs scripting language.
 .sp
@@ -267,6 +267,8 @@ The destination of a stream can be changed using something called \fIredirection
 .IP \(bu 2
 To read standard input from a file, use \fB<SOURCE_FILE\fP\&.
 .IP \(bu 2
+To read standard input from a file or /dev/null if it can\(aqt be read, use \fB<?SOURCE_FILE\fP\&.
+.IP \(bu 2
 To write standard output to a file, use \fB>DESTINATION\fP\&.
 .IP \(bu 2
 To write standard error to a file, use \fB2>DESTINATION\fP\&. [1]
@@ -300,6 +302,8 @@ To redirect the output of descriptor N, use \fBN>DESTINATION\fP\&.
 To append the output of descriptor N to a file, use \fBN>>DESTINATION_FILE\fP\&.
 .UNINDENT
 .sp
+File descriptors cannot be used with a \fB<?\fP input redirection, only a regular \fB<\fP one.
+.sp
 For example:
 .INDENT 0.0
 .INDENT 3.5
@@ -328,6 +332,9 @@ begin
     echo stdout
     echo stderr >&2 # <\- this goes to stderr!
 end >/dev/null # ignore stdout, so this prints \(dqstderr\(dq
+
+# print all lines that include \(dqfoo\(dq from myfile, or nothing if it doesn\(aqt exist.
+string match \(aq*foo*\(aq <?myfile
 .ft P
 .fi
 .UNINDENT
@@ -404,8 +411,9 @@ Now let\(aqs see a few cases:
 .nf
 .ft C
 # Redirect both stderr and stdout to less
-# (can also be spelt as \(ga&|\(ga)
 print 2>&1 | less
+# or
+print &| less
 
 # Show the \(dqout\(dq on stderr, silence the \(dqerr\(dq
 print >&2 2>/dev/null
@@ -434,7 +442,7 @@ emacs &
 .sp
 will start the emacs text editor in the background. \fI\%fg\fP can be used to bring it into the foreground again when needed.
 .sp
-Most programs allow you to suspend the program\(aqs execution and return control to fish by pressing \fBControl\fP+\fBZ\fP (also referred to as \fB^Z\fP). Once back at the fish commandline, you can start other programs and do anything you want. If you then want you can go back to the suspended command by using the \fI\%fg\fP (foreground) command.
+Most programs allow you to suspend the program\(aqs execution and return control to fish by pressing \fBctrl\-z\fP (also referred to as \fB^Z\fP). Once back at the fish commandline, you can start other programs and do anything you want. If you then want you can go back to the suspended command by using the \fI\%fg\fP (foreground) command.
 .sp
 If you instead want to put a suspended job into the background, use the \fI\%bg\fP command.
 .sp
@@ -617,19 +625,21 @@ This uses the \fI\%test\fP command to see if the file /etc/os\-release exists. I
 .sp
 Unlike other shells, the condition command just ends after the first job, there is no \fBthen\fP here. Combiners like \fBand\fP and \fBor\fP extend the condition.
 .sp
-\fBif\fP is commonly used with the \fI\%test\fP command that can check conditions.:
+A more complicated example with a \fI\%command substitution\fP:
 .INDENT 0.0
 .INDENT 3.5
 .sp
 .nf
 .ft C
-if test 5 \-gt 2
-    echo \(dqYes, 5 is greater than 2\(dq
+if test \(dq$(uname)\(dq = Linux
+    echo I like penguins
 end
 .ft P
 .fi
 .UNINDENT
 .UNINDENT
+.sp
+Because \fBtest\fP can be used for many different tests, it is important to quote variables and command substitutions. If the \fB$(uname)\fP was not quoted, and \fBuname\fP printed nothing it would run \fBtest = Linux\fP, which is an error.
 .sp
 \fBif\fP can also take \fBelse if\fP clauses with additional conditions and an  \fI\%else\fP clause that is executed when everything else was false:
 .INDENT 0.0
@@ -670,6 +680,18 @@ end
 .ft P
 .fi
 .UNINDENT
+.UNINDENT
+.sp
+Other things commonly used in if\-conditions:
+.INDENT 0.0
+.IP \(bu 2
+\fI\%contains\fP \- to see if a list contains a specific element (\fBif contains \-\- /usr/bin $PATH\fP)
+.IP \(bu 2
+\fI\%string\fP \- to e.g. match strings (\fBif string match \-q \-\- \(aq*\-\(aq $arg\fP)
+.IP \(bu 2
+\fI\%path\fP \- to check if paths of some criteria exist (\fBif path is \-rf \-\- ~/.config/fish/config.fish\fP)
+.IP \(bu 2
+\fI\%type\fP \- to see if a command, function or builtin exists (\fBif type \-q git\fP)
 .UNINDENT
 .SS The \fBswitch\fP statement
 .sp
@@ -1028,31 +1050,51 @@ If $WORD here is undefined or an empty list, the \(dqs\(dq is not printed. Howev
 For more on shell variables, read the \fI\%Shell variables\fP section.
 .SS Quoting variables
 .sp
-Unlike all the other expansions, variable expansion also happens in double quoted strings. Inside double quotes (\fB\(dqthese\(dq\fP), variables will always expand to exactly one argument. If they are empty or undefined, it will result in an empty string. If they have one element, they\(aqll expand to that element. If they have more than that, the elements will be joined with spaces, unless the variable is a \fI\%path variable\fP \- in that case it will use a colon (\fB:\fP) instead [3]\&.
+Variable expansion also happens in double quoted strings. Inside double quotes (\fB\(dqthese\(dq\fP), variables will always expand to exactly one argument. If they are empty or undefined, it will result in an empty string. If they have one element, they\(aqll expand to that element. If they have more than that, the elements will be joined with spaces, unless the variable is a \fI\%path variable\fP \- in that case it will use a colon (\fB:\fP) instead [3]\&.
 .sp
-Outside of double quotes, variables will expand to as many arguments as they have elements. That means an empty list will expand to nothing, a variable with one element will expand to that element, and a variable with multiple elements will expand to each of those elements separately.
-.sp
-If a variable expands to nothing, it will cancel out any other strings attached to it. See the \fI\%cartesian product\fP section for more information.
-.sp
-Unlike other shells, fish doesn\(aqt do what is known as \(dqWord Splitting\(dq. Once a variable is set to a particular set of elements, those elements expand as themselves. They aren\(aqt split on spaces or newlines or anything:
+Fish variables are all \fI\%lists\fP, and they are split into elements when they are \fIset\fP \- that means it is important to decide whether to use quotes or not with \fI\%set\fP:
 .INDENT 0.0
 .INDENT 3.5
 .sp
 .nf
 .ft C
-> set foo one\enthing
-> echo $foo
-one
-thing
-> printf \(aq|%s|\en\(aq $foo
-|one
-thing|
+set foo 1 2 3 # a variable with three elements
+rm $foo # runs the equivalent of \(garm 1 2 3\(ga \- trying to delete three files: 1, 2 and 3.
+rm \(dq$foo\(dq # runs \(garm \(aq1 2 3\(aq\(ga \- trying to delete one file called \(aq1 2 3\(aq
+
+set foo # an empty variable
+rm $foo # runs \(garm\(ga without arguments
+rm \(dq$foo\(dq # runs the equivalent of \(garm \(aq\(aq\(ga
+
+set foo \(dq1 2 3\(dq
+rm $foo # runs the equivalent of \(garm \(aq1 2 3\(aq\(ga \- trying to delete one file
+rm \(dq$foo\(dq # same thing
 .ft P
 .fi
 .UNINDENT
 .UNINDENT
 .sp
-That means quoting isn\(aqt the absolute necessity it is in other shells. Most of the time, not quoting a variable is correct. The exception is when you need to ensure that the variable is passed as one element, even if it might be unset or have multiple elements. This happens often with \fI\%test\fP:
+This is unlike other shells, which do what is known as \(dqWord Splitting\(dq, where they split the variable when it is \fIused\fP in an expansion. E.g. in bash:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+foo=\(dq1 2 3\(dq
+rm $foo # runs the equivalent of \(garm 1 2 3\(ga
+rm \(dq$foo\(dq # runs the equivalent of \(garm \(aq1 2 3\(aq\(ga
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+This is the cause of very common problems with filenames with spaces in bash scripts.
+.sp
+In fish, unquoted variables will expand to as many arguments as they have elements. That means an empty list will expand to nothing, a variable with one element will expand to that element, and a variable with multiple elements will expand to each of those elements separately.
+.sp
+If a variable expands to nothing, it will cancel out any other strings attached to it. See the \fI\%Combining Lists\fP section for more information.
+.sp
+Most of the time, not quoting a variable is correct. The exception is when you need to ensure that the variable is passed as one element, even if it might be unset or have multiple elements. This happens often with \fI\%test\fP:
 .INDENT 0.0
 .INDENT 3.5
 .sp
@@ -1095,9 +1137,93 @@ end
 .UNINDENT
 .UNINDENT
 .sp
-\fB$$foo[$i]\fP is \(dqthe value of the variable named by \fB$foo[$i]\fP\&.
+\fB$$foo[$i]\fP is \(dqthe value of the variable named by \fB$foo[$i]\fP\(dq.
 .sp
-When using this feature together with list brackets, the brackets will be used from the inside out. \fB$$foo[5]\fP will use the fifth element of \fB$foo\fP as a variable name, instead of giving the fifth element of all the variables $foo refers to. That would instead be expressed as \fB$$foo[1..\-1][5]\fP (take all elements of \fB$foo\fP, use them as variable names, then give the fifth element of those).
+This can also be used to give a variable name to a function:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+function print_var
+    for arg in $argv
+        echo Variable $arg is $$arg
+    end
+end
+
+set \-g foo 1 2 3
+set \-g bar a b c
+
+print_var foo bar
+# prints \(dqVariable foo is 1 2 3\(dq and \(dqVariable bar is a b c\(dq
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+Of course the variable will have to be accessible from the function, so it needs to be \fI\%global/universal\fP or \fI\%exported\fP\&. It also can\(aqt clash with a variable name used inside the function. So if we had made $foo there a local variable, or if we had named it \(dqarg\(dq instead, it would not have worked.
+.sp
+When using this feature together with \fI\%slices\fP, the slices will be used from the inside out. \fB$$foo[5]\fP will use the fifth element of \fB$foo\fP as a variable name, instead of giving the fifth element of all the variables $foo refers to. That would instead be expressed as \fB$$foo[1..\-1][5]\fP (take all elements of \fB$foo\fP, use them as variable names, then give the fifth element of those).
+.sp
+Some more examples:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+set listone 1 2 3
+set listtwo 4 5 6
+set var listone listtwo
+
+echo $$var
+# Output is 1 2 3 4 5 6
+
+echo $$var[1]
+# Output is 1 2 3
+
+echo $$var[2][3]
+# $var[1] is listtwo, third element of that is 6, output is 6
+
+echo $$var[..][2]
+# The second element of every variable, so output is
+# 2 5
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.SS Variables as command
+.sp
+Like other shells, you can run the value of a variable as a command.
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+> set \-g EDITOR emacs
+> $EDITOR foo # opens emacs, possibly the GUI version
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+If you want to give the command an argument inside the variable it needs to be a separate element:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+> set EDITOR emacs \-nw
+> $EDITOR foo # opens emacs in the terminal even if the GUI is installed
+> set EDITOR \(dqemacs \-nw\(dq
+> $EDITOR foo # tries to find a command called \(dqemacs \-nw\(dq
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+Also like other shells, this only works with commands, builtins and functions \- it will not work with keywords because they have syntactical importance.
+.sp
+For instance \fBset if $if\fP won\(aqt allow you to make an if\-block, and \fBset cmd command\fP won\(aqt allow you to use the \fI\%command\fP decorator, but only uses like \fB$cmd \-q foo\fP\&.
 .SS Command substitution
 .sp
 A \fBcommand substitution\fP is an expansion that uses the \fIoutput\fP of a command as the arguments to another. For example:
@@ -1106,7 +1232,7 @@ A \fBcommand substitution\fP is an expansion that uses the \fIoutput\fP of a com
 .sp
 .nf
 .ft C
-echo (pwd)
+echo $(pwd)
 .ft P
 .fi
 .UNINDENT
@@ -1116,9 +1242,23 @@ This executes the \fI\%pwd\fP command, takes its output (more specifically what 
 .sp
 If the inner command prints multiple lines, fish will use each separate line as a separate argument to the outer command. Unlike other shells, the value of \fB$IFS\fP is not used [4], fish splits on newlines.
 .sp
-A command substitution can also be spelled with a dollar sign like \fBoutercommand $(innercommand)\fP\&. This variant is also allowed inside double quotes. When using double quotes, the command output is not split up by lines, but trailing empty lines are still removed.
+Command substitutions can also be double\-quoted:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+echo \(dq$(pwd)\(dq
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+When using double quotes, the command output is not split up by lines, but trailing empty lines are still removed.
 .sp
 If the output is piped to \fI\%string split or string split0\fP as the last step, those splits are used as they appear instead of splitting lines.
+.sp
+Fish also allows spelling command substitutions without the dollar, like \fBecho (pwd)\fP\&. This variant will not be expanded in double\-quotes (\fBecho \(dq(pwd)\(dq\fP will print \fB(pwd)\fP).
 .sp
 The exit status of the last run command substitution is available in the \fI\%status\fP variable if the substitution happens in the context of a \fI\%set\fP command (so \fBif set \-l (something)\fP checks if \fBsomething\fP returned true).
 .sp
@@ -1175,7 +1315,7 @@ diff \-u (grep fish myanimallist1 | psub) (grep fish myanimallist2 | psub)
 .sp
 This creates a temporary file, stores the output of the command in that file and prints the filename, so it is given to the outer command.
 .sp
-Fish has a default limit of 100 MiB on the data it will read in a command sustitution. If that limit is reached the command (all of it, not just the command substitution \- the outer command won\(aqt be executed at all) fails and \fB$status\fP is set to 122. This is so command substitutions can\(aqt cause the system to go out of memory, because typically your operating system has a much lower limit, so reading more than that would be useless and harmful. This limit can be adjusted with the \fBfish_read_limit\fP variable (\fI0\fP meaning no limit). This limit also affects the \fI\%read\fP command.
+Fish has a default limit of 100 MiB on the data it will read in a command substitution. If that limit is reached the command (all of it, not just the command substitution \- the outer command won\(aqt be executed at all) fails and \fB$status\fP is set to 122. This is so command substitutions can\(aqt cause the system to go out of memory, because typically your operating system has a much lower limit, so reading more than that would be useless and harmful. This limit can be adjusted with the \fBfish_read_limit\fP variable (\fI0\fP meaning no limit). This limit also affects the \fI\%read\fP command.
 .IP [4] 5
 One exception: Setting \fB$IFS\fP to empty will disable line splitting. This is deprecated, use \fI\%string split\fP instead.
 .SS Brace expansion
@@ -1223,7 +1363,7 @@ foo\-{}
 .UNINDENT
 .UNINDENT
 .sp
-If after expansion there is nothing between the braces, the argument will be removed (see \fI\%the cartesian product section\fP):
+If after expansion there is nothing between the braces, the argument will be removed (see \fI\%the Combining Lists\fP section):
 .INDENT 0.0
 .INDENT 3.5
 .sp
@@ -1250,71 +1390,56 @@ If there is nothing between a brace and a comma or two commas, it\(aqs interpret
 .UNINDENT
 .sp
 To use a \(dq,\(dq as an element, \fI\%quote\fP or \fI\%escape\fP it.
-.SS Combining lists (Cartesian Product)
+.SS Combining lists
 .sp
-When lists are expanded with other parts attached, they are expanded with these parts still attached. Even if two lists are attached to each other, they are expanded in all combinations. This is referred to as the \(dqcartesian product\(dq (like in mathematics), and works basically like \fI\%brace expansion\fP\&.
-.sp
-Examples:
+Fish expands lists like \fI\%brace expansions\fP:
 .INDENT 0.0
 .INDENT 3.5
 .sp
 .nf
 .ft C
-# Brace expansion is the most familiar:
-# All elements in the brace combine with the parts outside of the braces
+>_ set \-l foo x y z
+>_ echo 1$foo
+# Any element of $foo is combined with the \(dq1\(dq:
+1x 1y 1z
+
 >_ echo {good,bad}\(dq apples\(dq
+# Any element of the {} is combined with the \(dq apples\(dq:
 good apples bad apples
 
-# The same thing happens with variable expansion.
->_ set \-l a x y z
->_ set \-l b 1 2 3
-
-# $a is {x,y,z}, $b is {1,2,3},
-# so this is \(gaecho {x,y,z}{1,2,3}\(ga
->_ echo $a$b
-x1 y1 z1 x2 y2 z2 x3 y3 z3
-
-# Same thing if something is between the lists
->_ echo $a\(dq\-\(dq$b
-x\-1 y\-1 z\-1 x\-2 y\-2 z\-2 x\-3 y\-3 z\-3
-
-# Or a brace expansion and a variable
->_ echo {x,y,z}$b
-x1 y1 z1 x2 y2 z2 x3 y3 z3
-
-# A combined brace\-variable expansion
->_ echo {$b}word
-1word 2word 3word
-
-# Special case: If $c has no elements, this expands to nothing
->_ echo {$c}word
-# Output is an empty line
+# Or we can mix the two:
+>_ echo {good,bad}\(dq \(dq$foo
+good x bad x good y bad y good z bad z
 .ft P
 .fi
 .UNINDENT
 .UNINDENT
 .sp
-Sometimes this may be unwanted, especially that tokens can disappear after expansion. In those cases, you should double\-quote variables \- \fBecho \(dq$c\(dqword\fP\&.
+Any string attached to a list will be concatenated to each element.
 .sp
-This also happens after \fI\%command substitution\fP\&. To avoid tokens disappearing there, make the inner command return a trailing newline, or store the output in a variable and double\-quote it.
-.sp
-E.g.
+Two lists will be expanded in all combinations  \- every element of the first with every element of the second:
 .INDENT 0.0
 .INDENT 3.5
 .sp
 .nf
 .ft C
->_ set b 1 2 3
->_ echo (echo x)$b
-x1 x2 x3
->_ echo (printf \(aq%s\(aq \(aq\(aq)banana
-# the printf prints nothing, so this is nothing times \(dqbanana\(dq,
-# which is nothing.
->_ echo (printf \(aq%s\en\(aq \(aq\(aq)banana
-# the printf prints a newline,
-# so the command substitution expands to an empty string,
-# so this is \(ga\(aq\(aqbanana\(ga
-banana
+>_ set \-l a x y z; set \-l b 1 2 3
+>_ echo $a$b # same as {x,y,z}{1,2,3}
+x1 y1 z1 x2 y2 z2 x3 y3 z3
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+A result of this is that, if a list has no elements, this combines the string with no elements, which means the entire token is removed!
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+>_ set \-l c # <\- this list is empty!
+>_ echo {$c}word
+# Output is an empty line \- the \(dqword\(dq part is gone
 .ft P
 .fi
 .UNINDENT
@@ -1333,6 +1458,32 @@ for file in $PATH/*
 .UNINDENT
 .sp
 Because \fI\%PATH\fP is a list, this expands to all the files in all the directories in it. And if there are no directories in \fI\%PATH\fP, the right answer here is to expand to no files.
+.sp
+Sometimes this may be unwanted, especially that tokens can disappear after expansion. In those cases, you should double\-quote variables \- \fBecho \(dq$c\(dqword\fP\&.
+.sp
+This also happens after \fI\%command substitution\fP\&. To avoid tokens disappearing there, make the inner command return a trailing newline, or double\-quote it:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+>_ set b 1 2 3
+>_ echo (echo x)$b
+x1 x2 x3
+>_ echo (printf \(aq%s\(aq \(aq\(aq)banana
+# the printf prints nothing, so this is nothing times \(dqbanana\(dq,
+# which is nothing.
+>_ echo (printf \(aq%s\en\(aq \(aq\(aq)banana
+# the printf prints a newline,
+# so the command substitution expands to an empty string,
+# so this is \(ga\(aq\(aqbanana\(ga
+banana
+>_ echo \(dq$(printf \(aq%s\(aq \(aq\(aq)\(dqbanana
+# quotes mean this is one argument, the banana stays
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
 .SS Slices
 .sp
 Sometimes it\(aqs necessary to access only some of the elements of a \fI\%list\fP (all fish variables are lists), or some of the lines a \fI\%command substitution\fP outputs. Both are possible in fish by writing a set of indices in brackets, like:
@@ -1497,11 +1648,131 @@ Bracket expansion
 Wildcard expansion
 .UNINDENT
 .sp
-Expansions are performed from right to left, nested bracket expansions are performed from the inside and out.
+Expansions are performed from right to left, nested bracket expansions and command substitutions are performed from the inside and out.
 .sp
 Example:
 .sp
 If the current directory contains the files \(aqfoo\(aq and \(aqbar\(aq, the command \fBecho a(ls){1,2,3}\fP will output \fBabar1 abar2 abar3 afoo1 afoo2 afoo3\fP\&.
+.SH TABLE OF OPERATORS
+.sp
+Putting it together, here is a quick reference to fish\(aqs operators, all of the special symbols it uses:
+.TS
+center;
+|l|l|l|.
+_
+T{
+Symbol
+T}	T{
+Meaning
+T}	T{
+Example
+T}
+_
+T{
+\fB$\fP
+T}	T{
+\fI\%Variable expansion\fP
+T}	T{
+\fBecho $foo\fP
+T}
+_
+T{
+\fB$()\fP and \fB()\fP
+T}	T{
+\fI\%Command substitution\fP
+T}	T{
+\fBcat (grep foo bar)\fP or \fBcat $(grep foo bar)\fP
+T}
+_
+T{
+\fB<\fP and \fB>\fP
+T}	T{
+\fI\%Redirection\fP, like \fBcommand > file\fP
+T}	T{
+\fBgit shortlog \-nse . > authors\fP
+T}
+_
+T{
+\fB|\fP
+T}	T{
+\fI\%Pipe\fP, connect two or more commands
+T}	T{
+\fBfoo | grep bar | grep baz\fP
+T}
+_
+T{
+\fB;\fP
+T}	T{
+End of the command, instead of a newline
+T}	T{
+\fBcommand1; command2\fP
+T}
+_
+T{
+\fB&\fP
+T}	T{
+\fI\%Backgrounding\fP
+T}	T{
+\fBsleep 5m &\fP
+T}
+_
+T{
+\fB{}\fP
+T}	T{
+\fI\%Brace expansion\fP
+T}	T{
+\fBls {/usr,}/bin\fP
+T}
+_
+T{
+\fB&&\fP and \fB||\fP
+T}	T{
+\fI\%Combiners\fP
+T}	T{
+\fBmkdir foo && cd foo\fP or \fBrm foo || exit\fP
+T}
+_
+T{
+\fB*\fP and \fB**\fP
+T}	T{
+\fI\%Wildcards\fP
+T}	T{
+\fBcat *.fish\fP or \fBcount **.jpg\fP
+T}
+_
+T{
+\fB\e\e\fP
+T}	T{
+\fI\%Escaping\fP
+T}	T{
+\fBecho foo\enbar\fP or \fBecho \e$foo\fP
+T}
+_
+T{
+\fB\(aq\(aq\fP and \fB\(dq\(dq\fP
+T}	T{
+\fI\%Quoting\fP
+T}	T{
+\fBrm \(dqfile with spaces\(dq\fP or \fBecho \(aq$foo\(aq\fP
+T}
+_
+T{
+\fB~\fP
+T}	T{
+\fI\%Home directory expansion\fP
+T}	T{
+\fBls ~/\fP or \fBls ~root/\fP
+T}
+_
+T{
+\fB#\fP
+T}	T{
+\fI\%Comments\fP
+T}	T{
+\fBecho Hello # this isn\(aqt printed\fP
+T}
+_
+.TE
 .SH SHELL VARIABLES
 .sp
 Variables are a way to save data and pass it around. They can be used just by the shell, or they can be \(dq\fI\%exported\fP\(dq, so that a copy of the variable is available to any external command the shell starts. An exported variable is referred to as an \(dqenvironment variable\(dq.
@@ -1532,7 +1803,45 @@ echo Papa smurf, who is $smurf_color, wears $pants_color pants
 So you set a variable with \fBset\fP, and use it with a \fB$\fP and the name.
 .SS Variable Scope
 .sp
-There are four kinds of variables in fish: universal, global, function and local variables.
+All variables in fish have a scope. For example they can be global or local to a function or block:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+# This variable is global, we can use it everywhere.
+set \-\-global name Patrick
+# This variable is local, it will not be visible in a function we call from here.
+set \-\-local place \(dqat the Krusty Krab\(dq
+
+function local
+    # This can find $name, but not $place
+    echo Hello this is $name $place
+
+    # This variable is local, it will not be available
+    # outside of this function
+    set \-\-local instrument mayonnaise
+    echo My favorite instrument is $instrument
+    # This creates a local $name, and won\(aqt touch the global one
+    set \-\-local name Spongebob
+    echo My best friend is $name
+end
+
+local
+# Will print:
+# Hello this is Patrick
+# My favorite instrument is mayonnaise
+# My best friend is Spongebob
+
+echo $name, I am $place and my instrument is $instrument
+# Will print:
+# Patrick, I am at the Krusty Krab and my instrument is
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+There are four kinds of variable scopes in fish: universal, global, function and local variables.
 .INDENT 0.0
 .IP \(bu 2
 Universal variables are shared between all fish sessions a user is running on one computer. They are stored on disk and persist even after reboot.
@@ -1638,12 +1947,13 @@ function test\-scopes
         set gnu \(dqIn the beginning there was nothing, which exploded\(dq
     end
 
-    echo $pirate
     # This will not output anything, since the pirate was local
+    echo $pirate
+    # This will output the good Captain\(aqs speech
+    # since $captain had function\-scope.
     echo $captain
-    # This will output the good Captain\(aqs speech since $captain had function\-scope.
+    # This will output Sir Terry\(aqs wisdom.
     echo $gnu
-    # Will output Sir Terry\(aqs wisdom.
 end
 .ft P
 .fi
@@ -1700,7 +2010,8 @@ Unlike other shells, fish will first set the variable and then perform other exp
 .nf
 .ft C
 set foo banana
-foo=gagaga echo $foo # prints gagaga, while in other shells it might print \(dqbanana\(dq
+foo=gagaga echo $foo
+# prints gagaga, while in other shells it might print \(dqbanana\(dq
 .ft P
 .fi
 .UNINDENT
@@ -1981,10 +2292,14 @@ A more robust approach to option handling is \fI\%argparse\fP, which checks the 
 .nf
 .ft C
 function mybetterfunction
-    # We tell argparse about \-h/\-\-help and \-s/\-\-second \- these are short and long forms of the same option.
-    # The \(dq\-\-\(dq here is mandatory, it tells it from where to read the arguments.
+    # We tell argparse about \-h/\-\-help and \-s/\-\-second
+    # \- these are short and long forms of the same option.
+    # The \(dq\-\-\(dq here is mandatory,
+    # it tells it from where to read the arguments.
     argparse h/help s/second \-\- $argv
-    # exit if argparse failed because it found an option it didn\(aqt recognize \- it will print an error
+    # exit if argparse failed because
+    # it found an option it didn\(aqt recognize
+    # \- it will print an error
     or return
 
     # If \-h or \-\-help is given, we print a little help text and return
@@ -2432,7 +2747,7 @@ Most importantly, it defines the text \fIencoding\fP \- which numbers map to whi
 .INDENT 0.0
 .TP
 .B LC_MONETARY
-Determines currency, how it is formated, and the symbols used.
+Determines currency, how it is formatted, and the symbols used.
 .UNINDENT
 .INDENT 0.0
 .TP
@@ -2536,7 +2851,8 @@ function show_files
 
     # If there are more than 5 files
     if test (count $files) \-gt 5
-        # and both stdin (for reading input) and stdout (for writing the prompt)
+        # and both stdin (for reading input)
+        # and stdout (for writing the prompt)
         # are terminals
         and isatty stdin
         and isatty stdout
@@ -2637,9 +2953,12 @@ You can see the current list of features via \fBstatus features\fP:
 .ft C
 > status features
 stderr\-nocaret          on  3.0 ^ no longer redirects stderr
-qmark\-noglob            off 3.0 ? no longer globs
+qmark\-noglob            on  3.0 ? no longer globs
 regex\-easyesc           on  3.1 string replace \-r needs fewer \e\e\(aqs
 ampersand\-nobg\-in\-token on  3.4 & only backgrounds if followed by a separating character
+remove\-percent\-self     off 4.0 %self is no longer expanded (use $fish_pid)
+test\-require\-arg        off 4.0 builtin test requires an argument
+keyboard\-protocols      on  4.0 Use keyboard protocols (kitty, xterm\(aqs modifyotherkeys
 .ft P
 .fi
 .UNINDENT
@@ -2648,13 +2967,21 @@ ampersand\-nobg\-in\-token on  3.4 & only backgrounds if followed by a separatin
 Here is what they mean:
 .INDENT 0.0
 .IP \(bu 2
-\fBstderr\-nocaret\fP was introduced in fish 3.0 (and made the default in 3.3). It makes \fB^\fP an ordinary character instead of denoting an stderr redirection, to make dealing with quoting and such easier. Use \fB2>\fP instead. This can no longer be turned off since fish 3.5. The flag can still be tested for compatibility, but a \fBno\-stderr\-nocaret\fP value will simply be ignored.
+\fBstderr\-nocaret\fP was introduced in fish 3.0 and cannot be turned off since fish 3.5. It can still be tested for compatibility, but a \fBno\-stderr\-nocaret\fP value will simply be ignored. The flag made \fB^\fP an ordinary character instead of denoting an stderr redirection. Use \fB2>\fP instead.
 .IP \(bu 2
-\fBqmark\-noglob\fP was also introduced in fish 3.0. It makes \fB?\fP an ordinary character instead of a single\-character glob. Use a \fB*\fP instead (which will match multiple characters) or find other ways to match files like \fBfind\fP\&.
+\fBqmark\-noglob\fP was also introduced in fish 3.0 (and made the default in 4.0). It makes \fB?\fP an ordinary character instead of a single\-character glob. Use a \fB*\fP instead (which will match multiple characters) or find other ways to match files like \fBfind\fP\&.
 .IP \(bu 2
-\fBregex\-easyesc\fP was introduced in 3.1. It makes it so the replacement expression in \fBstring replace \-r\fP does one fewer round of escaping. Before, to escape a backslash you would have to use \fBstring replace \-ra \(aq([ab])\(aq \(aq\e\e\e\e\e\e\e\e$1\(aq\fP\&. After, just \fB\(aq\e\e\e\e$1\(aq\fP is enough. Check your \fBstring replace\fP calls if you use this anywhere.
+\fBregex\-easyesc\fP was introduced in 3.1 (and made the default in 3.5). It makes it so the replacement expression in \fBstring replace \-r\fP does one fewer round of escaping. Before, to escape a backslash you would have to use \fBstring replace \-ra \(aq([ab])\(aq \(aq\e\e\e\e\e\e\e\e$1\(aq\fP\&. After, just \fB\(aq\e\e\e\e$1\(aq\fP is enough. Check your \fBstring replace\fP calls if you use this anywhere.
 .IP \(bu 2
-\fBampersand\-nobg\-in\-token\fP was introduced in fish 3.4. It makes it so a \fB&\fP i no longer interpreted as the backgrounding operator in the middle of a token, so dealing with URLs becomes easier. Either put spaces or a semicolon after the \fB&\fP\&. This is recommended formatting anyway, and \fBfish_indent\fP will have done it for you already.
+\fBampersand\-nobg\-in\-token\fP was introduced in fish 3.4 (and made the default in 3.5). It makes it so a \fB&\fP i no longer interpreted as the backgrounding operator in the middle of a token, so dealing with URLs becomes easier. Either put spaces or a semicolon after the \fB&\fP\&. This is recommended formatting anyway, and \fBfish_indent\fP will have done it for you already.
+.IP \(bu 2
+\fBremove\-percent\-self\fP turns off the special \fB%self\fP expansion. It was introduced in 4.0. To get fish\(aqs pid, you can use the \fI\%fish_pid\fP variable.
+.IP \(bu 2
+\fBtest\-require\-arg\fP removes \fI\%builtin test\fP\(aqs one\-argument form (\fBtest \(dqstring\(dq\fP\&. It was introduced in 4.0. To test if a string is non\-empty, use \fBtest \-n \(dqstring\(dq\fP\&. If disabled, any call to \fBtest\fP that would change sends a \fI\%debug message\fP of category \(dqdeprecated\-test\(dq, so starting fish with \fBfish \-\-debug=deprecated\-test\fP can be used to find offending calls.
+.IP \(bu 2
+\fBkeyboard\-protocols\fP lets fish turn on various keyboard protocols including the kitty keyboard protocol.
+It was introduced in 4.0 and is on by default.
+Disable it with \fBno\-keyboard\-protocols\fP to work around bugs in your terminal.
 .UNINDENT
 .sp
 These changes are introduced off by default. They can be enabled on a per session basis:
@@ -2695,16 +3022,6 @@ set \-Ua fish_features no\-qmark\-noglob
 .ft P
 .fi
 .UNINDENT
-.UNINDENT
-.sp
-Currently, the following features are enabled by default:
-.INDENT 0.0
-.IP \(bu 2
-stderr\-nocaret \- \fB^\fP no longer redirects stderr, use \fB2>\fP\&. Enabled by default in fish 3.3.0. No longer changeable since fish 3.5.0.
-.IP \(bu 2
-regex\-easyesc \- \fBstring replace \-r\fP requires fewer backslashes in the replacement part. Enabled by default in fish 3.5.0.
-.IP \(bu 2
-ampersand\-nobg\-in\-token \- \fB&\fP in the middle of a word is a normal character instead of backgrounding. Enabled by default in fish 3.5.0.
 .UNINDENT
 .SH EVENT HANDLERS
 .sp
@@ -2750,6 +3067,10 @@ Fish already has the following named events for the \fB\-\-on\-event\fP switch:
 \fBfish_exit\fP is emitted right before fish exits.
 .IP \(bu 2
 \fBfish_cancel\fP is emitted when a commandline is cleared.
+.IP \(bu 2
+\fBfish_focus_in\fP is emitted when fish\(aqs terminal gains focus.
+.IP \(bu 2
+\fBfish_focus_out\fP is emitted when fish\(aqs terminal loses focus.
 .UNINDENT
 .sp
 Events can be fired with the \fI\%emit\fP command, and do not have to be defined before. The names just need to match. For example:
@@ -2780,16 +3101,42 @@ Please note that event handlers only become active when a function is loaded, wh
 For more information on how to define new event handlers, see the documentation for the \fI\%function\fP command.
 .SH DEBUGGING FISH SCRIPTS
 .sp
-Fish includes basic built\-in debugging facilities that allow you to stop execution of a script at an arbitrary point. When this happens you are presented with an interactive prompt where you can execute any fish command to inspect or change state (there are no debug commands as such). For example, you can check or change the value of any variables using \fI\%printf\fP and \fI\%set\fP\&. As another example, you can run \fI\%status print\-stack\-trace\fP to see how the current breakpoint was reached. To resume normal execution of the script, simply type \fI\%exit\fP or \fBControl\fP+\fBD\fP\&.
+Fish includes basic built\-in debugging facilities that allow you to stop execution of a script at an arbitrary point. When this happens you are presented with an interactive prompt where you can execute any fish command to inspect or change state (there are no debug commands as such). For example, you can check or change the value of any variables using \fI\%printf\fP and \fI\%set\fP\&. As another example, you can run \fI\%status print\-stack\-trace\fP to see how the current breakpoint was reached. To resume normal execution of the script, simply type \fI\%exit\fP or \fBctrl\-d\fP\&.
 .sp
 To start a debug session simply insert the \fI\%builtin command\fP \fBbreakpoint\fP at the point in a function or script where you wish to gain control, then run the function or script. Also, the default action of the \fBTRAP\fP signal is to call this builtin, meaning a running script can be actively debugged by sending it the \fBTRAP\fP signal (\fBkill \-s TRAP <PID>\fP). There is limited support for interactively setting or modifying breakpoints from this debug prompt: it is possible to insert new breakpoints in (or remove old ones from) other functions by using the \fBfunced\fP function to edit the definition of a function, but it is not possible to add or remove a breakpoint from the function/script currently loaded and being executed.
 .sp
 Another way to debug script issues is to set the \fI\%fish_trace\fP variable, e.g. \fBfish_trace=1 fish_prompt\fP to see which commands fish executes when running the \fI\%fish_prompt\fP function.
+.SS Profiling fish scripts
 .sp
-If you specifically want to debug performance issues, \fBfish\fP can be run with the \fB\-\-profile /path/to/profile.log\fP option to save a profile to the specified path. This profile log includes a breakdown of how long each step in the execution took. See \fI\%fish\fP for more information.
+If you specifically want to debug performance issues, \fBfish\fP can be run with the \fB\-\-profile /path/to/profile.log\fP option to save a profile to the specified path. This profile log includes a breakdown of how long each step in the execution took.
+.sp
+For example:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+> fish \-\-profile /tmp/sleep.prof \-ic \(aqsleep 3s\(aq
+> cat /tmp/sleep.prof
+Time    Sum     Command
+3003419 3003419 > sleep 3s
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+This will show the time for each command itself in the first column, the time for the command and every subcommand (like any commands inside of a \fI\%function\fP or \fI\%command substitutions\fP) in the second and the command itself in the third, separated with tabs.
+.sp
+The time is given in microseconds.
+.sp
+To see the slowest commands last, \fBsort \-nk2 /path/to/logfile\fP is useful.
+.sp
+For profiling fish\(aqs startup there is also \fB\-\-profile\-startup /path/to/logfile\fP\&.
+.sp
+See \fI\%fish\fP for more information.
 .SH AUTHOR
 fish-shell developers
 .SH COPYRIGHT
-2023, fish-shell developers
+2024, fish-shell developers
 .\" Generated by docutils manpage writer.
 .

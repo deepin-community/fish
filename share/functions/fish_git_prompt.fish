@@ -180,10 +180,9 @@ if string match -q Darwin -- (uname) && string match -q /usr/bin/git -- (command
     else
         # git is installed, but on the first run it may be very slow as xcrun needs to populate the cache.
         # Kick it off in the background to populate the cache.
-        command git --version &>/dev/null &
-        disown $last_pid &>/dev/null
+        /bin/sh -c '( /usr/bin/git --version; touch /tmp/__fish_git_ready ) >/dev/null 2>&1 &'
         function __fish_git_prompt_ready
-            path is (xcrun --show-cache-path 2>/dev/null) || return 1
+            path is /tmp/__fish_git_ready || return 1
             # git is ready, erase the function.
             functions -e __fish_git_prompt_ready
             return 0
@@ -299,9 +298,9 @@ function fish_git_prompt --description "Prompt function for Git"
                 # Ignored files are omitted by default
                 set -l stat (command git -c core.fsmonitor= status --porcelain -z $opt | string split0)
 
-                set dirtystate (string match -qr '^.[ACDMR]' -- $stat; and echo 1)
+                set dirtystate (string match -qr '^.[ACDMRTU]' -- $stat; and echo 1)
                 if test -n "$sha"
-                    set stagedstate (string match -qr '^[ACDMR].' -- $stat; and echo 1)
+                    set stagedstate (string match -qr '^[ACDMRTU].' -- $stat; and echo 1)
                 else
                     set invalidstate 1
                 end
@@ -388,7 +387,9 @@ function fish_git_prompt --description "Prompt function for Git"
     end
 
     # Formatting
-    if test -n "$f"
+    # If we have state, a bare repo or upstream difference, add a separator.
+    # merging is already separate.
+    if test -n "$f$c$p"
         set f "$space$f"
     end
     set -l format $argv[1]
@@ -420,16 +421,13 @@ function __fish_git_prompt_informative_status
     # The v2 format is better, but we don't actually care in this case.
     set -l stats (string sub -l 2 (git -c core.fsmonitor= status --porcelain -z $untr | string split0))
     set -l invalidstate (string match -r '^UU' $stats | count)
-    set -l stagedstate (string match -r '^[ACDMR].' $stats | count)
-    set -l dirtystate (string match -r '^.[ACDMR]' $stats | count)
+    set -l stagedstate (string match -r '^[ACDMRT].' $stats | count)
+    set -l dirtystate (string match -r '^.[ACDMRT]' $stats | count)
     set -l untrackedfiles (string match -r '^\?\?' $stats | count)
 
     set -l info
 
-    # If `math` fails for some reason, assume the state is clean - it's the simpler path
-    set -l state (math $dirtystate + $invalidstate + $stagedstate + $untrackedfiles + $stashstate 2>/dev/null)
-    if test -z "$state"
-        or test "$state" = 0
+    if test "$dirtystate$invalidstate$stagedstate$untrackedfiles$stashstate" = 00000
         if test -n "$___fish_git_prompt_char_cleanstate"
             set info $___fish_git_prompt_color_cleanstate$___fish_git_prompt_char_cleanstate$___fish_git_prompt_color_cleanstate_done
         end
@@ -622,7 +620,6 @@ function __fish_git_prompt_set_color
         end
     end
 end
-
 
 function __fish_git_prompt_validate_colors --description "fish_git_prompt helper, checks color variables"
 

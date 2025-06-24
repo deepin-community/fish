@@ -1,6 +1,6 @@
 # Completions for the `apt` command
 
-# macOS has a /usr/bin/apt that is something else entirely: 
+# macOS has a /usr/bin/apt that is something else entirely:
 # (apt - Returns the path to a Java home directory from the current user's settings)
 if [ "$(uname -s)" = Darwin -a "$(command -s apt)" = /usr/bin/apt ]
     exit 1
@@ -14,7 +14,7 @@ set -l handle_file_pkg_subcmds install
 function __fish_apt_subcommand -V all_subcmds
     set -l subcommand $argv[1]
     set -e argv[1]
-    complete -f -c apt -n "not __fish_seen_subcommand_from $all_subcmds" -a $subcommand $argv
+    complete -f -c apt -n __fish_is_first_token -a $subcommand $argv
 end
 
 function __fish_apt_option
@@ -33,9 +33,10 @@ end
 
 complete -c apt -f
 
-complete -k -c apt -n "__fish_seen_subcommand_from $pkg_subcmds" -a '(__fish_print_apt_packages | string match -re -- "(?:\\b|_)"(commandline -ct | string escape --style=regex) | head -n 250 | sort)'
-complete -c apt -n "__fish_seen_subcommand_from $installed_pkg_subcmds" -a '(__fish_print_apt_packages --installed | string match -re -- "(?:\\b|_)"(commandline -ct | string escape --style=regex) | head -n 250)'
-complete -k -c apt -n "__fish_seen_subcommand_from $handle_file_pkg_subcmds" -a '(__fish_complete_suffix .deb)'
+# We use -k to keep PWD directories (from the .deb completion) after packages, so we need to sort the packages
+complete -k -c apt -n "__fish_seen_subcommand_from $handle_file_pkg_subcmds" -kxa '(__fish_complete_suffix .deb)'
+complete -k -c apt -n "__fish_seen_subcommand_from $pkg_subcmds" -kxa '(__fish_print_apt_packages | sort)'
+complete -c apt -n "__fish_seen_subcommand_from $installed_pkg_subcmds" -kxa '(__fish_print_apt_packages --installed | sort)'
 
 complete -c apt -n "__fish_seen_subcommand_from install" -l no-install-recommends -d 'Do not install recommended packages'
 complete -c apt -n "__fish_seen_subcommand_from install" -l no-install-suggests -d 'Do not install suggested packages'
@@ -64,8 +65,10 @@ complete -x -c apt -s t -d 'Install from specific repository' -x -a '(__fish_apt
 # List
 __fish_apt_subcommand list -d 'List packages'
 __fish_apt_option list -l installed -d 'Installed packages'
+__fish_apt_option list -l manual-installed -d 'Manually installed packages'
 __fish_apt_option list -l upgradable -d 'Upgradable packages'
-__fish_apt_option list -l all-versions -d 'Show all versions of any package'
+__fish_apt_option list -s a -l all-versions -d 'Show all versions of any package'
+__fish_apt_option list -s v -l verbose -d 'Verbose output'
 
 # Search
 __fish_apt_subcommand search -r -d 'Search for packages'

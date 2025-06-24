@@ -34,7 +34,7 @@ If **-q** or **--quiet** is given, ``string shorten`` only runs for the return v
 
 The default ellipsis is ``…``. If fish thinks your system is incapable because of your locale, it will use ``...`` instead.
 
-The return value is 0 if any shortening occured, 1 otherwise.
+The return value is 0 if any shortening occurred, 1 otherwise.
 
 .. END DESCRIPTION
 
@@ -81,13 +81,15 @@ Examples
     # Taking 20 columns from the right instead:
     …in-path-with-expand
 
+.. END EXAMPLES
+
 See Also
 --------
+
+.. BEGIN SEEALSO
 
 - :ref:`string<cmd-string>`'s ``pad`` subcommand does the inverse of this command, adding padding to a specific width instead.
   
 - The :doc:`printf <printf>` command can do simple padding, for example ``printf %10s\n`` works like ``string pad -w10``.
 
 - :doc:`string length <string-length>` with the ``--visible`` option can be used to show what fish thinks the width is.
-
-.. END EXAMPLES

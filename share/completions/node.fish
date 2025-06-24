@@ -147,7 +147,7 @@ complete -c node -l always_compact -d 'Perform compaction on every full GC'
 complete -c node -l lazy_sweeping -d 'Use lazy sweeping for old pointer and data spaces'
 complete -c node -l never_compact -d 'Never perform compaction on full GC - testing only'
 complete -c node -l compact_code_space -d 'Compact code space on full non-incremental collections'
-complete -c node -l cleanup_code_caches_at_gc -d 'Flush inline caches prior to mark compact collection and flush code caches in maps during mark compact cycle'
+complete -c node -l cleanup_code_caches_at_gc -d 'Flush inline/code caches prior to mark compact collection/cycle'
 complete -c node -l random_seed -d 'Default seed for random generator init(0:default-sys random)'
 complete -c node -l use_verbose_printer -d 'allows verbose printing'
 complete -c node -l allow_natives_syntax -d 'allow natives syntax'
@@ -161,10 +161,10 @@ complete -c node -l randomize_hashes -d 'randomize hashes(w/ snapshots cannot ov
 complete -c node -l hash_seed -d 'Fix seed to hash prop. key(w/ snapshots no BI seed overr.)'
 complete -c node -l preemption -d 'activate a 100ms timer that switches between V8 threads'
 complete -c node -l regexp_optimization -d 'generate optimized regexp code'
-complete -c node -l testing_bool_flag -d 'testing_bool_flag'
-complete -c node -l testing_int_flag -d 'testing_int_flag'
-complete -c node -l testing_float_flag -d 'float-flag'
-complete -c node -l testing_string_flag -d 'string-flag'
+complete -c node -l testing_bool_flag -d testing_bool_flag
+complete -c node -l testing_int_flag -d testing_int_flag
+complete -c node -l testing_float_flag -d float-flag
+complete -c node -l testing_string_flag -d string-flag
 complete -c node -l testing_prng_seed -d 'Seed used for threading test randomness'
 complete -c node -l testing_serialization_file -d 'file in which to serialize heap'
 complete -c node -l help -d 'Print usage message, including flags, on console'

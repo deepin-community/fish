@@ -158,6 +158,9 @@ echo -e 'abc\x211def'
 #CHECK: abc!def
 #CHECK: abc!1def
 
+echo \UDE01
+#CHECK: �
+
 # Comments allowed in between lines (#1987)
 echo before comment \
   # comment
@@ -500,7 +503,7 @@ type --query cp
 echo $status
 #CHECK: 0
 
-jobs --query 0
+jobs --query 1
 echo $status
 #CHECK: 1
 

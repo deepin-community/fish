@@ -10,7 +10,7 @@ Synopsis
 
     string match [-a | --all] [-e | --entire] [-i | --ignore-case]
                  [-g | --groups-only] [-r | --regex] [-n | --index]
-                 [-q | --quiet] [-v | --invert]
+                 [-q | --quiet] [-v | --invert] [(-m | --max-matches) MAX]
                  PATTERN [STRING ...]
 
 .. END SYNOPSIS
@@ -36,6 +36,8 @@ When matching via regular expressions, ``string match`` automatically sets varia
 
 If **--invert** or **-v** is used the selected lines will be only those which do not match the given glob pattern or regular expression.
 
+If **--max-matches MAX** or **-m MAX** is used, ``string`` will stop checking for matches after MAX lines of input have matched. This can be used as an "early exit" optimization when processing long inputs but expecting a limited and fixed number of outputs that might be found considerably before the input stream has been exhausted. If combined with **--invert** or **-v**, considers only inverted matches.
+
 Exit status: 0 if at least one match was found, or 1 otherwise.
 
 .. END DESCRIPTION
@@ -50,13 +52,13 @@ Match Glob Examples
 
 ::
 
-    >_ string match '?' a
+    >_ string match 'a' a
     a
 
     >_ string match 'a*b' axxb
     axxb
 
-    >_ string match -i 'a??B' Axxb
+    >_ string match -i 'a*B' Axxb
     Axxb
 
     >_ string match -- '-*' -h foo --version bar
@@ -65,7 +67,7 @@ Match Glob Examples
     -h
     --version
 
-    >_ echo 'ok?' | string match '*\?'
+    >_ echo 'ok?' | string match '*?'
     ok?
 
     # Note that only the second STRING will match here.
@@ -77,7 +79,7 @@ Match Glob Examples
     foo
     foo2
 
-    >_ string match 'foo?' 'foo1' 'foo' 'foo2'
+    >_ string match 'foo*' 'foo1' 'foo' 'foo2'
     foo1
     foo2
 

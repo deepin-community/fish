@@ -7,20 +7,27 @@ export LC_ALL=C.UTF-8
 
 include /usr/share/dpkg/pkg-info.mk
 
+# used in build.rs
+export FISH_BUILD_VERSION=$(DEB_VERSION_UPSTREAM)
+
 %:
 	dh $@ -Scmake+ninja
 
 execute_after_dh_auto_clean:
 	-find . -type d -name '__pycache__' -exec rm -rf '{}' \;
+	-$(RM) -r .cargo
 
 override_dh_auto_configure:
+	mkdir -p .cargo
+	cp debian/cargo-config.toml .cargo/config.toml
 	dh_auto_configure -- -DCMAKE_BUILD_TYPE=RelWithDebInfo
+
+execute_before_dh_auto_build:
+	# blhc treats them as errors
+	@echo 'blhc: ignore-line-regexp: .* Compiling v.+ .*'
+
+override_dh_auto_test:
+	ninja -C $(firstword $(wildcard obj-*)) fish_run_tests
 
 override_dh_install:
 	dh_install -XCHANGELOG
-
-
-ifeq ($(DEB_HOST_ARCH),armel)
-override_dh_auto_test:
-	dh_auto_test || true
-endif

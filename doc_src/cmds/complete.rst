@@ -53,9 +53,14 @@ The following options are available:
 
 **-r** or **--require-parameter**
     This completion must have an option argument, i.e. may not be followed by another option.
+    This means that the next argument is the argument to the option.
+    If this is *not* given, the option argument must be attached like ``-xFoo`` or ``--color=auto``.
 
 **-x** or **--exclusive**
     Short for **-r** and **-f**.
+
+**-d** or **--description** *DESCRIPTION*
+    Add a description for this completion, to be shown in the completion pager.
 
 **-w** or **--wraps** *WRAPPED_COMMAND*
     Causes the specified command to inherit completions from *WRAPPED_COMMAND* (see below for details).

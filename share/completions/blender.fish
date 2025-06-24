@@ -6,11 +6,10 @@ function __blender_echo_input_file_name
     # Find last argument ending in .blend (or .blend1, etc.)
     # This is because a Blender invocation can open multiple blend file
     # sequentially, so we need to find the last one up to this point.
-    set -l path (commandline -poc |
+    set -l path (commandline -pxc |
         string match -r '.*\\.blend[0-9]*$' |
         tail --lines=1)
-    # Using eval to expand ~ and variables specified on the commandline.
-    eval echo $path
+    echo $path
 end
 
 function __blender_list_scenes
@@ -78,13 +77,13 @@ complete -c blender -n 'not __blender_player' -o x -l use-extension -a '0\tfalse
 # Animation Playback Options:
 complete -c blender -n 'not __blender_player' -o a -d 'Run as animation player'
 
-complete -c blender -n '__blender_player' -o p -x -d 'Specify position and size'
-complete -c blender -n '__blender_player' -o m -d 'Read from disk (do not buffer)'
-complete -c blender -n '__blender_player' -o f -x -d 'Specify FPS to start with'
-complete -c blender -n '__blender_player' -o j -x -d 'Specify frame step'
-complete -c blender -n '__blender_player' -o s -x -d 'Specify start frame'
-complete -c blender -n '__blender_player' -o e -x -d 'Specify end frame'
-complete -c blender -n '__blender_player' -o c -x -d 'Memory in MB for cache'
+complete -c blender -n __blender_player -o p -x -d 'Specify position and size'
+complete -c blender -n __blender_player -o m -d 'Read from disk (do not buffer)'
+complete -c blender -n __blender_player -o f -x -d 'Specify FPS to start with'
+complete -c blender -n __blender_player -o j -x -d 'Specify frame step'
+complete -c blender -n __blender_player -o s -x -d 'Specify start frame'
+complete -c blender -n __blender_player -o e -x -d 'Specify end frame'
+complete -c blender -n __blender_player -o c -x -d 'Memory in MB for cache'
 
 # Window Options:
 complete -c blender -n 'not __blender_player' -o w -l window-border -d 'Show window borders'

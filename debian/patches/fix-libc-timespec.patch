@@ -1,0 +1,38 @@
+Description: Adapt to Debian patched libc::timespec with private fields.
+Forwarded: not-needed
+Last-Update: 2024-12-21
+Index: fish/src/input_common.rs
+===================================================================
+--- fish.orig/src/input_common.rs
++++ fish/src/input_common.rs
+@@ -1097,10 +1097,9 @@ pub trait InputEventQueuer {
+         const NSEC_PER_MSEC: u64 = 1000 * 1000;
+         const NSEC_PER_SEC: u64 = NSEC_PER_MSEC * 1000;
+         let wait_nsec: u64 = (wait_time_ms as u64) * NSEC_PER_MSEC;
+-        let timeout = libc::timespec {
+-            tv_sec: (wait_nsec / NSEC_PER_SEC).try_into().unwrap(),
+-            tv_nsec: (wait_nsec % NSEC_PER_SEC).try_into().unwrap(),
+-        };
++        let mut timeout: libc::timespec = unsafe { std::mem::zeroed() };
++        timeout.tv_sec = (wait_nsec / NSEC_PER_SEC).try_into().unwrap();
++        timeout.tv_nsec = (wait_nsec % NSEC_PER_SEC).try_into().unwrap();
+ 
+         // We have one fd of interest.
+         let mut fdset: libc::fd_set = unsafe { std::mem::zeroed() };
+Index: fish/src/universal_notifier/kqueue.rs
+===================================================================
+--- fish.orig/src/universal_notifier/kqueue.rs
++++ fish/src/universal_notifier/kqueue.rs
+@@ -119,10 +119,10 @@ impl UniversalNotifier for KqueueNotifie
+         )];
+         // Use a zero timeout because we check for more events than we have notifications for, to
+         // drain all events up front.
+-        let timeout = libc::timespec {
++        let timeout: libc::timespec = unsafe { std::mem::zeroed() };/*
+             tv_nsec: 0,
+             tv_sec: 0,
+-        };
++        };*/
+         loop {
+             let event_count = self
+                 .kq

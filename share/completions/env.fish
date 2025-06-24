@@ -3,23 +3,29 @@ if env --version &>/dev/null
     set is_gnu --is-gnu
 end
 
-# Returns 0 if we're after `env` and all previous tokens have an equal sign
+# Returns 0 if we're after `env` and all previous tokens have an equal sign or were switches
 function __fish_env_defining_vars
-    not string match -ev -- = (commandline -o)[2..-2] | string match -rq .
+    set last ""
+    for token in (commandline -cxp)[2..] # 2.. excludes `env`. -cx already ignores the variable being completed.
+        # Is a switch, defined an env variable, or was a variable name to unset (after -u)
+        string match -r -- '^-|=' $token || string match -rq -- '^(-u|--unset)$' "$last" || return 1
+        set last $token
+    end
 end
 
 # Returns 0 if we're after `env` and all previous tokens have not yet contained an equal sign
+# Prevents `env` completions from completing payload completions.
 function __fish_env_not_yet_vars
-    not string match -qe = (commandline)
+    not string match -qe -- = (commandline -c)
 end
 
 # Generate a list of possible variable names to redefine, excluding any already redefined.
 function __fish_env_redefine_vars
     set -l vars (set --names -x)
 
-    set cmdline "$(commandline -o)"
+    set cmdline "$(commandline -xp)"
     for var in $vars
-        if not string match -e -- $var= $cmdline
+        if not string match -eq -- $var= $cmdline
             echo $var=
         end
     end
@@ -37,7 +43,7 @@ end
 
 # Generate a list of possible completions for the current variable name from history
 function __fish_env_values_from_history
-    string match -rq "(?<name>.+)=(?<value>.*)" (commandline -ct); or return 1
+    string match -rq -- "(?<name>.+)=(?<value>.*)" (commandline -ct); or return 1
 
     # Caveat lector: very crude multi-word tokenization handling below!
     set -l rname (string escape --style=regex -- $name)
@@ -56,7 +62,7 @@ end
 
 # Get the text after all env arguments and variables, so we can complete it as a regular command
 function __fish_env_remaining_args -V is_gnu
-    set -l argv (commandline -opc) (commandline -ct)
+    set -l argv (commandline -xpc | string escape) (commandline -ct)
     if set -q is_gnu[1]
         argparse -s i/ignore-environment u/unset= help version -- $argv 2>/dev/null
         or return 0
@@ -87,15 +93,20 @@ end
 # Generate a completion for the executable to execute under `env`
 function __fish_complete_env_subcommand
     if set -l argv (__fish_env_remaining_args)
-        __fish_complete_subcommand --commandline $argv
+        complete -C "$argv"
     end
 end
 
-complete -c env -a "(__fish_complete_env_subcommand)"
-# Complete the name of the variable to redefine
+# Complete the name of the variable from current definitions
 complete -c env -n '__fish_env_defining_vars; and not string match -eq = -- (commandline -ct)' -a "(__fish_env_redefine_vars)" -f -d "Redefine variable"
+# Complete the name of the variable from history
 complete -c env -n '__fish_env_defining_vars; and not string match -eq = -- (commandline -ct)' -a "(__fish_env_names_from_history)" -f -d Historical
+# Complete the value for FOO= from history
+# TODO: NO_ESCAPE when that becomes available
 complete -c env -n '__fish_env_defining_vars; and string match -eq = -- (commandline -ct)' -a "(__fish_env_values_from_history)" -f
+
+# Complete normally after we are done with `env` stuff
+complete -c env -fa "(__fish_complete_env_subcommand)"
 
 if set -q is_gnu
     complete -c env -n __fish_env_not_yet_vars -s i -l ignore-environment -d "Start with an empty environment"

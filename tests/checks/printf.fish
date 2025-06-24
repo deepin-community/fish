@@ -124,6 +124,15 @@ printf '%d\n' 0g
 echo $status
 # CHECK: 1
 
+printf '%f\n' 0x2
+# CHECK: 2.000000
+
+printf '%f\n' 0x2p3
+# CHECK: 16.000000
+
+printf '%.1f\n' -0X1.5P8
+# CHECK: -336.0
+
 # Test that we ignore options
 printf -a
 printf --foo
@@ -138,3 +147,10 @@ echo
 printf --help
 echo
 # CHECK: --help
+
+# This is how mc likes to encode the directory we should cd to.
+printf '%b\n' '\0057foo\0057bar\0057'
+# CHECK: /foo/bar/
+
+printf %18446744073709551616s
+# CHECKERR: Number out of range

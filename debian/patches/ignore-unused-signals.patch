@@ -1,0 +1,16 @@
+Description: Remove signals unused but absent on some platforms failing build
+Forwarded: not-needed
+Last-Update: 2024-12-22
+Index: fish/src/signal.rs
+===================================================================
+--- fish.orig/src/signal.rs
++++ fish/src/signal.rs
+@@ -401,7 +401,7 @@ const SIGNAL_TABLE : &[LookupEntry] = &[
+     #[cfg(any(bsd, target_os = "macos"))]
+     LookupEntry::new(libc::SIGINFO,   L!("SIGINFO"), L!("Information request")),
+ 
+-    #[cfg(target_os = "linux")]
++    #[cfg(all(target_os = "linux", not(any(target_arch = "mips", target_arch = "mips64"))))]
+     LookupEntry::new(libc::SIGSTKFLT, L!("SISTKFLT"), L!("Stack fault")),
+ 
+     #[cfg(target_os = "linux")]

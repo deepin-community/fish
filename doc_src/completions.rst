@@ -3,15 +3,24 @@
 Writing your own completions
 ============================
 
-To specify a completion, use the ``complete`` command. ``complete`` takes as a parameter the name of the command to specify a completion for. For example, to add a completion for the program ``myprog``, one would start the completion command with ``complete -c myprog ...``
+To specify a completion, use the ``complete`` command. ``complete`` takes as a parameter the name of the command to specify a completion for. For example, to add a completion for the program ``myprog``, start the completion command with ``complete -c myprog ...``
 
-To provide a list of possible completions for myprog, use the ``-a`` switch. If ``myprog`` accepts the arguments start and stop, this can be specified as ``complete -c myprog -a 'start stop'``. The argument to the ``-a`` switch is always a single string. At completion time, it will be tokenized on spaces and tabs, and variable expansion, command substitution and other forms of parameter expansion will take place.
+For a complete description of the various switches accepted by the ``complete`` command, see the documentation for the :doc:`complete <cmds/complete>` builtin, or write ``complete --help`` inside the ``fish`` shell.
 
-``fish`` has a special syntax to support specifying switches accepted by a command. The switches ``-s``, ``-l`` and ``-o`` are used to specify a short switch (single character, such as ``-l``), a gnu style long switch (such as ``--color``) and an old-style long switch (like ``-shuffle``), respectively. If the command 'myprog' has an option '-o' which can also be written as ``--output``, and which can take an additional value of either 'yes' or 'no', this can be specified by writing::
+To provide a list of possible completions for myprog, use the ``-a`` switch. If ``myprog`` accepts the arguments start and stop, this can be specified as ``complete -c myprog -a 'start stop'``. The argument to the ``-a`` switch is always a single string. At completion time, it will be tokenized on spaces and tabs, and variable expansion, command substitution and other forms of parameter expansion will take place::
+
+  # If myprog can list the valid outputs with the list-outputs subcommand:
+  complete -c myprog -l output -a '(myprog list-outputs)'
+
+``fish`` has a special syntax to support specifying switches accepted by a command. The switches ``-s``, ``-l`` and ``-o`` are used to specify a short switch (single character, such as ``-l``), a gnu style long switch (such as ``--color``) and an old-style long switch (with one ``-``, like ``-shuffle``), respectively. If the command 'myprog' has an option that can be written as ``-o`` or ``--output``, that is::
+
+  complete -c myprog -s o -l output
+
+If this option takes an optional argument, you would also add ``--argument`` or ``-a``, and give that the possible arguments::
 
   complete -c myprog -s o -l output -a "yes no"
 
-In the complete call above, the ``-a`` arguments apply when the option -o/--output has been given, so this offers them for::
+This offers the arguments "yes" and "no" for::
 
   > myprog -o<TAB>
   > myprog --output=<TAB>
@@ -31,9 +40,7 @@ which offers yes/no in these cases::
   > myprog -o <TAB>
   > myprog --output <TAB>
 
-In the latter two cases, files will also be offered because file completion is enabled by default.
-
-You would either inhibit file completion for a single option::
+Fish will also offer files by default, in addition to the arguments you specified. You would either inhibit file completion for a single option::
 
   complete -c myprog -s o -l output --no-files -ra "yes no"
 
@@ -76,7 +83,7 @@ As a more comprehensive example, here's a commented excerpt of the completions f
   # The `-n`/`--condition` option takes script as a string, which it executes.
   # If it returns true, the completion is offered.
   # Here the condition is the `__fish_seen_subcommands_from` helper function.
-  # If returns true if any of the given commands is used on the commandline,
+  # It returns true if any of the given commands is used on the commandline,
   # as determined by a simple heuristic.
   # For more complex uses, you can write your own function.
   # See e.g. the git completions for an example.
@@ -136,8 +143,6 @@ Functions beginning with the string ``__fish_print_`` print a newline separated 
 
 - ``__fish_print_interfaces`` prints a list of all known network interfaces.
 
-- ``__fish_print_packages`` prints a list of all installed packages. This function currently handles Debian, rpm and Gentoo packages.
-
 .. _completion-path:
 
 Where to put completions
@@ -152,7 +157,7 @@ By default, Fish searches the following for completions, using the first availab
 - A user-specified directory for third-party vendor completions, usually ``~/.local/share/fish/vendor_completions.d`` (controlled by the ``XDG_DATA_HOME`` environment variable);
 - A directory for third-party software vendors to ship their own completions for their software, usually ``/usr/share/fish/vendor_completions.d``;
 - The completions shipped with fish, usually installed in ``/usr/share/fish/completions``; and
-- Completions automatically generated from the operating system's manual, usually stored in ``~/.local/share/fish/generated_completions``.
+- Completions automatically generated from the operating system's manual, usually stored in ``~/.cache/fish/generated_completions`` (controlled by ``XDG_CACHE_HOME`` environment variable).
 
 These paths are controlled by parameters set at build, install, or run time, and may vary from the defaults listed above.
 

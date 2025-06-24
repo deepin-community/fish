@@ -27,7 +27,7 @@ level margin: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .\" new: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .in \\n[rst2man-indent\\n[rst2man-indent-level]]u
 ..
-.TH "FUNCTION" "1" "Mar 19, 2024" "3.7" "fish-shell"
+.TH "FUNCTION" "1" "Apr 20, 2025" "4.0" "fish-shell"
 .SH NAME
 function \- create a function
 .SH SYNOPSIS
@@ -45,7 +45,7 @@ The following options are available:
 .INDENT 0.0
 .TP
 \fB\-a\fP \fINAMES\fP or \fB\-\-argument\-names\fP \fINAMES\fP
-Assigns the value of successive command\-line arguments to the names given in \fINAMES\fP\&. These are the same arguments given in \fI\%argv\fP, and are still available there. See also \fI\%Argument Handling\fP\&.
+Has to be the last option. Assigns the value of successive command\-line arguments to the names given in \fINAMES\fP (separated by space). These are the same arguments given in \fI\%argv\fP, and are still available there. See also \fI\%Argument Handling\fP\&.
 .TP
 \fB\-d\fP \fIDESCRIPTION\fP or \fB\-\-description\fP \fIDESCRIPTION\fP
 A description of what the function does, suitable as a completion description.
@@ -61,12 +61,14 @@ Run this function when the variable \fIVARIABLE_NAME\fP changes value. Note that
 .TP
 \fB\-j\fP \fIPID\fP or \fB\-\-on\-job\-exit\fP \fIPID\fP
 Run this function when the job containing a child process with the given process identifier \fIPID\fP exits. Instead of a PID, the string \(aqcaller\(aq can be specified. This is only allowed when in a command substitution, and will result in the handler being triggered by the exit of the job which created this command substitution.
+This will not trigger for \fI\%disowned\fP jobs.
 .TP
 \fB\-p\fP \fIPID\fP or \fB\-\-on\-process\-exit\fP \fIPID\fP
 Run this function when the fish child process with process ID PID exits. Instead of a PID, for backward compatibility, \(dq\fB%self\fP\(dq can be specified as an alias for \fB$fish_pid\fP, and the function will be run when the current fish instance exits.
+This will not trigger for \fI\%disowned\fP jobs.
 .TP
 \fB\-s\fP \fISIGSPEC\fP or \fB\-\-on\-signal\fP \fISIGSPEC\fP
-Run this function when the signal \fBSIGSPEC\fP is delivered. \fBSIGSPEC\fP can be a signal number, or the signal name, such as \fBSIGHUP\fP (or just \fBHUP\fP). Note that the signal must have been delivered to \fBfish\fP; for example, \fBCtrl\-C\fP sends \fBSIGINT\fP to the foreground process group, which will not be \fBfish\fP if you are running another command at the time. Observing a signal will prevent fish from exiting in response to that signal.
+Run this function when the signal \fBSIGSPEC\fP is delivered. \fBSIGSPEC\fP can be a signal number, or the signal name, such as \fBSIGHUP\fP (or just \fBHUP\fP). Note that the signal must have been delivered to \fBfish\fP; for example, \fBctrl\-c\fP sends \fBSIGINT\fP to the foreground process group, which will not be \fBfish\fP if you are running another command at the time. Observing a signal will prevent fish from exiting in response to that signal.
 .TP
 \fB\-S\fP or \fB\-\-no\-scope\-shadowing\fP
 Allows the function to access the variables of calling functions. Normally, any variables inside the function that have the same name as variables from the calling function are \(dqshadowed\(dq, and their contents are independent of the calling function.
@@ -79,7 +81,7 @@ Snapshots the value of the variable \fBNAME\fP and defines a local variable with
 .sp
 The event handler switches (\fBon\-event\fP, \fBon\-variable\fP, \fBon\-job\-exit\fP, \fBon\-process\-exit\fP and \fBon\-signal\fP) cause a function to run automatically at specific events. New named events for \fB\-\-on\-event\fP can be fired using the \fI\%emit\fP builtin. Fish already generates a few events, see \fI\%Event handlers\fP for more.
 .sp
-Functions may not be named the same as a reserved keyword. These are elements of fish syntax or builtin commands which are essential for the operations of the shell. Current reserved words are \fB[\fP, \fB_\fP, \fBand\fP, \fBargparse\fP, \fBbegin\fP, \fBbreak\fP, \fBbuiltin\fP, \fBcase\fP, \fBcommand\fP, \fBcontinue\fP, \fBelse\fP, \fBend\fP, \fBeval\fP, \fBexec\fP, \fBfor\fP, \fBfunction\fP, \fBif\fP, \fBnot\fP, \fBor\fP, \fBread\fP, \fBreturn\fP, \fBset\fP, \fBstatus\fP, \fBstring\fP, \fBswitch\fP, \fBtest\fP, \fBtime\fP, and \fBwhile\fP\&.
+Functions names cannot be reserved words. These are elements of fish syntax or builtin commands which are essential for the operations of the shell. Current reserved words are \fB[\fP, \fB_\fP, \fBand\fP, \fBargparse\fP, \fBbegin\fP, \fBbreak\fP, \fBbuiltin\fP, \fBcase\fP, \fBcommand\fP, \fBcontinue\fP, \fBelse\fP, \fBend\fP, \fBeval\fP, \fBexec\fP, \fBfor\fP, \fBfunction\fP, \fBif\fP, \fBnot\fP, \fBor\fP, \fBread\fP, \fBreturn\fP, \fBset\fP, \fBstatus\fP, \fBstring\fP, \fBswitch\fP, \fBtest\fP, \fBtime\fP, and \fBwhile\fP\&.
 .SH EXAMPLE
 .INDENT 0.0
 .INDENT 3.5
@@ -95,6 +97,34 @@ end
 .UNINDENT
 .sp
 will run the \fBls\fP command, using the \fB\-l\fP option, while passing on any additional files and switches to \fBls\fP\&.
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+function debug \-a name val
+    echo [DEBUG] $name: $val >&2
+end
+
+set foo bar
+debug foo bar
+# prints: [DEBUG] foo: bar
+
+# OR
+
+function debug2 \-a var
+    echo [DEBUG] $var: $$var >&2
+end
+
+set foo bar
+debug2 foo
+# prints: [DEBUG] foo: bar
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+will create a \fBdebug\fP command to print chosen variables to \fIstderr\fP\&.
 .INDENT 0.0
 .INDENT 3.5
 .sp
@@ -145,6 +175,6 @@ Events are only received from the current fish process as there is no way to sen
 .sp
 For more explanation of how functions fit into fish, see \fI\%Functions\fP\&.
 .SH COPYRIGHT
-2023, fish-shell developers
+2024, fish-shell developers
 .\" Generated by docutils manpage writer.
 .

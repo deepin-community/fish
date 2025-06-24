@@ -1,0 +1,31 @@
+Description: Use vendored, fish patched, rust-pcre2
+ which is apparently not packaged, and unlikely to be.
+Forwarded: not-needed
+Last-Update: 2024-12-20
+Index: fish/Cargo.toml
+===================================================================
+--- fish.orig/Cargo.toml
++++ fish/Cargo.toml
+@@ -1,6 +1,12 @@
+ [workspace]
+ resolver = "2"
+-members = ["printf"]
++members = [
++    "printf",
++    # Debian: nested workspaces are not allowed, thus.
++    # [workspace] in rust-pcre2/Cargo.toml is commented out, accordingly.
++    "debian/missing-sources/rust-pcre2",
++    "debian/missing-sources/rust-pcre2/pcre2-sys",
++]
+ 
+ [workspace.package]
+ rust-version = "1.70"
+@@ -28,7 +34,7 @@ homepage = "https://fishshell.com"
+ readme = "README.rst"
+ 
+ [dependencies]
+-pcre2 = { git = "https://github.com/fish-shell/rust-pcre2", tag = "0.2.9-utf32", default-features = false, features = [
++pcre2 = { path = "debian/missing-sources/rust-pcre2", default-features = false, features = [
+     "utf32",
+ ] }
+ 

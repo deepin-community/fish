@@ -27,7 +27,7 @@ level margin: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .\" new: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .in \\n[rst2man-indent\\n[rst2man-indent-level]]u
 ..
-.TH "FISH-TUTORIAL" "1" "Mar 19, 2024" "3.7" "fish-shell"
+.TH "FISH-TUTORIAL" "1" "Apr 20, 2025" "4.0" "fish-shell"
 .SH WHY FISH?
 .sp
 Fish is a fully\-equipped command line shell (like bash or zsh) that is smart and user\-friendly. Fish supports powerful features like syntax highlighting, autosuggestions, and tab completions that just work, with nothing to learn or configure.
@@ -53,9 +53,7 @@ you@hostname ~>
 .UNINDENT
 .UNINDENT
 .sp
-This prompt that you see above is the fish default prompt: it shows your username, hostname, and working directory.
-\- to change this prompt see \fI\%how to change your prompt\fP
-\- to switch to fish permanently see \fI\%Default Shell\fP\&.
+This prompt that you see above is the fish default prompt: it shows your username, hostname, and working directory. You can customize it, see \fI\%how to change your prompt\fP\&.
 .sp
 From now on, we\(aqll pretend your prompt is just a \fB>\fP to save space.
 .SH LEARNING FISH
@@ -118,7 +116,7 @@ set \- handle shell variables
 .sp
 To open this section, use \fBhelp getting\-help\fP\&.
 .sp
-Fish works by running commands, which are often also installed on your computer. Usually these commands also provide help in the man system, so you can get help for them there. Try \fBman ls\fP to get help on your computer\(aqs \fBls\fP command.
+This only works for fish\(aqs own documentation for itself and its built\-in commands (the \(dqbuiltins\(dq). For any other commands on your system, they should provide their own documentation, often in the man system. For example \fBman ls\fP should tell you about your computer\(aqs \fBls\fP command.
 .SH SYNTAX HIGHLIGHTING
 .sp
 You\(aqll quickly notice that fish performs syntax highlighting as you type. Invalid commands are colored red by default:
@@ -186,94 +184,6 @@ fish_config theme show
 .UNINDENT
 .sp
 Just running \fBfish_config\fP will open up a browser interface that allows you to pick from the available themes.
-.SH WILDCARDS
-.sp
-Fish supports the familiar wildcard \fB*\fP\&. To list all JPEG files:
-.INDENT 0.0
-.INDENT 3.5
-.sp
-.nf
-.ft C
-> ls *.jpg
-lena.jpg
-meena.jpg
-santa maria.jpg
-.ft P
-.fi
-.UNINDENT
-.UNINDENT
-.sp
-You can include multiple wildcards:
-.INDENT 0.0
-.INDENT 3.5
-.sp
-.nf
-.ft C
-> ls l*.p*
-lena.png
-lesson.pdf
-.ft P
-.fi
-.UNINDENT
-.UNINDENT
-.sp
-The recursive wildcard \fB**\fP searches directories recursively:
-.INDENT 0.0
-.INDENT 3.5
-.sp
-.nf
-.ft C
-> ls /var/**.log
-/var/log/system.log
-/var/run/sntp.log
-.ft P
-.fi
-.UNINDENT
-.UNINDENT
-.sp
-If that directory traversal is taking a long time, you can \fBControl\fP+\fBC\fP out of it.
-.sp
-For more, see \fI\%Wildcards\fP\&.
-.SH PIPES AND REDIRECTIONS
-.sp
-You can pipe between commands with the usual vertical bar:
-.INDENT 0.0
-.INDENT 3.5
-.sp
-.nf
-.ft C
-> echo hello world | wc
-      1       2      12
-.ft P
-.fi
-.UNINDENT
-.UNINDENT
-.sp
-stdin and stdout can be redirected via the familiar \fB<\fP and \fB>\fP\&. stderr is redirected with a \fB2>\fP\&.
-.INDENT 0.0
-.INDENT 3.5
-.sp
-.nf
-.ft C
-> grep fish < /etc/shells > ~/output.txt 2> ~/errors.txt
-.ft P
-.fi
-.UNINDENT
-.UNINDENT
-.sp
-To redirect stdout and stderr into one file, you can use \fB&>\fP:
-.INDENT 0.0
-.INDENT 3.5
-.sp
-.nf
-.ft C
-> make &> make_output.txt
-.ft P
-.fi
-.UNINDENT
-.UNINDENT
-.sp
-For more, see \fI\%Input and output redirections\fP and \fI\%Pipes\fP\&.
 .SH AUTOSUGGESTIONS
 .sp
 As you type fish will suggest commands to the right of the cursor, in gray. For example:
@@ -312,7 +222,7 @@ And history too. Type a command once, and you can re\-summon it by just typing a
 .UNINDENT
 .UNINDENT
 .sp
-To accept the autosuggestion, hit \fB→\fP (right arrow) or \fBControl\fP+\fBF\fP\&. To accept a single word of the autosuggestion, \fBAlt\fP+\fB→\fP (right arrow). If the autosuggestion is not what you want, just ignore it.
+To accept the autosuggestion, hit \fBright\fP (\fB→\fP) or \fBctrl\-f\fP\&. To accept a single word of the autosuggestion, \fBalt\-right\fP (\fB→\fP). If the autosuggestion is not what you want, just ignore it.
 .sp
 If you don\(aqt like autosuggestions, you can disable them by setting \fB$fish_autosuggestion_enabled\fP to 0:
 .INDENT 0.0
@@ -329,13 +239,13 @@ set \-g fish_autosuggestion_enabled 0
 .sp
 A rich set of tab completions work \(dqout of the box\(dq.
 .sp
-Press \fBTab\fP and fish will attempt to complete the command, argument, or path:
+Press \fBtab\fP and fish will attempt to complete the command, argument, or path:
 .INDENT 0.0
 .INDENT 3.5
 .sp
 .nf
 .ft C
-> /pri\fBTab\fP => /private/
+> /pri\fBtab\fP => /private/
 .ft P
 .fi
 .UNINDENT
@@ -347,7 +257,7 @@ If there\(aqs more than one possibility, it will list them:
 .sp
 .nf
 .ft C
-> ~/stuff/s\fBTab\fP
+> ~/stuff/s\fBtab\fP
 ~/stuff/script.sh  (command)  ~/stuff/sources/  (directory)
 .ft P
 .fi
@@ -362,8 +272,8 @@ fish can also complete many commands, like git branches:
 .sp
 .nf
 .ft C
-> git merge pr\fBTab\fP => git merge prompt_designer
-> git checkout b\fBTab\fP
+> git merge pr\fBtab\fP => git merge prompt_designer
+> git checkout b\fBtab\fP
 builtin_list_io_merge (Branch)  builtin_set_color (Branch) busted_events (Tag)
 .ft P
 .fi
@@ -573,28 +483,125 @@ end
 .UNINDENT
 .UNINDENT
 .sp
-Lists adjacent to other lists or strings are expanded as \fI\%cartesian products\fP unless quoted (see \fI\%Variable expansion\fP):
+One particular bit is that you can use lists like \fI\%Brace expansion\fP\&. If you attach another string to a list, it\(aqll combine every element of the list with the string:
 .INDENT 0.0
 .INDENT 3.5
 .sp
 .nf
 .ft C
-> set a 1 2 3
-> set 1 a b c
-> echo $a$1
-1a 2a 3a 1b 2b 3b 1c 2c 3c
-> echo $a\(dq banana\(dq
-1 banana 2 banana 3 banana
-> echo \(dq$a banana\(dq
-1 2 3 banana
+> set mydirs /usr/bin /bin
+> echo $mydirs/fish # this is just like {/usr/bin,/bin}/fish
+/usr/bin/fish /bin/fish
 .ft P
 .fi
 .UNINDENT
 .UNINDENT
 .sp
-This is similar to \fI\%Brace expansion\fP\&.
+This also means that, if the list is empty, there will be no argument:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+> set empty # no argument
+> echo $empty/this_is_gone # prints an empty line
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+If you quote the list, it will be used as one string and so you\(aqll get one argument even if it is empty.
 .sp
 For more, see \fI\%Lists\fP\&.
+For more on combining lists with strings (or even other lists), see \fI\%cartesian products\fP and \fI\%Variable expansion\fP\&.
+.SH WILDCARDS
+.sp
+Fish supports the familiar wildcard \fB*\fP\&. To list all JPEG files:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+> ls *.jpg
+lena.jpg
+meena.jpg
+santa maria.jpg
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+You can include multiple wildcards:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+> ls l*.p*
+lena.png
+lesson.pdf
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+The recursive wildcard \fB**\fP searches directories recursively:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+> ls /var/**.log
+/var/log/system.log
+/var/run/sntp.log
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+If that directory traversal is taking a long time, you can \fBctrl\-c\fP out of it.
+.sp
+For more, see \fI\%Wildcards\fP\&.
+.SH PIPES AND REDIRECTIONS
+.sp
+You can pipe between commands with the usual vertical bar:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+> echo hello world | wc
+      1       2      12
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+stdin and stdout can be redirected via the familiar \fB<\fP and \fB>\fP\&. stderr is redirected with a \fB2>\fP\&.
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+> grep fish < /etc/shells > ~/output.txt 2> ~/errors.txt
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+To redirect stdout and stderr into one file, you can use \fB&>\fP:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+> make &> make_output.txt
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+For more, see \fI\%Input and output redirections\fP and \fI\%Pipes\fP\&.
 .SH COMMAND SUBSTITUTIONS
 .sp
 Command substitutions use the output of one command as an argument to another. Unlike other shells, fish does not use backticks \(ga\(ga for command substitutions. Instead, it uses parentheses with or without a dollar:
@@ -1154,12 +1161,14 @@ vim
 .fi
 .UNINDENT
 .UNINDENT
+.sp
+You only need to set universal variables once interactively. There is no need to add them to your \fI\%config files\fP\&. For more details, see \fI\%Universal Variables\fP\&.
 .SH READY FOR MORE?
 .sp
-If you want to learn more about fish, there is \fI\%lots of detailed documentation\fP, the \fI\%official gitter channel\fP, an \fI\%official mailing list\fP, and the \fI\%github page\fP\&.
+If you want to learn more about fish, there is \fI\%lots of detailed documentation\fP, the \X'tty: link https://gitter.im/fish-shell/fish-shell'\fI\%official gitter channel\fP <\fBhttps://gitter.im/fish-shell/fish-shell\fP>\X'tty: link', an \X'tty: link https://lists.sourceforge.net/lists/listinfo/fish-users'\fI\%official mailing list\fP <\fBhttps://lists.sourceforge.net/lists/listinfo/fish-users\fP>\X'tty: link', and the \X'tty: link https://github.com/fish-shell/fish-shell/'\fI\%github page\fP <\fBhttps://github.com/fish-shell/fish-shell/\fP>\X'tty: link'\&.
 .SH AUTHOR
 fish-shell developers
 .SH COPYRIGHT
-2023, fish-shell developers
+2024, fish-shell developers
 .\" Generated by docutils manpage writer.
 .

@@ -16,6 +16,7 @@ echo */foo/
 # CHECKERR: echo */foo/
 # CHECKERR:      ^~~~~^
 
+
 cd $oldpwd
 rm -Rf $dir
 

@@ -27,7 +27,7 @@ level margin: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .\" new: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .in \\n[rst2man-indent\\n[rst2man-indent-level]]u
 ..
-.TH "FISH-PROMPT-TUTORIAL" "1" "Mar 19, 2024" "3.7" "fish-shell"
+.TH "FISH-PROMPT-TUTORIAL" "1" "Apr 20, 2025" "4.0" "fish-shell"
 .sp
 \fBWARNING:\fP
 .INDENT 0.0
@@ -48,7 +48,7 @@ Unlike other shells, fish\(aqs prompt is built by running a function \- \fI\%fis
 .IP \(bu 2
 \fI\%fish_right_prompt\fP, which is shown on the right side of the terminal.
 .IP \(bu 2
-\fI\%fish_mode_prompt\fP, which is shown if \fI\%vi\-mode\fP is used.
+\fI\%fish_mode_prompt\fP, which is shown if \fI\%vi mode\fP is used.
 .UNINDENT
 .sp
 These functions are run, and whatever they print is displayed as the prompt (minus one trailing newline).
@@ -102,7 +102,7 @@ end
 The \fB\-\-\fP indicates to \fBstring\fP that no options can come after it, in case we extend this with something that can start with a \fB\-\fP\&.
 .sp
 There are other ways to remove the space, including \fBecho \-s\fP and \fI\%printf\fP\&.
-.SH ADDING COLO(U)R
+.SH ADDING COLOR
 .sp
 This prompt is functional, but a bit boring. We could add some color.
 .sp
@@ -136,19 +136,21 @@ end
 .sp
 A \(dqnormal\(dq color tells the terminal to go back to its normal formatting options.
 .sp
-What \fBset_color\fP does internally is to print an escape sequence that tells the terminal to change color. So if you see something like:
+\fBset_color\fP works by producing an escape sequence, which is a special piece of text that terminals
+interpret as instructions \- for example, to change color. So \fBset_color red\fP produces the same
+effect as:
 .INDENT 0.0
 .INDENT 3.5
 .sp
 .nf
 .ft C
-echo \ee\e[31mfoo
+echo \ee\e[31m
 .ft P
 .fi
 .UNINDENT
 .UNINDENT
 .sp
-that could just be \fBset_color red\fP\&.
+Although you can write your own escape sequences by hand, it\(aqs much easier to use \fBset_color\fP\&.
 .SH SHORTENING THE WORKING DIRECTORY
 .sp
 This is fine, but our \fI\%PWD\fP can be a bit long, and we are typically only interested in the last few directories. We can shorten this with the \fI\%prompt_pwd\fP helper that will give us a shortened working directory:
@@ -208,7 +210,7 @@ set \-l last_status $status
 .UNINDENT
 .UNINDENT
 .sp
-And after that, you can set a string if it not zero:
+And after that, you can set a string if it is not zero:
 .INDENT 0.0
 .INDENT 3.5
 .sp
@@ -272,22 +274,43 @@ And it looks like:
 .UNINDENT
 .sp
 after we run \fBfalse\fP (which returns 1).
+.SH SAVE THE PROMPT
+.sp
+Once you are happy with your prompt, you can save it with \fBfuncsave fish_prompt\fP (see \fI\%funcsave \- save the definition of a function to the user\(aqs autoload directory\fP) or write it to ~/.config/fish/functions/fish_prompt.fish yourself.
+.sp
+If you want to edit it again, open that file or use \fBfunced fish_prompt\fP (see \fI\%funced \- edit a function interactively\fP).
 .SH WHERE TO GO FROM HERE?
 .sp
 We have now built a simple but working and usable prompt, but of course more can be done.
 .INDENT 0.0
 .IP \(bu 2
-Fish offers more helper functions:
-\- \fBprompt_login\fP to describe the user/hostname/container or \fBprompt_hostname\fP to describe just the host
-\- \fBfish_is_root_user\fP to help with changing the symbol for root.
-\- \fBfish_vcs_prompt\fP to show version control information (or \fBfish_git_prompt\fP / \fBfish_hg_prompt\fP / \fBfish_svn_prompt\fP to limit it to specific systems)
+.INDENT 2.0
+.TP
+.B Fish offers more helper functions:
+.INDENT 7.0
 .IP \(bu 2
-You can add a right prompt by changing \fI\%fish_right_prompt\fP or a vi\-mode prompt by changing \fI\%fish_mode_prompt\fP\&.
+\fBprompt_login\fP to describe the user/hostname/container or \fBprompt_hostname\fP to describe just the host
 .IP \(bu 2
-Some prompts have interesting or advanced features
-\- Add the time when the prompt was printed
-\- Show various integrations like python\(aqs venv
-\- Color the parts differently.
+\fBfish_is_root_user\fP to help with changing the symbol for root.
+.IP \(bu 2
+\fBfish_vcs_prompt\fP to show version control information (or \fBfish_git_prompt\fP / \fBfish_hg_prompt\fP / \fBfish_svn_prompt\fP to limit it to specific systems)
+.UNINDENT
+.UNINDENT
+.IP \(bu 2
+You can add a right prompt by changing \fI\%fish_right_prompt\fP or a vi mode prompt by changing \fI\%fish_mode_prompt\fP\&.
+.IP \(bu 2
+.INDENT 2.0
+.TP
+.B Some prompts have interesting or advanced features
+.INDENT 7.0
+.IP \(bu 2
+Add the time when the prompt was printed
+.IP \(bu 2
+Show various integrations like python\(aqs venv
+.IP \(bu 2
+Color the parts differently.
+.UNINDENT
+.UNINDENT
 .UNINDENT
 .sp
 You can look at fish\(aqs sample prompts for inspiration. Open up \fI\%fish_config\fP, find one you like and pick it. For example:
@@ -306,6 +329,6 @@ funced fish_prompt # <\- opens fish_prompt in your editor, and reloads it once t
 .SH AUTHOR
 fish-shell developers
 .SH COPYRIGHT
-2023, fish-shell developers
+2024, fish-shell developers
 .\" Generated by docutils manpage writer.
 .

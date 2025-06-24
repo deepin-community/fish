@@ -9,12 +9,13 @@ Synopsis
 .. synopsis::
 
     set
-    set (-f | --function) (-l | local) (-g | --global) (-U | --universal)
+    set (-f | --function) (-l | --local) (-g | --global) (-U | --universal) [--no-event]
     set [-Uflg] NAME [VALUE ...]
     set [-Uflg] NAME[[INDEX ...]] [VALUE ...]
-    set (-a | --append) [-flgU] NAME VALUE ...
-    set (-q | --query) (-e | --erase) [-flgU] [NAME][[INDEX]] ...]
-    set (-S | --show) [NAME ...]
+    set (-x | --export) (-u | --unexport) [-Uflg] NAME [VALUE ...]
+    set (-a | --append) (-p | --prepend) [-Uflg] NAME VALUE ...
+    set (-q | --query) (-e | --erase) [-Uflg] [NAME][[INDEX]] ...]
+    set (-S | --show) (-L | --long) [NAME ...]
 
 Description
 -----------
@@ -81,12 +82,12 @@ Further options:
     This can be used with **--append** to both append and prepend at the same time.
     This cannot be used when assigning to a variable slice.
 
-**-e** or **--erase** *NAME*[*INDEX*]
+**-e** or **--erase** *NAME*\[*INDEX*\]
     Causes the specified shell variables to be erased.
     Supports erasing from multiple scopes at once.
     Individual items in a variable at *INDEX* in brackets can be specified.
 
-**-q** or **--query** *NAME*[*INDEX*]
+**-q** or **--query** *NAME*\[*INDEX*\]
     Test if the specified variable names are defined.
     If an *INDEX* is provided, check for items at that slot.
     Does not output anything, but the shell status is set to the number of variables specified that were not defined, up to a maximum of 255.
@@ -101,6 +102,11 @@ Further options:
     If no variable names are given then all variables are shown in sorted order.
     It shows the scopes the given variables are set in, along with the values in each and whether or not it is exported.
     No other flags can be used with this option.
+
+**--no-event**
+    Don't generate a variable change event when setting or erasing a variable.
+    We recommend using this carefully because the event handlers are usually set up for a reason.
+    Possible uses include modifying the variable inside a variable handler.
 
 **-L** or **--long**
     Do not abbreviate long values when printing set variables.

@@ -60,7 +60,8 @@ And here is fish::
 
   > set foo "bar baz"
   > printf '"%s"\n' $foo
-  # foo was set as one element, so it will be passed as one element, so this is one line
+  # foo was set as one element,
+  # so it will be passed as one element, so this is one line
   "bar baz"
 
 All variables are "arrays" (we use the term "lists"), and expanding a variable expands to all its elements, with each element as its own argument (like bash's ``"${var[@]}"``::
@@ -113,6 +114,10 @@ Globbing doesn't happen on expanded variables, so::
 will not match any files.
 
 There are no options to control globbing so it always behaves like that.
+
+The ``**`` glob will match in subdirectories as well. In other shells this often needs to be turned on with an option, like ``setopt globstar`` in bash.
+
+Unlike bash, fish will also follow symlinks, and will sort the results in a natural sort, with included numbers compared as numbers. That means it will sort e.g. music tracks correctly even if they have numbers like ``1`` instead of ``01``.
 
 See :ref:`Wildcards <expand-wildcard>` for more.
 
@@ -298,7 +303,7 @@ Both ``*`` and ``x`` are valid ways to spell multiplication, but ``*`` needs to 
 Prompts
 -------
 
-Fish does not use the ``$PS1``, ``$PS2`` and so on variables. Instead the prompt is the output of the :doc:`fish_prompt <cmds/fish_prompt>` function, plus the :doc:`fish_mode_prompt <cmds/fish_mode_prompt>` function if vi-mode is enabled and the :doc:`fish_right_prompt <cmds/fish_right_prompt>` function for the right prompt.
+Fish does not use the ``$PS1``, ``$PS2`` and so on variables. Instead the prompt is the output of the :doc:`fish_prompt <cmds/fish_prompt>` function, plus the :doc:`fish_mode_prompt <cmds/fish_mode_prompt>` function if :ref:`vi mode <vi-mode>` is enabled. The output of the :doc:`fish_right_prompt <cmds/fish_right_prompt>` function is used for the right-sided prompt.
 
 As an example, here's a relatively simple bash prompt:
 
@@ -412,6 +417,8 @@ This includes things like:
         baz &
     done
 
+Fish does not currently have subshells. You will have to find a different solution. The isolation can usually be achieved by just scoping variables (with ``set -l``), but if you really do need to run your code in a new shell environment you can use ``fish -c 'your code here'`` to do so explicitly.
+
 ``()`` subshells are often confused with ``{}`` grouping, which does *not* use a subshell. When you just need to group, you can use ``begin; end`` in fish::
 
     (foo; bar) | baz
@@ -431,8 +438,6 @@ The pipe will simply be run in the same process, so ``while read`` loops can set
     jobs # will show "baz"
 
 Subshells are also frequently confused with :ref:`command substitutions <bash-command-substitutions>`, which bash writes as ```command``` or ``$(command)`` and fish writes as ``$(command)`` or ``(command)``. Bash also *uses* subshells to implement them.
-
-The isolation can usually be achieved by just scoping variables (with ``set -l``), but if you really do need to run your code in a new shell environment you can always use ``fish -c 'your code here'`` to do so explicitly.
 
 Builtins and other commands
 ---------------------------

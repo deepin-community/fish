@@ -12,7 +12,7 @@ Keywords
 
 Core language keywords that make up the syntax, like
 
-- :doc:`if <cmds/if>` for conditions.
+- :doc:`if <cmds/if>` and :doc:`else <cmds/else>` for conditions.
 - :doc:`for <cmds/for>` and :doc:`while <cmds/while>` for loops.
 - :doc:`break <cmds/break>` and :doc:`continue <cmds/continue>` to control loops.
 - :doc:`function <cmds/function>` to define functions.
@@ -23,6 +23,7 @@ Core language keywords that make up the syntax, like
 - :doc:`command <cmds/command>` or :doc:`builtin <cmds/builtin>` to tell fish what sort of thing to execute
 - :doc:`time <cmds/time>` to time execution
 - :doc:`exec <cmds/exec>` tells fish to replace itself with a command.
+- :doc:`end <cmds/end>` to end a block
 
 Tools
 ^^^^^
@@ -35,6 +36,7 @@ Builtins to do a task, like
 - :doc:`set <cmds/set>` to set, query or erase variables.
 - :doc:`read <cmds/read>` to read input.
 - :doc:`string <cmds/string>` for string manipulation.
+- :doc:`path <cmds/path>` for filtering paths and handling their components.
 - :doc:`math <cmds/math>` does arithmetic.
 - :doc:`argparse <cmds/argparse>` to make arguments easier to handle.
 - :doc:`count <cmds/count>` to count arguments.
@@ -59,6 +61,7 @@ Known functions are a customization point. You can change them to change how you
 - :doc:`fish_command_not_found <cmds/fish_command_not_found>` to tell fish what to do when a command is not found.
 - :doc:`fish_title <cmds/fish_title>` to change the terminal's title.
 - :doc:`fish_greeting <cmds/fish_greeting>` to show a greeting when fish starts.
+- :doc:`fish_should_add_to_history <cmds/fish_should_add_to_history>` to determine if a command should be added to history
 
 Helper functions
 ^^^^^^^^^^^^^^^^
@@ -76,6 +79,7 @@ Some helper functions, often to give you information for use in your prompt:
 - :doc:`fish_add_path <cmds/fish_add_path>` to easily add a path to $PATH.
 - :doc:`alias <cmds/alias>` to quickly define wrapper functions ("aliases").
 - :doc:`fish_delta <cmds/fish_delta>` to show what you have changed from the default configuration.
+- :doc:`export <cmds/export>` as a compatibility function for other shells.
 
 Helper commands
 ^^^^^^^^^^^^^^^

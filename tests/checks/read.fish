@@ -1,4 +1,4 @@
-# RUN: %fish -C "set fish %fish" %s
+# RUN: %fish -C "set -g fish %fish; set -g filter_ctrls %filter-control-sequences" %s
 # Set term again explicitly to ensure behavior.
 set -gx TERM xterm
 # Read with no vars is not an error
@@ -155,7 +155,7 @@ echo $foo
 echo newline | read -lz foo
 echo $foo
 #CHECK: newline
-#CHECK: 
+#CHECK:
 echo -n 'test ing' | read -lz foo bar
 print_vars foo bar
 #CHECK: 1 'test' 1 'ing'
@@ -248,7 +248,7 @@ if test (string length "$x") -ne $fish_read_limit
 end
 
 # Confirm reading non-interactively works -- \#4206 regression
-echo abc\ndef | $fish -i -c 'read a; read b; set --show a; set --show b'
+echo abc\ndef | $fish -i -c 'read a; read b; set --show a; set --show b' | $filter_ctrls
 #CHECK: $a: set in global scope, unexported, with 1 elements
 #CHECK: $a[1]: |abc|
 #CHECK: $b: set in global scope, unexported, with 1 elements
@@ -303,7 +303,7 @@ echo $foo
 echo $bar
 #CHECK: b
 echo $baz
-#CHECK: 
+#CHECK:
 
 # Multi-char delimiters with -d
 echo a...b...c | read -l -d "..." a b c
@@ -389,3 +389,19 @@ echo foo | read status
 # CHECKERR: (Type 'help read' for related documentation)
 echo read $status
 # CHECK: read 2
+
+echo ' foo' | read -n 1 -la var
+set -S var
+#CHECK: $var: set in local scope, unexported, with 0 elements
+
+echo foo | read -n -1
+# CHECKERR: read: -1: invalid integer
+# CHECKERR: {{.*}}read.fish (line {{\d+}}):
+# CHECKERR: echo foo | read -n -1
+# CHECKERR: ^
+# CHECKERR: (Type 'help read' for related documentation)
+
+printf \xf9\x98\xb1\x83\x8b | read -z out_of_range_codepoint
+set -S out_of_range_codepoint
+# CHECK: $out_of_range_codepoint: set in global scope, unexported, with 1 elements
+# CHECK: $out_of_range_codepoint[1]: |\Xf9\X98\Xb1\X83\X8b|

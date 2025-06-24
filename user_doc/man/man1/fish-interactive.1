@@ -27,7 +27,7 @@ level margin: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .\" new: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .in \\n[rst2man-indent\\n[rst2man-indent-level]]u
 ..
-.TH "FISH-INTERACTIVE" "1" "Mar 19, 2024" "3.7" "fish-shell"
+.TH "FISH-INTERACTIVE" "1" "Apr 20, 2025" "4.0" "fish-shell"
 .sp
 Fish prides itself on being really nice to use interactively. That\(aqs down to a few features we\(aqll explain in the next few sections.
 .sp
@@ -45,7 +45,7 @@ The main page can be viewed via \fBhelp index\fP (or just \fBhelp\fP) or \fBman 
 .sp
 fish suggests commands as you type, based on \fI\%command history\fP, completions, and valid file paths. As you type commands, you will see a suggestion offered after the cursor, in a muted gray color (which can be changed with the \fBfish_color_autosuggestion\fP variable).
 .sp
-To accept the autosuggestion (replacing the command line contents), press \fB→\fP or \fBControl\fP+\fBF\fP\&. To accept the first suggested word, press \fBAlt\fP+\fB→\fP or \fBAlt\fP+\fBF\fP\&. If the autosuggestion is not what you want, just ignore it: it won\(aqt execute unless you accept it.
+To accept the autosuggestion (replacing the command line contents), press \fBright\fP (\fB→\fP) or \fBctrl\-f\fP\&. To accept the first suggested word, press \fBalt\-right\fP (\fB→\fP) or \fBalt\-f\fP\&. If the autosuggestion is not what you want, just ignore it: it won\(aqt execute unless you accept it.
 .sp
 Autosuggestions are a powerful way to quickly summon frequently entered commands, by typing the first few characters. They are also an efficient technique for navigating through directory hierarchies.
 .sp
@@ -62,9 +62,9 @@ set \-g fish_autosuggestion_enabled 0
 .UNINDENT
 .SH TAB COMPLETION
 .sp
-Tab completion is a time saving feature of any modern shell. When you type \fBTab\fP, fish tries to guess the rest of the word under the cursor. If it finds just one possibility, it inserts it. If it finds more, it inserts the longest unambiguous part and then opens a menu (the \(dqpager\(dq) that you can navigate to find what you\(aqre looking for.
+Tab completion is a time saving feature of any modern shell. When you type \fBtab\fP, fish tries to guess the rest of the word under the cursor. If it finds just one possibility, it inserts it. If it finds more, it inserts the longest unambiguous part and then opens a menu (the \(dqpager\(dq) that you can navigate to find what you\(aqre looking for.
 .sp
-The pager can be navigated with the arrow keys, \fBPage Up\fP / \fBPage Down\fP, \fBTab\fP or \fBShift\fP+\fBTab\fP\&. Pressing \fBControl\fP+\fBS\fP (the \fBpager\-toggle\-search\fP binding \- \fB/\fP in vi\-mode) opens up a search menu that you can use to filter the list.
+The pager can be navigated with the arrow keys, \fBpageup\fP / \fBpagedown\fP, \fBtab\fP or \fBshift\-tab\fP\&. Pressing \fBctrl\-s\fP (the \fBpager\-toggle\-search\fP binding \- \fB/\fP in vi mode) opens up a search menu that you can use to filter the list.
 .sp
 Fish provides some general purpose completions, like for commands, variable names, usernames or files.
 .sp
@@ -109,7 +109,7 @@ For example, to disable nearly all coloring:
 .sp
 .nf
 .ft C
-fish_config theme choose none
+fish_config theme choose None
 .ft P
 .fi
 .UNINDENT
@@ -558,9 +558,9 @@ abbr \-a gco git checkout
 .UNINDENT
 .UNINDENT
 .sp
-After entering \fBgco\fP and pressing \fBSpace\fP or \fBEnter\fP, a \fBgco\fP in command position will turn into \fBgit checkout\fP in the command line. If you want to use a literal \fBgco\fP sometimes, use \fBControl\fP+\fBSpace\fP [1]\&.
+After entering \fBgco\fP and pressing \fBspace\fP or \fBenter\fP, a \fBgco\fP in command position will turn into \fBgit checkout\fP in the command line. If you want to use a literal \fBgco\fP sometimes, use \fBctrl\-space\fP [1]\&.
 .sp
-This is a lot more powerful, for example you can make going up a number of directories easier with this:
+Abbreviations are a lot more powerful than just replacing literal strings. For example you can make going up a number of directories easier with this:
 .INDENT 0.0
 .INDENT 3.5
 .sp
@@ -579,38 +579,36 @@ Now, \fB\&..\fP transforms to \fBcd ../\fP, while \fB\&...\fP turns into \fBcd .
 .sp
 The advantage over aliases is that you can see the actual command before using it, add to it or change it, and the actual command will be stored in history.
 .IP [1] 5
-Any binding that executes the \fBexpand\-abbr\fP or \fBexecute\fP \fI\%bind function\fP will expand abbreviations. By default \fBControl\fP+\fBSpace\fP is bound to just inserting a space.
-.SH PROGRAMMABLE TITLE
+Any binding that executes the \fBexpand\-abbr\fP or \fBexecute\fP \fI\%bind function\fP will expand abbreviations. By default \fBctrl\-space\fP is bound to just inserting a space.
+.SH PROGRAMMABLE PROMPT
 .sp
-When using most virtual terminals, it is possible to set the message displayed in the titlebar of the terminal window. This can be done automatically in fish by defining the \fI\%fish_title\fP function. The \fI\%fish_title\fP function is executed before and after a new command is executed or put into the foreground and the output is used as a titlebar message. The \fI\%status current\-command\fP builtin will always return the name of the job to be put into the foreground (or \fBfish\fP if control is returning to the shell) when the \fI\%fish_prompt\fP function is called. The first argument to fish_title will contain the most recently executed foreground command as a string.
-.sp
-The default fish title shows the hostname if connected via ssh, the currently running command (unless it is fish) and the current working directory. All of this is shortened to not make the tab too wide.
-.sp
-Examples:
-.sp
-To show the last command and working directory in the title:
+When it is fish\(aqs turn to ask for input (like after it started or the command ended), it will show a prompt. Often this looks something like:
 .INDENT 0.0
 .INDENT 3.5
 .sp
 .nf
 .ft C
-function fish_title
-    # \(gaprompt_pwd\(ga shortens the title. This helps prevent tabs from becoming very wide.
-    echo $argv[1] (prompt_pwd)
-    pwd
-end
+you@hostname ~>
 .ft P
 .fi
 .UNINDENT
 .UNINDENT
-.SH PROGRAMMABLE PROMPT
 .sp
-When it is fish\(aqs turn to ask for input (like after it started or the command ended), it will show a prompt. It does this by running the \fI\%fish_prompt\fP and \fI\%fish_right_prompt\fP functions.
+This prompt is determined by running the \fI\%fish_prompt\fP and \fI\%fish_right_prompt\fP functions.
 .sp
-The output of the former is displayed on the left and the latter\(aqs output on the right side of the terminal. The output of \fI\%fish_mode_prompt\fP will be prepended on the left, though the default function only does this when in \fI\%vi\-mode\fP\&.
+The output of the former is displayed on the left and the latter\(aqs output on the right side of the terminal.
+For \fI\%vi mode\fP, the output of \fI\%fish_mode_prompt\fP will be prepended on the left.
+.sp
+Fish ships with a few prompts which you can see with \fI\%fish_config\fP\&. If you run just \fBfish_config\fP it will open a web interface [2] where you\(aqll be shown the prompts and can pick which one you want. \fBfish_config prompt show\fP will show you the prompts right in your terminal.
+.sp
+For example \fBfish_config prompt choose disco\fP will temporarily select the \(dqdisco\(dq prompt. If you like it and decide to keep it, run \fBfish_config prompt save\fP\&.
+.sp
+You can also change these functions yourself by running \fBfunced fish_prompt\fP and \fBfuncsave fish_prompt\fP once you are happy with the result (or \fBfish_right_prompt\fP if you want to change that).
+.IP [2] 5
+The web interface runs purely locally on your computer and requires python to be installed.
 .SH CONFIGURABLE GREETING
 .sp
-When it is started interactively, fish tries to run the \fI\%fish_greeting\fP function. The default fish_greeting prints a simple greeting. You can change its text by changing the \fB$fish_greeting\fP variable, for instance using a \fI\%universal variable\fP:
+When it is started interactively, fish tries to run the \fI\%fish_greeting\fP function. The default fish_greeting prints a simple message. You can change its text by changing the \fB$fish_greeting\fP variable, for instance using a \fI\%universal variable\fP:
 .INDENT 0.0
 .INDENT 3.5
 .sp
@@ -649,18 +647,36 @@ end
 .UNINDENT
 .sp
 save this in config.fish or \fI\%a function file\fP\&. You can also use \fI\%funced\fP and \fI\%funcsave\fP to edit it easily.
-.SH PRIVATE MODE
+.SH PROGRAMMABLE TITLE
 .sp
-If \fB$fish_private_mode\fP is set to a non\-empty value, commands will not be written to the history file on disk.
+When using most terminals, it is possible to set the text displayed in the titlebar of the terminal window. Fish does this by running the \fI\%fish_title\fP function. It is executed before and after a command and the output is used as a titlebar message.
 .sp
-You can also launch with \fBfish \-\-private\fP (or \fBfish \-P\fP for short). This both hides old history and prevents writing history to disk. This is useful to avoid leaking personal information (e.g. for screencasts) or when dealing with sensitive information.
+The \fI\%status current\-command\fP builtin will always return the name of the job to be put into the foreground (or \fBfish\fP if control is returning to the shell) when the \fI\%fish_title\fP function is called. The first argument will contain the most recently executed foreground command as a string.
 .sp
-You can query the variable \fBfish_private_mode\fP (\fBif test \-n \(dq$fish_private_mode\(dq ...\fP) if you would like to respect the user\(aqs wish for privacy and alter the behavior of your own fish scripts.
+The default title shows the hostname if connected via ssh, the currently running command (unless it is fish) and the current working directory. All of this is shortened to not make the tab too wide.
+.sp
+Examples:
+.sp
+To show the last command and working directory in the title:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+function fish_title
+    # \(gaprompt_pwd\(ga shortens the title. This helps prevent tabs from becoming very wide.
+    echo $argv[1] (prompt_pwd)
+    pwd
+end
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
 .SH COMMAND LINE EDITOR
 .sp
 The fish editor features copy and paste, a \fI\%searchable history\fP and many editor functions that can be bound to special keyboard shortcuts.
 .sp
-Like bash and other shells, fish includes two sets of keyboard shortcuts (or key bindings): one inspired by the Emacs text editor, and one by the Vi text editor. The default editing mode is Emacs. You can switch to Vi mode by running \fI\%fish_vi_key_bindings\fP and switch back with \fI\%fish_default_key_bindings\fP\&. You can also make your own key bindings by creating a function and setting the \fBfish_key_bindings\fP variable to its name. For example:
+Like bash and other shells, fish includes two sets of keyboard shortcuts (or key bindings): one inspired by the Emacs text editor, and one by the vi text editor. The default editing mode is Emacs. You can switch to vi mode by running \fI\%fish_vi_key_bindings\fP and switch back with \fI\%fish_default_key_bindings\fP\&. You can also make your own key bindings by creating a function and setting the \fBfish_key_bindings\fP variable to its name. For example:
 .INDENT 0.0
 .INDENT 3.5
 .sp
@@ -679,107 +695,115 @@ set \-g fish_key_bindings fish_hybrid_key_bindings
 .UNINDENT
 .UNINDENT
 .sp
-While the key bindings included with fish include many of the shortcuts popular from the respective text editors, they are not a complete implementation. They include a shortcut to open the current command line in your preferred editor (\fBAlt\fP+\fBE\fP by default) if you need the full power of your editor.
+While the key bindings included with fish include many of the shortcuts popular from the respective text editors, they are not a complete implementation. They include a shortcut to open the current command line in your preferred editor (\fBalt\-e\fP by default) if you need the full power of your editor.
 .SS Shared bindings
 .sp
-Some bindings are common across Emacs and Vi mode, because they aren\(aqt text editing bindings, or because what Vi/Vim does for a particular key doesn\(aqt make sense for a shell.
+Some bindings are common across Emacs and vi mode, because they aren\(aqt text editing bindings, or because what vi/Vim does for a particular key doesn\(aqt make sense for a shell.
 .INDENT 0.0
 .IP \(bu 2
-\fBTab\fP \fI\%completes\fP the current token. \fBShift\fP+\fBTab\fP completes the current token and starts the pager\(aqs search mode. \fBTab\fP is the same as \fBControl\fP+\fBI\fP\&.
+\fBtab\fP \fI\%completes\fP the current token. \fBshift\-tab\fP completes the current token and starts the pager\(aqs search mode. \fBtab\fP is the same as \fBctrl\-i\fP\&.
 .IP \(bu 2
-\fB←\fP (Left) and \fB→\fP (Right) move the cursor left or right by one character. If the cursor is already at the end of the line, and an autosuggestion is available, \fB→\fP accepts the autosuggestion.
+\fBleft\fP (\fB←\fP) and \fBright\fP (\fB→\fP) move the cursor left or right by one character. If the cursor is already at the end of the line, and an autosuggestion is available, \fBright\fP (\fB→\fP) accepts the autosuggestion.
 .IP \(bu 2
-\fBEnter\fP executes the current commandline or inserts a newline if it\(aqs not complete yet (e.g. a \fB)\fP or \fBend\fP is missing).
+\fBenter\fP executes the current commandline or inserts a newline if it\(aqs not complete yet (e.g. a \fB)\fP or \fBend\fP is missing).
 .IP \(bu 2
-\fBAlt\fP+\fBEnter\fP inserts a newline at the cursor position.
+\fBalt\-enter\fP inserts a newline at the cursor position. This is useful to add a line to a commandline that\(aqs already complete.
 .IP \(bu 2
-\fBAlt\fP+\fB←\fP and \fBAlt\fP+\fB→\fP move the cursor one word left or right (to the next space or punctuation mark), or moves forward/backward in the directory history if the command line is empty. If the cursor is already at the end of the line, and an autosuggestion is available, \fBAlt\fP+\fB→\fP (or \fBAlt\fP+\fBF\fP) accepts the first word in the suggestion.
+\fBalt\-left\fP (\fB←\fP) and \fBalt\-right\fP (\fB→\fP) move the cursor one word left or right (to the next space or punctuation mark), or moves forward/backward in the directory history if the command line is empty. If the cursor is already at the end of the line, and an autosuggestion is available, \fBalt\-right\fP (\fB→\fP) (or \fBalt\-f\fP) accepts the first word in the suggestion.
 .IP \(bu 2
-\fBControl\fP+\fB←\fP and \fBControl\fP+\fB→\fP move the cursor one word left or right. These accept one word of the autosuggestion \- the part they\(aqd move over.
+\fBctrl\-left\fP (\fB←\fP) and \fBctrl\-right\fP (\fB→\fP) move the cursor one word left or right. These accept one word of the autosuggestion \- the part they\(aqd move over.
 .IP \(bu 2
-\fBShift\fP+\fB←\fP and \fBShift\fP+\fB→\fP move the cursor one word left or right, without stopping on punctuation. These accept one big word of the autosuggestion.
+\fBshift\-left\fP (\fB←\fP) and \fBshift\-right\fP (\fB→\fP) move the cursor one word left or right, without stopping on punctuation. These accept one big word of the autosuggestion.
 .IP \(bu 2
-\fB↑\fP (Up) and \fB↓\fP (Down) (or \fBControl\fP+\fBP\fP and \fBControl\fP+\fBN\fP for emacs aficionados) search the command history for the previous/next command containing the string that was specified on the commandline before the search was started. If the commandline was empty when the search started, all commands match. See the \fI\%history\fP section for more information on history searching.
+\fBup\fP (\fB↑\fP) and \fBdown\fP (\fB↓\fP) (or \fBctrl\-p\fP and \fBctrl\-n\fP for emacs aficionados) search the command history for the previous/next command containing the string that was specified on the commandline before the search was started. If the commandline was empty when the search started, all commands match. See the \fI\%history\fP section for more information on history searching.
 .IP \(bu 2
-\fBAlt\fP+\fB↑\fP and \fBAlt\fP+\fB↓\fP search the command history for the previous/next token containing the token under the cursor before the search was started. If the commandline was not on a token when the search started, all tokens match. See the \fI\%history\fP section for more information on history searching.
+\fBalt\-up\fP (\fB↑\fP) and \fBalt\-down\fP (\fB↓\fP) search the command history for the previous/next token containing the token under the cursor before the search was started. If the commandline was not on a token when the search started, all tokens match. See the \fI\%history\fP section for more information on history searching.
 .IP \(bu 2
-\fBControl\fP+\fBC\fP interrupt/kill whatever is running (SIGINT).
+\fBctrl\-c\fP interrupts/kills whatever is running (SIGINT).
 .IP \(bu 2
-\fBControl\fP+\fBD\fP delete one character to the right of the cursor. If the command line is empty, \fBControl\fP+\fBD\fP will exit fish.
+\fBctrl\-d\fP deletes one character to the right of the cursor. If the command line is empty, \fBctrl\-d\fP will exit fish.
 .IP \(bu 2
-\fBControl\fP+\fBU\fP removes contents from the beginning of line to the cursor (moving it to the \fI\%killring\fP).
+\fBctrl\-u\fP removes contents from the beginning of line to the cursor (moving it to the \fI\%killring\fP).
 .IP \(bu 2
-\fBControl\fP+\fBL\fP clears and repaints the screen.
+\fBctrl\-l\fP clears and repaints the screen.
 .IP \(bu 2
-\fBControl\fP+\fBW\fP removes the previous path component (everything up to the previous \(dq/\(dq, \(dq:\(dq or \(dq@\(dq) (moving it to the \fI\%Copy and paste (Kill Ring)\fP).
+\fBctrl\-w\fP removes the previous path component (everything up to the previous \(dq/\(dq, \(dq:\(dq or \(dq@\(dq) (moving it to the \fI\%Copy and paste (Kill Ring)\fP).
 .IP \(bu 2
-\fBControl\fP+\fBX\fP copies the current buffer to the system\(aqs clipboard, \fBControl\fP+\fBV\fP inserts the clipboard contents. (see \fI\%fish_clipboard_copy\fP and \fI\%fish_clipboard_paste\fP)
+\fBctrl\-x\fP copies the current buffer to the system\(aqs clipboard, \fBctrl\-v\fP inserts the clipboard contents. (see \fI\%fish_clipboard_copy\fP and \fI\%fish_clipboard_paste\fP)
 .IP \(bu 2
-\fBAlt\fP+\fBD\fP moves the next word to the \fI\%Copy and paste (Kill Ring)\fP\&.
+\fBalt\-d\fP or \fBctrl\-delete\fP moves the next word to the \fI\%Copy and paste (Kill Ring)\fP\&.
 .IP \(bu 2
-\fBAlt\fP+\fBH\fP (or \fBF1\fP) shows the manual page for the current command, if one exists.
+\fBalt\-d\fP lists the directory history if the command line is empty.
 .IP \(bu 2
-\fBAlt\fP+\fBL\fP lists the contents of the current directory, unless the cursor is over a directory argument, in which case the contents of that directory will be listed.
+\fBalt\-delete\fP moves the next argument to the \fI\%Copy and paste (Kill Ring)\fP\&.
 .IP \(bu 2
-\fBAlt\fP+\fBO\fP opens the file at the cursor in a pager.
+\fBshift\-delete\fP removes the current history item or autosuggestion from the command history.
 .IP \(bu 2
-\fBAlt\fP+\fBP\fP adds the string \fB&| less;\fP to the end of the job under the cursor. The result is that the output of the command will be paged.
+\fBalt\-h\fP (or \fBf1\fP) shows the manual page for the current command, if one exists.
 .IP \(bu 2
-\fBAlt\fP+\fBW\fP prints a short description of the command under the cursor.
+\fBalt\-l\fP lists the contents of the current directory, unless the cursor is over a directory argument, in which case the contents of that directory will be listed.
 .IP \(bu 2
-\fBAlt\fP+\fBE\fP edit the current command line in an external editor. The editor is chosen from the first available of the \fB$VISUAL\fP or \fB$EDITOR\fP variables.
+\fBalt\-o\fP opens the file at the cursor in a pager. If the cursor is in command position and the command is a script, it will instead open that script in your editor. The editor is chosen from the first available of the \fB$VISUAL\fP or \fB$EDITOR\fP variables.
 .IP \(bu 2
-\fBAlt\fP+\fBV\fP Same as \fBAlt\fP+\fBE\fP\&.
+\fBalt\-p\fP adds the string \fB&| less;\fP to the end of the job under the cursor. The result is that the output of the command will be paged.
 .IP \(bu 2
-\fBAlt\fP+\fBS\fP Prepends \fBsudo\fP to the current commandline. If the commandline is empty, prepend \fBsudo\fP to the last commandline.
+\fBalt\-w\fP prints a short description of the command under the cursor.
 .IP \(bu 2
-\fBControl\fP+\fBSpace\fP Inserts a space without expanding an \fI\%abbreviation\fP\&. For vi\-mode this only applies to insert\-mode.
+\fBalt\-e\fP edits the current command line in an external editor. The editor is chosen from the first available of the \fB$VISUAL\fP or \fB$EDITOR\fP variables.
+.IP \(bu 2
+\fBalt\-v\fP Same as \fBalt\-e\fP\&.
+.IP \(bu 2
+\fBalt\-s\fP Prepends \fBsudo\fP to the current commandline. If the commandline is empty, prepend \fBsudo\fP to the last commandline.
+.IP \(bu 2
+\fBctrl\-space\fP Inserts a space without expanding an \fI\%abbreviation\fP\&. For vi mode, this only applies to insert\-mode.
 .UNINDENT
 .SS Emacs mode commands
 .sp
 To enable emacs mode, use \fI\%fish_default_key_bindings\fP\&. This is also the default.
 .INDENT 0.0
 .IP \(bu 2
-\fBHome\fP or \fBControl\fP+\fBA\fP moves the cursor to the beginning of the line.
+\fBhome\fP or \fBctrl\-a\fP moves the cursor to the beginning of the line.
 .IP \(bu 2
-\fBEnd\fP or \fBControl\fP+\fBE\fP moves to the end of line. If the cursor is already at the end of the line, and an autosuggestion is available, \fBEnd\fP or \fBControl\fP+\fBE\fP accepts the autosuggestion.
+\fBend\fP or \fBctrl\-e\fP moves to the end of line. If the cursor is already at the end of the line, and an autosuggestion is available, \fBend\fP or \fBctrl\-e\fP accepts the autosuggestion.
 .IP \(bu 2
-\fBControl\fP+\fBB\fP, \fBControl\fP+\fBF\fP move the cursor one character left or right or accept the autosuggestion just like the \fB←\fP (Left) and \fB→\fP (Right) shared bindings (which are available as well).
+\fBctrl\-b\fP, \fBctrl\-f\fP move the cursor one character left or right or accept the autosuggestion just like the \fBleft\fP (\fB←\fP) and \fBright\fP (\fB→\fP) shared bindings (which are available as well).
 .IP \(bu 2
-\fBControl\fP+\fBN\fP, \fBControl\fP+\fBP\fP move the cursor up/down or through history, like the up and down arrow shared bindings.
+\fBalt\-b\fP, \fBalt\-f\fP move the cursor one word left or right, or accept one word of the autosuggestion. If the command line is empty, moves forward/backward in the directory history instead.
 .IP \(bu 2
-\fBDelete\fP or \fBBackspace\fP removes one character forwards or backwards respectively. This also goes for \fBControl\fP+\fBH\fP, which is indistinguishable from backspace.
+\fBctrl\-n\fP, \fBctrl\-p\fP move the cursor up/down or through history, like the up and down arrow shared bindings.
 .IP \(bu 2
-\fBAlt\fP+\fBBackspace\fP removes one word backwards.
+\fBdelete\fP or \fBbackspace\fP or \fBctrl\-h\fP removes one character forwards or backwards respectively.
 .IP \(bu 2
-\fBAlt\fP+\fB<\fP moves to the beginning of the commandline, \fBAlt\fP+\fB>\fP moves to the end.
+\fBalt\-backspace\fP removes one word backwards. If supported by the terminal, \fBctrl\-backspace\fP does the same.
 .IP \(bu 2
-\fBControl\fP+\fBK\fP deletes from the cursor to the end of line (moving it to the \fI\%Copy and paste (Kill Ring)\fP).
+\fBalt\-<\fP moves to the beginning of the commandline, \fBalt\->\fP moves to the end.
 .IP \(bu 2
-\fBEscape\fP and \fBControl\fP+\fBG\fP cancel the current operation. Immediately after an unambiguous completion this undoes it.
+\fBctrl\-k\fP deletes from the cursor to the end of line (moving it to the \fI\%Copy and paste (Kill Ring)\fP).
 .IP \(bu 2
-\fBAlt\fP+\fBC\fP capitalizes the current word.
+\fBescape\fP and \fBctrl\-g\fP cancel the current operation. Immediately after an unambiguous completion this undoes it.
 .IP \(bu 2
-\fBAlt\fP+\fBU\fP makes the current word uppercase.
+\fBalt\-c\fP capitalizes the current word.
 .IP \(bu 2
-\fBControl\fP+\fBT\fP transposes the last two characters.
+\fBalt\-u\fP makes the current word uppercase.
 .IP \(bu 2
-\fBAlt\fP+\fBT\fP transposes the last two words.
+\fBctrl\-t\fP transposes the last two characters.
 .IP \(bu 2
-\fBControl\fP+\fBZ\fP, \fBControl\fP+\fB_\fP (\fBControl\fP+\fB/\fP on some terminals) undo the most recent edit of the line.
+\fBalt\-t\fP transposes the last two words.
 .IP \(bu 2
-\fBAlt\fP+\fB/\fP reverts the most recent undo.
+\fBctrl\-z\fP, \fBctrl\-_\fP (\fBctrl\-/\fP on some terminals) undo the most recent edit of the line.
 .IP \(bu 2
-\fBControl\fP+\fBR\fP opens the history in a pager. This will show history entries matching the search, a few at a time. Pressing \fBControl\fP+\fBR\fP again will search older entries, pressing \fBControl\fP+\fBS\fP (that otherwise toggles pager search) will go to newer entries. The search bar will always be selected.
+\fBalt\-/\fP or \fBctrl\-shift\-z\fP reverts the most recent undo.
+.IP \(bu 2
+\fBctrl\-r\fP opens the history in a pager. This will show history entries matching the search, a few at a time. Pressing \fBctrl\-r\fP again will search older entries, pressing \fBctrl\-s\fP (that otherwise toggles pager search) will go to newer entries. The search bar will always be selected.
 .UNINDENT
 .sp
 You can change these key bindings using the \fI\%bind\fP builtin.
 .SS Vi mode commands
 .sp
-Vi mode allows for the use of Vi\-like commands at the prompt. Initially, \fI\%insert mode\fP is active. \fBEscape\fP enters \fI\%command mode\fP\&. The commands available in command, insert and visual mode are described below. Vi mode shares \fI\%some bindings\fP with \fI\%Emacs mode\fP\&.
+Vi mode allows for the use of vi\-like commands at the prompt. Initially, \fI\%insert mode\fP is active. \fBescape\fP enters \fI\%command mode\fP\&. The commands available in command, insert and visual mode are described below. Vi mode shares \fI\%some bindings\fP with \fI\%Emacs mode\fP\&.
 .sp
 To enable vi mode, use \fI\%fish_vi_key_bindings\fP\&.
-It is also possible to add all emacs\-mode bindings to vi\-mode by using something like:
+It is also possible to add all Emacs mode bindings to vi mode by using something like:
 .INDENT 0.0
 .INDENT 3.5
 .sp
@@ -800,11 +824,11 @@ end
 .UNINDENT
 .UNINDENT
 .sp
-When in vi\-mode, the \fI\%fish_mode_prompt\fP function will display a mode indicator to the left of the prompt. To disable this feature, override it with an empty function. To display the mode elsewhere (like in your right prompt), use the output of the \fBfish_default_mode_prompt\fP function.
+When in vi mode, the \fI\%fish_mode_prompt\fP function will display a mode indicator to the left of the prompt. To disable this feature, override it with an empty function. To display the mode elsewhere (like in your right prompt), use the output of the \fBfish_default_mode_prompt\fP function.
 .sp
 When a binding switches the mode, it will repaint the mode\-prompt if it exists, and the rest of the prompt only if it doesn\(aqt. So if you want a mode\-indicator in your \fBfish_prompt\fP, you need to erase \fBfish_mode_prompt\fP e.g. by adding an empty file at \fB~/.config/fish/functions/fish_mode_prompt.fish\fP\&. (Bindings that change the mode are supposed to call the \fIrepaint\-mode\fP bind function, see \fI\%bind\fP)
 .sp
-The \fBfish_vi_cursor\fP function will be used to change the cursor\(aqs shape depending on the mode in supported terminals. The following snippet can be used to manually configure cursors after enabling vi\-mode:
+The \fBfish_vi_cursor\fP function will be used to change the cursor\(aqs shape depending on the mode in supported terminals. The following snippet can be used to manually configure cursors after enabling vi mode:
 .INDENT 0.0
 .INDENT 3.5
 .sp
@@ -833,7 +857,7 @@ Additionally, \fBblink\fP can be added after each of the cursor shape parameters
 .sp
 Fish knows the shapes \(dqblock\(dq, \(dqline\(dq and \(dqunderscore\(dq, other values will be ignored.
 .sp
-If the cursor shape does not appear to be changing after setting the above variables, it\(aqs likely your terminal emulator does not support the capabilities necessary to do this. It may also be the case, however, that \fBfish_vi_cursor\fP has not detected your terminal\(aqs features correctly (for example, if you are using \fBtmux\fP). If this is the case, you can force \fBfish_vi_cursor\fP to set the cursor shape by setting \fB$fish_vi_force_cursor\fP in \fBconfig.fish\fP\&. You\(aqll have to restart fish for any changes to take effect. If cursor shape setting remains broken after this, it\(aqs almost certainly an issue with your terminal emulator, and not fish.
+If the cursor shape does not appear to be changing after setting the above variables, it\(aqs likely your terminal emulator does not support the capabilities necessary to do this.
 .SS Command mode
 .sp
 Command mode is also known as normal mode.
@@ -847,13 +871,13 @@ Command mode is also known as normal mode.
 .IP \(bu 2
 \fBi\fP enters \fI\%insert mode\fP at the current cursor position.
 .IP \(bu 2
-\fBShift\fP+\fBI\fP enters \fI\%insert mode\fP at the beginning of the line.
+\fBI\fP enters \fI\%insert mode\fP at the beginning of the line.
 .IP \(bu 2
 \fBv\fP enters \fI\%visual mode\fP at the current cursor position.
 .IP \(bu 2
 \fBa\fP enters \fI\%insert mode\fP after the current cursor position.
 .IP \(bu 2
-\fBShift\fP+\fBA\fP enters \fI\%insert mode\fP at the end of the line.
+\fBA\fP enters \fI\%insert mode\fP at the end of the line.
 .IP \(bu 2
 \fBo\fP inserts a new line under the current one and enters \fI\%insert mode\fP
 .IP \(bu 2
@@ -861,37 +885,39 @@ Command mode is also known as normal mode.
 .IP \(bu 2
 \fB0\fP (zero) moves the cursor to beginning of line (remaining in command mode).
 .IP \(bu 2
-\fBd\fP+\fBd\fP deletes the current line and moves it to the \fI\%Copy and paste (Kill Ring)\fP\&.
+\fBd,d\fP deletes the current line and moves it to the \fI\%Copy and paste (Kill Ring)\fP\&.
 .IP \(bu 2
-\fBShift\fP+\fBD\fP deletes text after the current cursor position and moves it to the \fI\%Copy and paste (Kill Ring)\fP\&.
+\fBD\fP deletes text after the current cursor position and moves it to the \fI\%Copy and paste (Kill Ring)\fP\&.
 .IP \(bu 2
 \fBp\fP pastes text from the \fI\%Copy and paste (Kill Ring)\fP\&.
 .IP \(bu 2
 \fBu\fP undoes the most recent edit of the command line.
 .IP \(bu 2
-\fBControl\fP+\fBR\fP redoes the most recent edit.
+\fBctrl\-r\fP redoes the most recent edit.
 .IP \(bu 2
 \fB[\fP and \fB]\fP search the command history for the previous/next token containing the token under the cursor before the search was started. See the \fI\%history\fP section for more information on history searching.
 .IP \(bu 2
-\fB/\fP opens the history in a pager. This will show history entries matching the search, a few at a time. Pressing it again will search older entries, pressing \fBControl\fP+\fBS\fP (that otherwise toggles pager search) will go to newer entries. The search bar will always be selected.
+\fB/\fP opens the history in a pager. This will show history entries matching the search, a few at a time. Pressing it again will search older entries, pressing \fBctrl\-s\fP (that otherwise toggles pager search) will go to newer entries. The search bar will always be selected.
 .IP \(bu 2
-\fBBackspace\fP moves the cursor left.
+\fBbackspace\fP moves the cursor left.
 .IP \(bu 2
 \fBg\fP / \fBG\fP moves the cursor to the beginning/end of the commandline, respectively.
 .IP \(bu 2
-\fB:q\fP exits fish.
+\fB:,q\fP exits fish.
 .UNINDENT
 .SS Insert mode
 .INDENT 0.0
 .IP \(bu 2
-\fBEscape\fP enters \fI\%command mode\fP\&.
+\fBescape\fP enters \fI\%command mode\fP\&.
 .IP \(bu 2
-\fBBackspace\fP removes one character to the left.
+\fBbackspace\fP removes one character to the left.
+.IP \(bu 2
+\fBctrl\-n\fP accepts the autosuggestion.
 .UNINDENT
 .SS Visual mode
 .INDENT 0.0
 .IP \(bu 2
-\fB←\fP (Left) and \fB→\fP (Right) extend the selection backward/forward by one character.
+\fBleft (\(ga\(ga←\(ga\fP) and \fBright\(ga(\(ga\(ga→\(ga\fP) extend the selection backward/forward by one character.
 .IP \(bu 2
 \fBh\fP moves the cursor left.
 .IP \(bu 2
@@ -905,7 +931,7 @@ Command mode is also known as normal mode.
 .IP \(bu 2
 \fBd\fP and \fBx\fP move the selection to the \fI\%Copy and paste (Kill Ring)\fP and enter \fI\%command mode\fP\&.
 .IP \(bu 2
-\fBEscape\fP and \fBControl\fP+\fBC\fP enter \fI\%command mode\fP\&.
+\fBescape\fP and \fBctrl\-c\fP enter \fI\%command mode\fP\&.
 .IP \(bu 2
 \fBc\fP and \fBs\fP remove the selection and switch to insert mode.
 .IP \(bu 2
@@ -915,7 +941,7 @@ Command mode is also known as normal mode.
 .IP \(bu 2
 \fB~\fP toggles the case (upper/lower) on the selection, and enters \fI\%command mode\fP\&.
 .IP \(bu 2
-\fB\(dq*y\fP copies the selection to the clipboard, and enters \fI\%command mode\fP\&.
+\fB\(dq,*,y\fP copies the selection to the clipboard, and enters \fI\%command mode\fP\&.
 .UNINDENT
 .SS Custom bindings
 .sp
@@ -926,7 +952,7 @@ In addition to the standard bindings listed here, you can also define your own w
 .nf
 .ft C
 # Just clear the commandline on control\-c
-bind \ecc \(aqcommandline \-r \(dq\(dq\(aq
+bind ctrl\-c \(aqcommandline \-r \(dq\(dq\(aq
 .ft P
 .fi
 .UNINDENT
@@ -940,7 +966,7 @@ If you change your mind on a binding and want to go back to fish\(aqs default, y
 .sp
 .nf
 .ft C
-bind \-\-erase \ecc
+bind \-\-erase ctrl\-c
 .ft P
 .fi
 .UNINDENT
@@ -954,39 +980,34 @@ If you use \fI\%vi bindings\fP, note that \fBbind\fP will by default bind keys i
 .sp
 .nf
 .ft C
-bind \-\-mode insert \ecc \(aqcommandline \-r \(dq\(dq\(aq
+bind \-\-mode insert ctrl\-c \(aqcommandline \-r \(dq\(dq\(aq
 .ft P
 .fi
 .UNINDENT
 .UNINDENT
 .SS Key sequences
 .sp
-The terminal tells fish which keys you pressed by sending some sequences of bytes to describe that key. For some keys, this is easy \- pressing \fBa\fP simply means the terminal sends \(dqa\(dq. In others it\(aqs more complicated and terminals disagree on which they send.
-.sp
-In these cases, \fI\%fish_key_reader\fP can tell you how to write the key sequence for your terminal. Just start it and press the keys you are interested in:
+To find out the name of a key, you can use \fI\%fish_key_reader\fP\&.
 .INDENT 0.0
 .INDENT 3.5
 .sp
 .nf
 .ft C
-> fish_key_reader # pressing control\-c
+> fish_key_reader # Press Alt + right\-arrow
 Press a key:
-Press [ctrl\-C] again to exit
-bind \ecC \(aqdo something\(aq
-
-> fish_key_reader # pressing the right\-arrow
-Press a key:
-bind \ee\e[C \(aqdo something\(aq
+bind alt\-right \(aqdo something\(aq
 .ft P
 .fi
 .UNINDENT
 .UNINDENT
 .sp
-Note that some key combinations are indistinguishable or unbindable. For instance control\-i \fIis the same\fP as the tab key. This is a terminal limitation that fish can\(aqt do anything about. When \fBfish_key_reader\fP prints the same sequence for two different keys, then that is because your terminal sends the same sequence for them.
+Note that the historical way the terminal encodes keys and sends them to the application (fish, in this case) makes a lot of combinations indistinguishable or unbindable. In the usual encoding, \fBctrl\-i\fP \fIis the same\fP as the tab key, and shift cannot be detected when ctrl is also pressed.
 .sp
-Also, \fBEscape\fP is the same thing as \fBAlt\fP in a terminal. To distinguish between pressing \fBEscape\fP and then another key, and pressing \fBAlt\fP and that key (or an escape sequence the key sends), fish waits for a certain time after seeing an escape character. This is configurable via the \fI\%fish_escape_delay_ms\fP variable.
+There are more powerful encoding schemes, and fish tries to tell the terminal to turn them on, but there are still many terminals that do not support them. When \fBfish_key_reader\fP prints the same sequence for two different keys, then that is because your terminal sends the same sequence for them, and there isn\(aqt anything fish can do about it. It is our hope that these schemes will become more widespread, making input more flexible.
 .sp
-If you want to be able to press \fBEscape\fP and then a character and have it count as \fBAlt\fP+that character, set it to a higher value, e.g.:
+In the historical scheme, \fBescape\fP is the same thing as \fBalt\fP in a terminal. To distinguish between pressing \fBescape\fP and then another key, and pressing \fBalt\fP and that key (or an escape sequence the key sends), fish waits for a certain time after seeing an escape character. This is configurable via the \fI\%fish_escape_delay_ms\fP variable.
+.sp
+If you want to be able to press \fBescape\fP and then a character and have it count as \fBalt\fP+that character, set it to a higher value, e.g.:
 .INDENT 0.0
 .INDENT 3.5
 .sp
@@ -1004,10 +1025,10 @@ Similarly, to disambiguate \fIother\fP keypresses where you\(aqve bound a subseq
 .sp
 .nf
 .ft C
-# This binds \(dqjk\(dq to switch to normal mode in vi\-mode.
+# This binds the sequence j,k to switch to normal mode in vi mode.
 # If you kept it like that, every time you press \(dqj\(dq,
 # fish would wait for a \(dqk\(dq or other key to disambiguate
-bind \-M insert \-m default jk cancel repaint\-mode
+bind \-M insert \-m default j,k cancel repaint\-mode
 
 # After setting this, fish only waits 200ms for the \(dqk\(dq,
 # or decides to treat the \(dqj\(dq as a separate sequence, inserting it.
@@ -1018,26 +1039,26 @@ set \-g fish_sequence_key_delay_ms 200
 .UNINDENT
 .SS Copy and paste (Kill Ring)
 .sp
-Fish uses an Emacs\-style kill ring for copy and paste functionality. For example, use \fBControl\fP+\fBK\fP (\fIkill\-line\fP) to cut from the current cursor position to the end of the line. The string that is cut (a.k.a. killed in emacs\-ese) is inserted into a list of kills, called the kill ring. To paste the latest value from the kill ring (emacs calls this \(dqyanking\(dq) use \fBControl\fP+\fBY\fP (the \fByank\fP input function). After pasting, use \fBAlt\fP+\fBY\fP (\fByank\-pop\fP) to rotate to the previous kill.
+Fish uses an Emacs\-style kill ring for copy and paste functionality. For example, use \fBctrl\-k\fP (\fIkill\-line\fP) to cut from the current cursor position to the end of the line. The string that is cut (a.k.a. killed in emacs\-ese) is inserted into a list of kills, called the kill ring. To paste the latest value from the kill ring (emacs calls this \(dqyanking\(dq) use \fBctrl\-y\fP (the \fByank\fP input function). After pasting, use \fBalt\-y\fP (\fByank\-pop\fP) to rotate to the previous kill.
 .sp
-Copy and paste from outside are also supported, both via the \fBControl\fP+\fBX\fP / \fBControl\fP+\fBV\fP bindings (the \fBfish_clipboard_copy\fP and \fBfish_clipboard_paste\fP functions [2]) and via the terminal\(aqs paste function, for which fish enables \(dqBracketed Paste Mode\(dq, so it can tell a paste from manually entered text.
+Copy and paste from outside are also supported, both via the \fBctrl\-x\fP / \fBctrl\-v\fP bindings (the \fBfish_clipboard_copy\fP and \fBfish_clipboard_paste\fP functions [3]) and via the terminal\(aqs paste function, for which fish enables \(dqBracketed Paste Mode\(dq, so it can tell a paste from manually entered text.
 In addition, when pasting inside single quotes, pasted single quotes and backslashes are automatically escaped so that the result can be used as a single token simply by closing the quote after.
 Kill ring entries are stored in \fBfish_killring\fP variable.
 .sp
 The commands \fBbegin\-selection\fP and \fBend\-selection\fP (unbound by default; used for selection in vi visual mode) control text selection together with cursor movement commands that extend the current selection.
 The variable \fI\%fish_cursor_selection_mode\fP can be used to configure if that selection should include the character under the cursor (\fBinclusive\fP) or not (\fBexclusive\fP). The default is \fBexclusive\fP, which works well with any cursor shape. For vi mode, and particularly for the \fBblock\fP or \fBunderscore\fP cursor shapes you may prefer \fBinclusive\fP\&.
-.IP [2] 5
+.IP [3] 5
 These rely on external tools. Currently xsel, xclip, wl\-copy/wl\-paste and pbcopy/pbpaste are supported.
 .SS Multiline editing
 .sp
 The fish commandline editor can be used to work on commands that are several lines long. There are three ways to make a command span more than a single line:
 .INDENT 0.0
 .IP \(bu 2
-Pressing the \fBEnter\fP key while a block of commands is unclosed, such as when one or more block commands such as \fBfor\fP, \fBbegin\fP or \fBif\fP do not have a corresponding \fI\%end\fP command.
+Pressing the \fBenter\fP key while a block of commands is unclosed, such as when one or more block commands such as \fBfor\fP, \fBbegin\fP or \fBif\fP do not have a corresponding \fI\%end\fP command.
 .IP \(bu 2
-Pressing \fBAlt\fP+\fBEnter\fP instead of pressing the \fBEnter\fP key.
+Pressing \fBalt\-enter\fP instead of pressing the \fBenter\fP key.
 .IP \(bu 2
-By inserting a backslash (\fB\e\fP) character before pressing the \fBEnter\fP key, escaping the newline.
+By inserting a backslash (\fB\e\fP) character before pressing the \fBenter\fP key, escaping the newline.
 .UNINDENT
 .sp
 The fish commandline editor works exactly the same in single line mode and in multiline mode. To move between lines use the left and right arrow keys and other such keyboard shortcuts.
@@ -1045,11 +1066,11 @@ The fish commandline editor works exactly the same in single line mode and in mu
 .sp
 After a command has been executed, it is remembered in the history list. Any duplicate history items are automatically removed. By pressing the up and down keys, you can search forwards and backwards in the history. If the current command line is not empty when starting a history search, only the commands containing the string entered into the command line are shown.
 .sp
-By pressing \fBAlt\fP+\fB↑\fP and \fBAlt\fP+\fB↓\fP, a history search is also performed, but instead of searching for a complete commandline, each commandline is broken into separate elements just like it would be before execution, and the history is searched for an element matching that under the cursor.
+By pressing \fBalt\-up\fP (\fB↑\fP) and \fBalt\-down\fP (\fB↓\fP), a history search is also performed, but instead of searching for a complete commandline, each commandline is broken into separate elements just like it would be before execution, and the history is searched for an element matching that under the cursor.
 .sp
-For more complicated searches, you can press \fBCtrl\fP+\fBR\fP to open a pager that allows you to search the history. It shows a limited number of entries in one page, press \fBCtrl\fP+\fBR\fP [3] again to move to the next page and \fBCtrl\fP+\fBS\fP [4] to move to the previous page. You can change the text to refine your search.
+For more complicated searches, you can press \fBctrl\-r\fP to open a pager that allows you to search the history. It shows a limited number of entries in one page, press \fBctrl\-r\fP [4] again to move to the next page and \fBctrl\-s\fP [5] to move to the previous page. You can change the text to refine your search.
 .sp
-History searches are case\-insensitive unless the search string contains an uppercase character. You can stop a search to edit your search string by pressing \fBEsc\fP or \fBPage Down\fP\&.
+History searches are case\-insensitive unless the search string contains an uppercase character. You can stop a search to edit your search string by pressing \fBescape\fP or \fBpagedown\fP\&.
 .sp
 Prefixing the commandline with a space will prevent the entire line from being stored in the history. It will still be available for recall until the next command is executed, but will not be stored on disk. This is to allow you to fix misspellings and such.
 .sp
@@ -1064,11 +1085,18 @@ Examples:
 .sp
 To search for previous entries containing the word \(aqmake\(aq, type \fBmake\fP in the console and press the up key.
 .sp
-If the commandline reads \fBcd m\fP, place the cursor over the \fBm\fP character and press \fBAlt\fP+\fB↑\fP to search for previously typed words containing \(aqm\(aq.
-.IP [3] 5
-Or another binding that triggers the \fBhistory\-pager\fP input function. See \fI\%bind\fP for a list.
+If the commandline reads \fBcd m\fP, place the cursor over the \fBm\fP character and press \fBalt\-up\fP (\fB↑\fP) to search for previously typed words containing \(aqm\(aq.
 .IP [4] 5
+Or another binding that triggers the \fBhistory\-pager\fP input function. See \fI\%bind\fP for a list.
+.IP [5] 5
 Or another binding that triggers the \fBpager\-toggle\-search\fP input function.
+.SH PRIVATE MODE
+.sp
+Fish has a private mode, in which command history will not be written to the history file on disk. To enable it, either set \fB$fish_private_mode\fP to a non\-empty value, or launch with \fBfish \-\-private\fP (or \fBfish \-P\fP for short).
+.sp
+If you launch fish with \fB\-P\fP, it both hides old history and prevents writing history to disk. This is useful to avoid leaking personal information (e.g. for screencasts) or when dealing with sensitive information.
+.sp
+You can query the variable \fBfish_private_mode\fP (\fBif test \-n \(dq$fish_private_mode\(dq ...\fP) if you would like to respect the user\(aqs wish for privacy and alter the behavior of your own fish scripts.
 .SH NAVIGATING DIRECTORIES
 .sp
 Navigating directories is usually done with the \fI\%cd\fP command, but fish offers some advanced features as well.
@@ -1085,9 +1113,9 @@ Several commands are provided to interact with this directory history:
 .IP \(bu 2
 \fI\%cdh\fP displays a prompt to quickly navigate the history
 .IP \(bu 2
-\fI\%prevd\fP moves backward through the history. It is bound to \fBAlt\fP+\fB←\fP
+\fI\%prevd\fP moves backward through the history. It is bound to \fBalt\-left\fP (\fB←\fP)
 .IP \(bu 2
-\fI\%nextd\fP moves forward through the history. It is bound to \fBAlt\fP+\fB→\fP
+\fI\%nextd\fP moves forward through the history. It is bound to \fBalt\-right\fP (\fB→\fP)
 .UNINDENT
 .SS Directory stack
 .sp
@@ -1103,6 +1131,6 @@ Another set of commands, usually also available in other shells like bash, deal 
 .SH AUTHOR
 fish-shell developers
 .SH COPYRIGHT
-2023, fish-shell developers
+2024, fish-shell developers
 .\" Generated by docutils manpage writer.
 .

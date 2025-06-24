@@ -14,7 +14,6 @@ function __fish_default_command_not_found_handler
     printf (_ "fish: Unknown command: %s\n") (string escape -- $argv[1]) >&2
 end
 
-
 if not status --is-interactive
     # Hook up the default as the command_not_found handler
     # if we are not interactive to avoid custom handlers.
@@ -81,7 +80,7 @@ else if not contains -- $__fish_data_dir/functions $fish_function_path
 end
 
 if not set -q fish_complete_path
-    set fish_complete_path $__fish_config_dir/completions $__fish_sysconf_dir/completions $__fish_vendor_completionsdirs $__fish_data_dir/completions $__fish_user_data_dir/generated_completions
+    set fish_complete_path $__fish_config_dir/completions $__fish_sysconf_dir/completions $__fish_vendor_completionsdirs $__fish_data_dir/completions $__fish_cache_dir/generated_completions
 else if not contains -- $__fish_data_dir/completions $fish_complete_path
     set -a fish_complete_path $__fish_data_dir/completions
 end
@@ -150,7 +149,8 @@ end
 # Set the locale if it isn't explicitly set. Allowing the lack of locale env vars to imply the
 # C/POSIX locale causes too many problems. Do this before reading the snippets because they might be
 # in UTF-8 (with non-ASCII characters).
-__fish_set_locale
+not set -q LANG # (fast path - no need to load the file if we have $LANG)
+and __fish_set_locale
 
 #
 # Some things should only be done for login terminals
@@ -166,13 +166,11 @@ if status --is-login
 
             # Populate path according to config files
             for path_file in $argv[2] $argv[3]/*
-                if test -f $path_file
-                    while read -l entry
-                        if not contains -- $entry $result
-                            test -n "$entry"
-                            and set -a result $entry
-                        end
-                    end <$path_file
+                for entry in (string split : <? $path_file)
+                    if not contains -- $entry $result
+                        test -n "$entry"
+                        and set -a result $entry
+                    end
                 end
             end
 
@@ -223,15 +221,22 @@ end
 
 for jobbltn in bg wait disown
     function $jobbltn -V jobbltn
-        builtin $jobbltn (__fish_expand_pid_args $argv)
+        set -l args (__fish_expand_pid_args $argv)
+        and builtin $jobbltn $args
     end
 end
 function fg
-    builtin fg (__fish_expand_pid_args $argv)[-1]
+    set -l args (__fish_expand_pid_args $argv)
+    and builtin fg $args[-1]
 end
 
-function kill
-    command kill (__fish_expand_pid_args $argv)
+if command -q kill
+    # Only define this if something to wrap exists
+    # this allows a nice "commad not found" error to be triggered.
+    function kill
+        set -l args (__fish_expand_pid_args $argv)
+        and command kill $args
+    end
 end
 
 # As last part of initialization, source the conf directories.

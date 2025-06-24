@@ -17,8 +17,18 @@ function fish_config --description "Launch fish's web based configuration"
     # Also opened with just `fish_config` or `fish_config browse`.
     if contains -- $cmd browse
         set -lx __fish_bin_dir $__fish_bin_dir
+        set -l fish_path (status fish-path)
+        and set __fish_bin_dir (path dirname -- $fish_path)
         if set -l python (__fish_anypython)
             $python "$__fish_data_dir/tools/web_config/webconfig.py" $argv
+
+            # If the execution of 'webconfig.py' fails, display python location and return.
+            if test $status -ne 0
+                echo "Please check if Python has been installed successfully."
+                echo "You can find the location of Python by executing the 'command -s $python' command."
+                return 1
+            end
+
         else
             echo (set_color $fish_color_error)Cannot launch the web configuration tool:(set_color normal)
             echo (set_color -o)"fish_config browse"(set_color normal) requires Python.
@@ -38,7 +48,7 @@ function fish_config --description "Launch fish's web based configuration"
     end
 
     # Variables a theme is allowed to set
-    set -l theme_var_filter '^fish_(?:pager_)?color.*$';
+    set -l theme_var_filter '^fish_(?:pager_)?color.*$'
 
     switch $cmd
         case prompt
@@ -110,12 +120,20 @@ function fish_config --description "Launch fish's web based configuration"
                         # or we'd throw an error on a stock fish.
                         path is $__fish_config_dir/functions/fish_prompt.fish
                         and cp $__fish_config_dir/functions/fish_prompt.fish{,.bak}
+                        path is $__fish_config_dir/functions/fish_right_prompt.fish
+                        and cp $__fish_config_dir/functions/fish_right_prompt.fish{,.bak}
 
                         set -l have
                         if set -q argv[1]
                             for f in $prompt_dir/$argv[1].fish
                                 if test -f $f
                                     set have $f
+                                    # Set the functions to empty so we empty the file
+                                    # if necessary.
+                                    function fish_prompt
+                                    end
+                                    function fish_right_prompt
+                                    end
                                     source $f
                                     or return 2
                                 end
@@ -176,7 +194,7 @@ function fish_config --description "Launch fish's web based configuration"
                     echo -ns (set_color $fish_color_command || set_color $fish_color_normal) Th
                     set_color normal
                     set_color $fish_color_autosuggestion || set_color $fish_color_normal
-                    echo is is an autosuggestion
+                    echo is an autosuggestion
                     echo
                 case show
                     set -l fish (status fish-path)

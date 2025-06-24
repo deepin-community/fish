@@ -27,7 +27,7 @@ level margin: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .\" new: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .in \\n[rst2man-indent\\n[rst2man-indent-level]]u
 ..
-.TH "STRING" "1" "Mar 19, 2024" "3.7" "fish-shell"
+.TH "STRING" "1" "Apr 20, 2025" "4.0" "fish-shell"
 .SH NAME
 string \- manipulate strings
 .SH SYNOPSIS
@@ -46,6 +46,7 @@ string \- manipulate strings
            [\fISTRING\fP \&...]
 \fBstring\fP \fBrepeat\fP [(\fB\-n\fP | \fB\-\-count\fP) \fICOUNT\fP] [(\fB\-m\fP | \fB\-\-max\fP) \fIMAX\fP] [\fB\-N\fP | \fB\-\-no\-newline\fP]
               [\fB\-q\fP | \fB\-\-quiet\fP] [\fISTRING\fP \&...]
+\fBstring\fP \fBrepeat\fP [\fB\-N\fP | \fB\-\-no\-newline\fP] [\fB\-q\fP | \fB\-\-quiet\fP] \fICOUNT\fP [\fISTRING\fP \&...]
 \fBstring\fP \fBreplace\fP [\fB\-a\fP | \fB\-\-all\fP] [\fB\-f\fP | \fB\-\-filter\fP] [\fB\-i\fP | \fB\-\-ignore\-case\fP]
                [\fB\-r\fP | \fB\-\-regex\fP] [\fB\-q\fP | \fB\-\-quiet\fP] \fIPATTERN\fP \fIREPLACE\fP [\fISTRING\fP \&...]
 \fBstring\fP \fBshorten\fP [(\fB\-c\fP | \fB\-\-char\fP) \fICHARS\fP] [(\fB\-m\fP | \fB\-\-max\fP) \fIINTEGER\fP]
@@ -123,7 +124,9 @@ foobar
 .fi
 .sp
 .sp
-\fBstring escape\fP escapes each \fISTRING\fP in one of three ways. The first is \fB\-\-style=script\fP\&. This is the default. It alters the string such that it can be passed back to \fBeval\fP to produce the original argument again. By default, all special characters are escaped, and quotes are used to simplify the output when possible. If \fB\-n\fP or \fB\-\-no\-quoted\fP is given, the simplifying quoted format is not used. Exit status: 0 if at least one string was escaped, or 1 otherwise.
+\fBstring escape\fP escapes each \fISTRING\fP in one of several ways.
+.sp
+\fB\-\-style=script\fP (default) alters the string such that it can be passed back to \fBeval\fP to produce the original argument again. By default, all special characters are escaped, and quotes are used to simplify the output when possible. If \fB\-n\fP or \fB\-\-no\-quoted\fP is given, the simplifying quoted format is not used. Exit status: 0 if at least one string was escaped, or 1 otherwise.
 .sp
 \fB\-\-style=var\fP ensures the string can be used as a variable name by hex encoding any non\-alphanumeric characters. The string is first converted to UTF\-8 before being encoded.
 .sp
@@ -233,7 +236,7 @@ With \fB\-V\fP or \fB\-\-visible\fP, it uses the visible width of the arguments.
 .nf
 \fBstring\fP \fBmatch\fP [\fB\-a\fP | \fB\-\-all\fP] [\fB\-e\fP | \fB\-\-entire\fP] [\fB\-i\fP | \fB\-\-ignore\-case\fP]
              [\fB\-g\fP | \fB\-\-groups\-only\fP] [\fB\-r\fP | \fB\-\-regex\fP] [\fB\-n\fP | \fB\-\-index\fP]
-             [\fB\-q\fP | \fB\-\-quiet\fP] [\fB\-v\fP | \fB\-\-invert\fP]
+             [\fB\-q\fP | \fB\-\-quiet\fP] [\fB\-v\fP | \fB\-\-invert\fP] [(\fB\-m\fP | \fB\-\-max\-matches\fP) \fIMAX\fP]
              \fIPATTERN\fP [\fISTRING\fP \&...]
 .fi
 .sp
@@ -254,6 +257,8 @@ When matching via regular expressions, \fBstring match\fP automatically sets var
 .sp
 If \fB\-\-invert\fP or \fB\-v\fP is used the selected lines will be only those which do not match the given glob pattern or regular expression.
 .sp
+If \fB\-\-max\-matches MAX\fP or \fB\-m MAX\fP is used, \fBstring\fP will stop checking for matches after MAX lines of input have matched. This can be used as an \(dqearly exit\(dq optimization when processing long inputs but expecting a limited and fixed number of outputs that might be found considerably before the input stream has been exhausted. If combined with \fB\-\-invert\fP or \fB\-v\fP, considers only inverted matches.
+.sp
 Exit status: 0 if at least one match was found, or 1 otherwise.
 .SS Match Glob Examples
 .INDENT 0.0
@@ -261,13 +266,13 @@ Exit status: 0 if at least one match was found, or 1 otherwise.
 .sp
 .nf
 .ft C
->_ string match \(aq?\(aq a
+>_ string match \(aqa\(aq a
 a
 
 >_ string match \(aqa*b\(aq axxb
 axxb
 
->_ string match \-i \(aqa??B\(aq Axxb
+>_ string match \-i \(aqa*B\(aq Axxb
 Axxb
 
 >_ string match \-\- \(aq\-*\(aq \-h foo \-\-version bar
@@ -276,7 +281,7 @@ Axxb
 \-h
 \-\-version
 
->_ echo \(aqok?\(aq | string match \(aq*\e?\(aq
+>_ echo \(aqok?\(aq | string match \(aq*?\(aq
 ok?
 
 # Note that only the second STRING will match here.
@@ -288,7 +293,7 @@ foo1
 foo
 foo2
 
->_ string match \(aqfoo?\(aq \(aqfoo1\(aq \(aqfoo\(aq \(aqfoo2\(aq
+>_ string match \(aqfoo*\(aq \(aqfoo1\(aq \(aqfoo\(aq \(aqfoo2\(aq
 foo1
 foo2
 .ft P
@@ -358,7 +363,7 @@ goodbye
 .fi
 .UNINDENT
 .UNINDENT
-.SH "PAD" AND "SHORTEN" SUBCOMMANDS
+.SH "PAD" SUBCOMMAND
 .nf
 \fBstring\fP \fBpad\fP [\fB\-r\fP | \fB\-\-right\fP] [(\fB\-c\fP | \fB\-\-char\fP) \fICHAR\fP] [(\fB\-w\fP | \fB\-\-width\fP) \fIINTEGER\fP]
            [\fISTRING\fP \&...]
@@ -374,6 +379,7 @@ If \fB\-r\fP or \fB\-\-right\fP is given, add the padding after a string.
 If \fB\-c\fP or \fB\-\-char\fP is given, pad with \fICHAR\fP instead of whitespace.
 .sp
 The output is padded to the maximum width of all input strings. If \fB\-w\fP or \fB\-\-width\fP is given, use at least that.
+.SS Examples
 .INDENT 0.0
 .INDENT 3.5
 .sp
@@ -393,13 +399,14 @@ rich.  🐟🐟🐟🐟
 .fi
 .UNINDENT
 .UNINDENT
-.SH SEE ALSO
+.SS See also
 .INDENT 0.0
 .IP \(bu 2
 The \fI\%printf\fP command can do simple padding, for example \fBprintf %10s\en\fP works like \fBstring pad \-w10\fP\&.
 .IP \(bu 2
 \fI\%string length\fP with the \fB\-\-visible\fP option can be used to show what fish thinks the width is.
 .UNINDENT
+.SH "SHORTEN" SUBCOMMAND
 .nf
 \fBstring\fP \fBshorten\fP [(\fB\-c\fP | \fB\-\-char\fP) \fICHARS\fP] [(\fB\-m\fP | \fB\-\-max\fP) \fIINTEGER\fP]
                [\fB\-N\fP | \fB\-\-no\-newline\fP] [\fB\-l\fP | \fB\-\-left\fP] [\fB\-q\fP | \fB\-\-quiet\fP] [\fISTRING\fP \&...]
@@ -422,7 +429,8 @@ If \fB\-q\fP or \fB\-\-quiet\fP is given, \fBstring shorten\fP only runs for the
 .sp
 The default ellipsis is \fB…\fP\&. If fish thinks your system is incapable because of your locale, it will use \fB\&...\fP instead.
 .sp
-The return value is 0 if any shortening occured, 1 otherwise.
+The return value is 0 if any shortening occurred, 1 otherwise.
+.SS Examples
 .INDENT 0.0
 .INDENT 3.5
 .sp
@@ -467,7 +475,7 @@ builtin\-path\-with\-e…
 .fi
 .UNINDENT
 .UNINDENT
-.SH SEE ALSO
+.SS See also
 .INDENT 0.0
 .IP \(bu 2
 \fI\%string\fP\(aqs \fBpad\fP subcommand does the inverse of this command, adding padding to a specific width instead.
@@ -480,10 +488,11 @@ The \fI\%printf\fP command can do simple padding, for example \fBprintf %10s\en\
 .nf
 \fBstring\fP \fBrepeat\fP [(\fB\-n\fP | \fB\-\-count\fP) \fICOUNT\fP] [(\fB\-m\fP | \fB\-\-max\fP) \fIMAX\fP] [\fB\-N\fP | \fB\-\-no\-newline\fP]
               [\fB\-q\fP | \fB\-\-quiet\fP] [\fISTRING\fP \&...]
+\fBstring\fP \fBrepeat\fP [\fB\-N\fP | \fB\-\-no\-newline\fP] [\fB\-q\fP | \fB\-\-quiet\fP] \fICOUNT\fP [\fISTRING\fP \&...]
 .fi
 .sp
 .sp
-\fBstring repeat\fP repeats the \fISTRING\fP \fB\-n\fP or \fB\-\-count\fP times. The \fB\-m\fP or \fB\-\-max\fP option will limit the number of outputted characters (excluding the newline). This option can be used by itself or in conjunction with \fB\-\-count\fP\&. If both \fB\-\-count\fP and \fB\-\-max\fP are present, max char will be outputed unless the final repeated string size is less than max, in that case, the string will repeat until count has been reached. Both \fB\-\-count\fP and \fB\-\-max\fP will accept a number greater than or equal to zero, in the case of zero, nothing will be outputed. If \fB\-N\fP or \fB\-\-no\-newline\fP is given, the output won\(aqt contain a newline character at the end. Exit status: 0 if yielded string is not empty, 1 otherwise.
+\fBstring repeat\fP repeats the \fISTRING\fP \fB\-n\fP or \fB\-\-count\fP times. The \fB\-m\fP or \fB\-\-max\fP option will limit the number of outputted characters (excluding the newline). This option can be used by itself or in conjunction with \fB\-\-count\fP\&. If both \fB\-\-count\fP and \fB\-\-max\fP are present, max char will be outputted unless the final repeated string size is less than max, in that case, the string will repeat until count has been reached. Both \fB\-\-count\fP and \fB\-\-max\fP will accept a number greater than or equal to zero, in the case of zero, nothing will be outputted. The first argument is interpreted as \fICOUNT\fP if \fB\-\-count\fP or \fB\-\-max\fP are not explicitly specified. If \fB\-N\fP or \fB\-\-no\-newline\fP is given, the output won\(aqt contain a newline character at the end. Exit status: 0 if yielded string is not empty, 1 otherwise.
 .SS Examples
 .SS Repeat Examples
 .INDENT 0.0
@@ -502,6 +511,12 @@ foofo
 
 >_ string repeat \-m 5 \(aqfoo\(aq
 foofo
+
+>_ string repeat 2 \(aqfoo\(aq
+foofoo
+
+>_ string repeat 2 \-n 3
+222
 .ft P
 .fi
 .UNINDENT
@@ -509,7 +524,8 @@ foofo
 .SH "REPLACE" SUBCOMMAND
 .nf
 \fBstring\fP \fBreplace\fP [\fB\-a\fP | \fB\-\-all\fP] [\fB\-f\fP | \fB\-\-filter\fP] [\fB\-i\fP | \fB\-\-ignore\-case\fP]
-               [\fB\-r\fP | \fB\-\-regex\fP] [\fB\-q\fP | \fB\-\-quiet\fP] \fIPATTERN\fP \fIREPLACEMENT\fP [\fISTRING\fP \&...]
+               [\fB\-r\fP | \fB\-\-regex\fP] [(\fB\-m\fP | \fB\-\-max\-matches\fP) \fIMAX\fP] [\fB\-q\fP | \fB\-\-quiet\fP]
+               \fIPATTERN\fP \fIREPLACEMENT\fP [\fISTRING\fP \&...]
 .fi
 .sp
 .sp
@@ -518,6 +534,8 @@ foofo
 If \fB\-r\fP or \fB\-\-regex\fP is given, \fIPATTERN\fP is interpreted as a Perl\-compatible regular expression, and \fIREPLACEMENT\fP can contain C\-style escape sequences like \fBt\fP as well as references to capturing groups by number or name as \fI$n\fP or \fI${n}\fP\&.
 .sp
 If you specify the \fB\-f\fP or \fB\-\-filter\fP flag then each input string is printed only if a replacement was done. This is useful where you would otherwise use this idiom: \fBa_cmd | string match pattern | string replace pattern new_pattern\fP\&. You can instead just write \fBa_cmd | string replace \-\-filter pattern new_pattern\fP\&.
+.sp
+If \fB\-\-max\-matches MAX\fP or \fB\-m MAX\fP is used, \fBstring replace\fP will stop all processing after MAX lines of input have matched the specified pattern. In the event of \fB\-\-filter\fP or \fB\-f\fP, this means the output will be MAX lines in length. This can be used as an \(dqearly exit\(dq optimization when processing long inputs but expecting a limited and fixed number of outputs that might be found considerably before the input stream has been exhausted.
 .sp
 Exit status: 0 if at least one replacement was performed, or 1 otherwise.
 .SS Replace Literal Examples
@@ -668,7 +686,11 @@ c
 .fi
 .sp
 .sp
-\fBstring trim\fP removes leading and trailing whitespace from each \fISTRING\fP\&. If \fB\-l\fP or \fB\-\-left\fP is given, only leading whitespace is removed. If \fB\-r\fP or \fB\-\-right\fP is given, only trailing whitespace is trimmed. The \fB\-c\fP or \fB\-\-chars\fP switch causes the characters in \fICHARS\fP to be removed instead of whitespace. Exit status: 0 if at least one character was trimmed, or 1 otherwise.
+\fBstring trim\fP removes leading and trailing whitespace from each \fISTRING\fP\&. If \fB\-l\fP or \fB\-\-left\fP is given, only leading whitespace is removed. If \fB\-r\fP or \fB\-\-right\fP is given, only trailing whitespace is trimmed.
+.sp
+The \fB\-c\fP or \fB\-\-chars\fP switch causes the set of characters in \fICHARS\fP to be removed instead of whitespace. This is a set of characters, not a string \- if you pass \fB\-c foo\fP, it will remove any \(dqf\(dq or \(dqo\(dq, not just \(dqfoo\(dq as a whole.
+.sp
+Exit status: 0 if at least one character was trimmed, or 1 otherwise.
 .SS Examples
 .INDENT 0.0
 .INDENT 3.5
@@ -799,6 +821,6 @@ Like \fBsed\fP\(aqs \fBs/old/new/\fP command, \fBstring replace\fP still prints 
 .sp
 \fBstring split somedelimiter\fP is a replacement for \fBtr somedelimiter \en\fP\&.
 .SH COPYRIGHT
-2023, fish-shell developers
+2024, fish-shell developers
 .\" Generated by docutils manpage writer.
 .

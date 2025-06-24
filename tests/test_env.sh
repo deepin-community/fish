@@ -50,6 +50,10 @@ export XDG_RUNTIME_DIR
 mkdir -p $XDG_RUNTIME_DIR/fish || die
 chmod 700 "$XDG_RUNTIME_DIR"
 
+XDG_CACHE_HOME="$homedir/xdg_cache_home"
+export XDG_CACHE_HOME
+mkdir -p $XDG_CACHE_HOME/fish || die
+
 # Create a temp/scratch directory for tests to use, if they want (tests shouldn't write to a
 # shared temp folder).
 TMPDIR="$homedir/temp"
@@ -76,16 +80,14 @@ export LC_CTYPE="en_US.UTF-8"
 # See also tests/interactive.fish.
 export TERM=xterm
 unset COLORTERM
-unset INSIDE_EMACS
-unset ITERM_PROFILE
 unset KONSOLE_PROFILE_NAME
 unset KONSOLE_VERSION
 unset PANTHEON_TERMINAL_ID
+unset LC_TERMINAL
+unset LC_TERMINAL_VERSION
 unset TERM_PROGRAM
 unset TERM_PROGRAM_VERSION
 unset VTE_VERSION
-unset WT_PROFILE_ID
-unset XTERM_VERSION
 
 # If we are sourced, return without executing
 if test -z ${target}; then

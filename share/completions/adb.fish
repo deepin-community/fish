@@ -1,7 +1,7 @@
 # Completions for Android adb command
 
 function __fish_adb_no_subcommand -d 'Test if adb has yet to be given the subcommand'
-    for i in (commandline -opc)
+    for i in (commandline -xpc)
         if contains -- $i connect disconnect devices push pull sync shell emu logcat install uninstall jdwp forward bugreport backup restore version help start-server kill-server remount reboot get-state get-serialno get-devpath status-window root usb tcpip ppp sideload reconnect unroot exec-out
             return 1
         end
@@ -25,7 +25,7 @@ end
 function __fish_adb_run_command -d 'Runs adb with any -s parameters already given on the command line'
     set -l sopt
     set -l sopt_is_next
-    set -l cmd (commandline -poc)
+    set -l cmd (commandline -pxc)
     set -e cmd[1]
     for i in $cmd
         if test -n "$sopt_is_next"
@@ -59,10 +59,19 @@ function __fish_adb_list_packages
     __fish_adb_run_command pm list packages 2\>/dev/null | string replace 'package:' ''
 end
 
-
 function __fish_adb_list_uninstallable_packages
     # -3 doesn't exactly mean show uninstallable, but it's the closest you can get to with pm list
     __fish_adb_run_command pm list packages -3 | string replace 'package:' ''
+end
+
+function __fish_adb_list_local_files
+    set -l token (commandline -ct)*
+
+    # Unquoted $token to expand the array
+    # Return list of directories suffixed with '/'
+    find $token -maxdepth 0 -type d 2>/dev/null | string replace -r '$' /
+    # Return list of files
+    find $token -maxdepth 0 -type f -o -type l 2>/dev/null
 end
 
 function __fish_adb_list_files
@@ -74,7 +83,7 @@ function __fish_adb_list_files
     end
 
     # Return list of directories suffixed with '/'
-    __fish_adb_run_command find -H "$token*" -maxdepth 0 -type d 2\>/dev/null | awk '{print $0"/"}'
+    __fish_adb_run_command find -H "$token*" -maxdepth 0 -type d 2\>/dev/null | string replace -r '$' /
     # Return list of files
     __fish_adb_run_command find -H "$token*" -maxdepth 0 -type f 2\>/dev/null
 end
@@ -188,13 +197,14 @@ complete -n '__fish_seen_subcommand_from reconnect' -c adb -x -a device -d 'Kick
 # commands that accept listing device files
 complete -n '__fish_seen_subcommand_from shell' -c adb -f -a "(__fish_adb_list_files)" -d 'File on device'
 complete -n '__fish_seen_subcommand_from pull' -c adb -F -a "(__fish_adb_list_files)" -d 'File on device'
-complete -n '__fish_seen_subcommand_from push' -c adb -F -a "(__fish_adb_list_files)" -d 'File on device'
+complete -n '__fish_seen_subcommand_from push' -c adb -ka "(__fish_adb_list_files)" -d 'File on device'
+complete -n '__fish_seen_subcommand_from push' -c adb -ka "(__fish_adb_list_local_files)"
 
 # logcat
 complete -n '__fish_seen_subcommand_from logcat' -c adb -f
 # general options
 complete -n '__fish_seen_subcommand_from logcat' -c adb -s L -l last -d 'Dump logs from prior to last reboot from pstore'
-complete -n '__fish_seen_subcommand_from logcat' -c adb -s b -l buffer -d ' Request alternate ring buffer(s)' -xa '(__fish_complete_list ,  "echo main\nsystem\nradio\nevents\ncrash\ndefault\nall")'
+complete -n '__fish_seen_subcommand_from logcat' -c adb -s b -l buffer -d ' Request alternate ring buffer(s)' -xa '(__fish_append , main system radio events crash default all)'
 complete -n '__fish_seen_subcommand_from logcat' -c adb -s c -l clear -d 'Clear (flush) the entire log and exit'
 complete -n '__fish_seen_subcommand_from logcat' -c adb -s d -d 'Dump the log and then exit (don\'t block)'
 complete -n '__fish_seen_subcommand_from logcat' -c adb -l pid -d 'Only print the logs for the given PID'
@@ -207,7 +217,7 @@ complete -n '__fish_seen_subcommand_from logcat' -c adb -s B -l binary -d 'Outpu
 complete -n '__fish_seen_subcommand_from logcat' -c adb -s f -l file -d 'Log to file instead of stdout'
 complete -n '__fish_seen_subcommand_from logcat' -c adb -s r -l rotate-kbytes -d 'Rotate log every kbytes, requires -f'
 complete -n '__fish_seen_subcommand_from logcat' -c adb -s n -l rotate-count -d 'Sets number of rotated logs to keep, default 4'
-complete -n '__fish_seen_subcommand_from logcat' -c adb -l id -d ' If the signature <id> for logging to file changes, then clear the associated files and continue'
+complete -n '__fish_seen_subcommand_from logcat' -c adb -l id -d 'If the given signature for logging changes, clear the associated files'
 # logd control
 complete -n '__fish_seen_subcommand_from logcat' -c adb -s g -l buffer-size -d 'Get the size of the ring buffers within logd'
 complete -n '__fish_seen_subcommand_from logcat' -c adb -s G -l buffer-size -d 'Set size of a ring buffer in logd'

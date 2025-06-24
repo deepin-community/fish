@@ -61,21 +61,16 @@ export suppress_color
 # Source test util functions at startup
 fish_init_cmd="${fish_init_cmd} && source ${TESTS_ROOT}/test_util.fish";
 
+# Indicate that the fish panic handler shouldn't wait for input to prevent tests from hanging
+FISH_FAST_FAIL=1
+export FISH_FAST_FAIL
+
 # Run the test script, but don't exec so we can clean up after it succeeds/fails. Each test is
 # launched directly within its TMPDIR, so that the fish tests themselves do not need to refer to
 # TMPDIR (to ensure their output as displayed in case of failure by littlecheck is reproducible).
 (cd $TMPDIR && env HOME="$homedir" "${BUILD_ROOT}/test/root/bin/fish" \
     --init-command "${fish_init_cmd}" "$fish_script" "$script_args")
 test_status="$?"
-
-# CMake less than 3.9.0 "fully supports" setting an exit code to denote a skipped test, but then
-# it just goes ahead and reports them as failed anyway. Really?
-if test -n $CMAKE_SKIPPED_HACK; then
-    if test $test_status -eq 125; then
-        echo "Overriding SKIPPED return code from test" 1>&2
-        test_status=0
-    fi
-fi
 
 rm -rf "$homedir"
 exit "$test_status"

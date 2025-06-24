@@ -11,6 +11,7 @@ Synopsis
     status
     status is-login
     status is-interactive
+    status is-interactive-read
     status is-block
     status is-breakpoint
     status is-command-substitution
@@ -29,6 +30,7 @@ Synopsis
     status job-control CONTROL_TYPE
     status features
     status test-feature FEATURE
+    status buildinfo
 
 Description
 -----------
@@ -48,6 +50,9 @@ The following operations (subcommands) are available:
 
 **is-interactive**, **-i** or **--is-interactive**
     Returns 0 if fish is interactive - that is, connected to a keyboard.
+
+**is-interactive-read** or **--is-interactive-read**
+    Returns 0 if fish is running an interactive :doc:`read <read>` builtin which is connected to a keyboard.
 
 **is-login**, **-l** or **--is-login**
     Returns 0 if fish is a login shell - that is, if fish should perform login tasks such as setting up :envvar:`PATH`.
@@ -96,6 +101,10 @@ The following operations (subcommands) are available:
 
 **test-feature** *FEATURE*
     Returns 0 when FEATURE is enabled, 1 if it is disabled, and 2 if it is not recognized.
+
+**buildinfo**
+    This prints information on how fish was build - which architecture, which build system or profile was used, etc.
+    This is mainly useful for debugging.
 
 Notes
 -----

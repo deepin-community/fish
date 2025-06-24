@@ -27,12 +27,12 @@ level margin: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .\" new: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .in \\n[rst2man-indent\\n[rst2man-indent-level]]u
 ..
-.TH "ABBR" "1" "Mar 19, 2024" "3.7" "fish-shell"
+.TH "ABBR" "1" "Apr 20, 2025" "4.0" "fish-shell"
 .SH NAME
 abbr \- manage fish abbreviations
 .SH SYNOPSIS
 .nf
-\fBabbr\fP \fB\-\-add\fP \fINAME\fP [\fB\-\-position\fP \fBcommand\fP | \fBanywhere\fP] [\fB\-r\fP | \fB\-\-regex\fP \fIPATTERN\fP]
+\fBabbr\fP \fB\-\-add\fP \fINAME\fP [\fB\-\-position\fP \fBcommand\fP | \fBanywhere\fP] [\fB\-r\fP | \fB\-\-regex\fP \fIPATTERN\fP] [\fB\-c\fP | \fB\-\-command\fP \fICOMMAND\fP]
                 [\fB\-\-set\-cursor\fP[\fB=\fP\fIMARKER\fP]] ([\fB\-f\fP | \fB\-\-function\fP \fIFUNCTION\fP] | \fIEXPANSION\fP)
 \fBabbr\fP \fB\-\-erase\fP \fINAME\fP \&...
 \fBabbr\fP \fB\-\-rename\fP \fIOLD_WORD\fP \fINEW_WORD\fP
@@ -53,8 +53,8 @@ Only typed\-in commands use abbreviations. Abbreviations are not expanded in scr
 .UNINDENT
 .sp
 For example, a frequently\-run command like \fBgit checkout\fP can be abbreviated to \fBgco\fP\&.
-After entering \fBgco\fP and pressing \fBSpace\fP or \fBEnter\fP, the full text \fBgit checkout\fP will appear in the command line.
-To avoid expanding something that looks like an abbreviation, the default \fBControl\fP+\fBSpace\fP binding inserts a space without expanding.
+After entering \fBgco\fP and pressing \fBspace\fP or \fBenter\fP, the full text \fBgit checkout\fP will appear in the command line.
+To avoid expanding something that looks like an abbreviation, the default \fBctrl\-space\fP binding inserts a space without expanding.
 .sp
 An abbreviation may match a literal word, or it may match a pattern given by a regular expression. When an abbreviation matches a word, that word is replaced by new text, called its \fIexpansion\fP\&. This expansion may be a fixed new phrase, or it can be dynamically created via a fish function. This expansion occurs after pressing space or enter.
 .sp
@@ -89,17 +89,35 @@ then you can run \fBabbr \-\-erase\fP to remove the universal variable:
 .fi
 .UNINDENT
 .UNINDENT
+.sp
+Alternatively you can keep them in a separate \fI\%configuration file\fP by doing something like the following:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+> abbr > ~/.config/fish/conf.d/myabbrs.fish
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+This will save all your abbreviations in \(dqmyabbrs.fish\(dq, overwriting the whole file so it doesn\(aqt leave any duplicates,
+or restore abbreviations you had erased.
+Of course any functions will have to be saved separately, see \fI\%funcsave\fP\&.
 
 .SH "ADD" SUBCOMMAND
 .nf
 \fBabbr\fP [\fB\-a\fP | \fB\-\-add\fP] \fINAME\fP [\fB\-\-position\fP \fBcommand\fP | \fBanywhere\fP] [\fB\-r\fP | \fB\-\-regex\fP \fIPATTERN\fP]
-     [\fB\-\-set\-cursor\fP[\fB=\fP\fIMARKER\fP]] ([\fB\-f\fP | \fB\-\-function\fP \fIFUNCTION\fP] | \fIEXPANSION\fP)
+     [\fB\-c\fP | \fB\-\-command\fP \fICOMMAND\fP] [\fB\-\-set\-cursor\fP[\fB=\fP\fIMARKER\fP]] ([\fB\-f\fP | \fB\-\-function\fP \fIFUNCTION\fP] | \fIEXPANSION\fP)
 .fi
 .sp
 .sp
 \fBabbr \-\-add\fP creates a new abbreviation. With no other options, the string \fBNAME\fP is replaced by \fBEXPANSION\fP\&.
 .sp
 With \fB\-\-position command\fP, the abbreviation will only expand when it is positioned as a command, not as an argument to another command. With \fB\-\-position anywhere\fP the abbreviation may expand anywhere in the command line. The default is \fBcommand\fP\&.
+.sp
+With \fB\-\-command COMMAND\fP, the abbreviation will only expand when it is used as an argument to the given COMMAND. Multiple \fB\-\-command\fP can be used together, and the abbreviation will expand for each. An empty \fBCOMMAND\fP means it will expand only when there is no command. \fB\-\-command\fP implies \fB\-\-position anywhere\fP and disallows \fB\-\-position command\fP\&. Even with different \fBCOMMANDS\fP, the \fBNAME\fP of the abbreviation needs to be unique. Consider using \fB\-\-regex\fP if you want to expand the same word differently for multiple commands.
 .sp
 With \fB\-\-regex\fP, the abbreviation matches using the regular expression given by \fBPATTERN\fP, instead of the literal \fBNAME\fP\&. The pattern is interpreted using PCRE2 syntax and must match the entire token. If multiple abbreviations match the same token, the last abbreviation added is used.
 .sp
@@ -185,6 +203,18 @@ abbr 4DIRS \-\-set\-cursor=! \(dq$(string join \en \-\- \(aqfor dir in */\(aq \(
 .UNINDENT
 .sp
 This creates an abbreviation \(dq4DIRS\(dq which expands to a multi\-line loop \(dqtemplate.\(dq The template enters each directory and then leaves it. The cursor is positioned ready to enter the command to run in each directory, at the location of the \fB!\fP, which is itself erased.
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+abbr \-\-command git co checkout
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+Turns \(dqco\(dq as an argument to \(dqgit\(dq into \(dqcheckout\(dq. Multiple commands are possible, \fB\-\-command={git,hg}\fP would expand \(dqco\(dq to \(dqcheckout\(dq for both git and hg.
 .SH OTHER SUBCOMMANDS
 .INDENT 0.0
 .INDENT 3.5
@@ -259,6 +289,6 @@ abbr \-h or \-\-help
 .sp
 Displays help for the \fIabbr\fP command.
 .SH COPYRIGHT
-2023, fish-shell developers
+2024, fish-shell developers
 .\" Generated by docutils manpage writer.
 .

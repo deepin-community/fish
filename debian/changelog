@@ -1,3 +1,100 @@
+fish (4.0.2-1) unstable; urgency=medium
+
+  * New upstream version 4.0.2
+  * Refresh existing patches.
+
+ -- Mo Zhou <lumin@debian.org>  Sun, 20 Apr 2025 13:01:54 -0400
+
+fish (4.0.1-1) unstable; urgency=medium
+
+  * New upstream version 4.0.1
+  * Drop cherry-picked patches that are already merged in 4.0.1.
+  * Refresh existing patches.
+
+ -- Mo Zhou <lumin@debian.org>  Thu, 13 Mar 2025 19:01:18 -0400
+
+fish (4.0.0-3) unstable; urgency=medium
+
+  [ Shengqi Chen ]
+  * d/rules: make blhc happy by ignoring Rust crate compiling log
+
+  [ Mo Zhou ]
+  * Apply patchset from upstream Integration_4.0.1 branch. (Closes: #1099240)
+
+ -- Mo Zhou <lumin@debian.org>  Mon, 03 Mar 2025 23:13:27 -0500
+
+fish (4.0.0-2) unstable; urgency=medium
+
+  * Use wildcard to figure out build directory instead.
+  * Upload to unstable.
+
+ -- Mo Zhou <lumin@debian.org>  Fri, 28 Feb 2025 15:33:06 -0500
+
+fish (4.0.0-1) experimental; urgency=medium
+
+  * New upstream version 4.0.0
+  * Remove unneeded patches and refresh remaining ones.
+  * Update src/signal.rs patch to fix syntax error.
+  * The target for tests is fish_run_tests now.
+  * Add tmux and git as dependencies for running tests.
+  * Patch the wrong Cargo metadata.
+
+ -- Mo Zhou <lumin@debian.org>  Fri, 28 Feb 2025 11:14:38 -0500
+
+fish (4.0~b1-1~exp5) experimental; urgency=medium
+
+  [ Blair Noctis ]
+  * Disable SIGSTKFLT on all of mips{,64{,el}}
+  * d/control: reorder B-Ds
+  * d/patches: drop inline-rsconf, accepted; d/control: add B-D
+
+  [ Mo Zhou ]
+  * Insert the changelog for 3.7.1-2 from unstable.
+
+ -- Blair Noctis <ncts@debian.org>  Sun, 29 Dec 2024 12:46:28 +0000
+
+fish (4.0~b1-1~exp4) experimental; urgency=medium
+
+  * Fix build on mips64el which lacks libc::SIGSTKFLT
+  * Fix stat segfaults on i386 with librust-libc-dev >= 0.2.169
+
+ -- Blair Noctis <ncts@debian.org>  Sun, 29 Dec 2024 06:33:31 +0000
+
+fish (4.0~b1-1~exp3) experimental; urgency=medium
+
+  * Fix build on certain archs where libc::timespec has private fields due to
+    Debian patch
+  * Fix build on riscv64 which lacks libc::SIGUNUSED
+
+ -- Blair Noctis <ncts@debian.org>  Sun, 22 Dec 2024 08:06:53 +0000
+
+fish (4.0~b1-1~exp2) experimental; urgency=medium
+
+  * Fix the build for Arch: all. At least make amd64 package installable.
+
+ -- Mo Zhou <lumin@debian.org>  Sat, 21 Dec 2024 23:10:01 -0500
+
+fish (4.0~b1-1~exp1) experimental; urgency=medium
+
+  * New upstream version 4.0b1, to experimental
+  * Vendor fish forked pcre2 crate, to be decided with upstream
+  * Bump S-V to 4.7.0
+
+  [ Mo Zhou ]
+  * Require B-D librust-terminfo-dev (>= 0.9.0~) to avoid unnecessary FTBFS.
+  * Patch the version test due to version mangling from 4.0b1 to 4.0~b1.
+  * Add ncurses-term to B-D.
+  * rules: Delete the .cargo directory on clean.
+
+ -- Blair Noctis <ncts@debian.org>  Thu, 19 Dec 2024 14:53:55 +0000
+
+fish (3.7.1-2) unstable; urgency=medium
+
+  * Skip the broken test against pcre2-10.45. (Closes: #1096221)
+    (See:https://github.com/fish-shell/fish-shell/issues/11164)
+
+ -- Mo Zhou <lumin@debian.org>  Mon, 24 Feb 2025 13:22:54 -0500
+
 fish (3.7.1-1) unstable; urgency=medium
 
   * New upstream version 3.7.1

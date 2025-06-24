@@ -27,7 +27,7 @@ level margin: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .\" new: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .in \\n[rst2man-indent\\n[rst2man-indent-level]]u
 ..
-.TH "TEST" "1" "Mar 19, 2024" "3.7" "fish-shell"
+.TH "TEST" "1" "Apr 20, 2025" "4.0" "fish-shell"
 .SH NAME
 test \- perform tests on files and text
 .SH SYNOPSIS
@@ -39,16 +39,26 @@ test \- perform tests on files and text
 .SH DESCRIPTION
 .sp
 NOTE: This page documents the fish builtin \fBtest\fP\&.
-To see the documentation on the \fBtest\fP command you might have,
-use \fBcommand man test\fP\&.
+To see the documentation on any non\-fish versions, use \fBcommand man test\fP\&.
 .sp
-Tests the expression given and sets the exit status to 0 if true, and 1 if false. An expression is made up of one or more operators and their arguments.
+\fBtest\fP checks the given conditions and sets the exit status to 0 if they are true, 1 if they are false.
 .sp
 The first form (\fBtest\fP) is preferred. For compatibility with other shells, the second form is available: a matching pair of square brackets (\fB[ [EXPRESSION] ]\fP).
 .sp
-This test is mostly POSIX\-compatible.
+When using a variable or command substitution as an argument with \fBtest\fP you should almost always enclose it in double\-quotes, as variables expanding to zero or more than one argument will most likely interact badly with \fBtest\fP\&.
 .sp
-When using a variable as an argument for a test operator you should almost always enclose it in double\-quotes. There are only two situations it is safe to omit the quote marks. The first is when the argument is a literal string with no whitespace or other characters special to the shell (e.g., semicolon). For example, \fBtest \-b /my/file\fP\&. The second is using a variable that expands to exactly one element including if that element is the empty string (e.g., \fBset x \(aq\(aq\fP). If the variable is not set, set but with no value, or set to more than one value you must enclose it in double\-quotes. For example, \fBtest \(dq$x\(dq = \(dq$y\(dq\fP\&. Since it is always safe to enclose variables in double\-quotes when used as \fBtest\fP arguments that is the recommended practice.
+\fBWARNING:\fP
+.INDENT 0.0
+.INDENT 3.5
+For historical reasons, \fBtest\fP supports the one\-argument form (\fBtest foo\fP), and this will also be triggered by e.g. \fBtest \-n $foo\fP if $foo is unset. We recommend you don\(aqt use the one\-argument form and quote all variables or command substitutions used with \fBtest\fP\&.
+.sp
+This confusing misfeature will be removed in future. \fBtest \-n\fP without any additional argument will be false, \fBtest \-z\fP will be true and any other invocation with exactly one or zero arguments, including \fBtest \-d\fP and \fBtest \(dqfoo\(dq\fP will be an error.
+.sp
+The same goes for \fB[\fP, e.g. \fB[ \(dqfoo\(dq ]\fP and \fB[ \-d ]\fP will be errors.
+.sp
+This can be turned on already via the \fBtest\-require\-arg\fP \fI\%feature flag\fP, and will eventually become the default and then only option.
+.UNINDENT
+.UNINDENT
 .SH OPERATORS FOR FILES AND DIRECTORIES
 .INDENT 0.0
 .TP
@@ -74,7 +84,7 @@ Returns true if \fIFILE\fP has the set\-group\-ID bit set.
 Returns true if \fIFILE\fP exists and has the same group ID as the current user.
 .TP
 \fB\-k\fP \fIFILE\fP
-Returns true if \fIFILE\fP has the sticky bit set. If the OS does not support the concept it returns false. See \fI\%https://en.wikipedia.org/wiki/Sticky_bit\fP\&.
+Returns true if \fIFILE\fP has the sticky bit set. If the OS does not support the concept it returns false. See \X'tty: link https://en.wikipedia.org/wiki/Sticky_bit'\fI\%https://en.wikipedia.org/wiki/Sticky_bit\fP\X'tty: link'\&.
 .TP
 \fB\-L\fP \fIFILE\fP
 Returns true if \fIFILE\fP is a symbolic link.
@@ -180,7 +190,7 @@ Expressions can be grouped using parentheses.
 Returns the value of \fIEXPRESSION\fP\&.
 .UNINDENT
 .sp
-Note that parentheses will usually require escaping with \fB\e(\fP to avoid being interpreted as a command substitution.
+Note that parentheses will usually require escaping with \fB\e\fP (so they appear as \fB\e(\fP and \fB\e)\fP) to avoid being interpreted as a command substitution.
 .SH EXAMPLES
 .sp
 If the \fB/tmp\fP directory exists, copy the \fB/etc/motd\fP file to it:
@@ -210,6 +220,24 @@ end
 .fi
 .UNINDENT
 .UNINDENT
+.sp
+Be careful with unquoted variables:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+if test \-n $MANPATH
+    # This will also be reached if $MANPATH is unset,
+    # because in that case we have \(gatest \-n\(ga, so it checks if \(dq\-n\(dq is non\-empty, and it is.
+    echo $MANPATH
+end
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.sp
+This will change in a future release of fish, or already with the \fBtest\-require\-arg\fP \fI\%feature flag\fP \- if $MANPATH is unset, \fBif test \-n $MANPATH\fP will be false.
 .sp
 Parentheses and the \fB\-o\fP and \fB\-a\fP operators can be combined to produce more complicated expressions. In this example, success is printed if there is a \fB/foo\fP or \fB/bar\fP file as well as a \fB/baz\fP or \fB/bat\fP file.
 .INDENT 0.0
@@ -282,19 +310,28 @@ end
 .UNINDENT
 .SH STANDARDS
 .sp
-\fBtest\fP implements a subset of the \fI\%IEEE Std 1003.1\-2008 (POSIX.1) standard\fP\&. The following exceptions apply:
+Unlike many things in fish, \fBtest\fP implements a subset of the \X'tty: link https://pubs.opengroup.org/onlinepubs/9699919799/utilities/test.html'\fI\%IEEE Std 1003.1\-2008 (POSIX.1) standard\fP <\fBhttps://pubs.opengroup.org/onlinepubs/9699919799/utilities/test.html\fP>\X'tty: link'\&. The following exceptions apply:
 .INDENT 0.0
 .IP \(bu 2
 The \fB<\fP and \fB>\fP operators for comparing strings are not implemented.
 .IP \(bu 2
-Because this test is a shell builtin and not a standalone utility, using the \-c flag on a special file descriptors like standard input and output may not return the same result when invoked from within a pipe as one would expect when invoking the \fBtest\fP utility in another shell.
+With \fBtest\-require\-arg\fP, the zero\- and one\-argument modes will behave differently.
 .UNINDENT
 .INDENT 0.0
 .INDENT 3.5
 In cases such as this, one can use \fBcommand\fP \fBtest\fP to explicitly use the system\(aqs standalone \fBtest\fP rather than this \fBbuiltin\fP \fBtest\fP\&.
 .UNINDENT
 .UNINDENT
+.SH SEE ALSO
+.sp
+Other commands that may be useful as a condition, and are often easier to use:
+.INDENT 0.0
+.IP \(bu 2
+\fI\%string \- manipulate strings\fP, which can do string operations including wildcard and regular expression matching
+.IP \(bu 2
+\fI\%path \- manipulate and check paths\fP, which can do file checks and operations, including filters on multiple paths at once
+.UNINDENT
 .SH COPYRIGHT
-2023, fish-shell developers
+2024, fish-shell developers
 .\" Generated by docutils manpage writer.
 .

@@ -16,6 +16,11 @@ Synopsis
 Description
 -----------
 
+.. only:: builder_man
+
+          NOTE: This page documents the fish builtin ``alias``.
+          To see the documentation on any non-fish versions, use ``command man alias``.
+
 ``alias`` is a simple wrapper for the ``function`` builtin, which creates a function wrapping a command. It has similar syntax to POSIX shell ``alias``. For other uses, it is recommended to define a :doc:`function <function>`.
 
 If you want to ease your interactive use, to save typing, consider using an :doc:`abbreviation <abbr>` instead.
@@ -49,9 +54,11 @@ The following code will create ``rmi``, which runs ``rm`` with additional argume
         rm -i $argv
     end
     
+``alias`` sometimes requires escaping, as you can see here::
+
     # This needs to have the spaces escaped or "Chrome.app..."
     # will be seen as an argument to "/Applications/Google":
-    alias chrome='/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome banana'
+    alias chrome='/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome'
 
 
 See more

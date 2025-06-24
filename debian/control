@@ -2,10 +2,10 @@ Source: fish
 Section: shells
 Priority: optional
 Maintainer: Mo Zhou <lumin@debian.org>
-Build-Depends: cmake,
-               debhelper-compat (= 13),
+Build-Depends: debhelper-compat (= 13),
+               cargo,
+               cmake,
                gettext,
-               libncurses-dev,
                libpcre2-dev,
                locales-all <!nocheck>,
                ninja-build,
@@ -13,7 +13,28 @@ Build-Depends: cmake,
                python3 <!nocheck>,
                python3-sphinx,
                python3-pexpect <!nocheck>,
-Standards-Version: 4.6.0
+               rustc,
+               librust-bitflags-dev,
+               librust-cc-dev,
+               librust-errno-dev,
+               librust-lazy-static-dev,
+               librust-libc-dev (>= 0.2.169~),
+               librust-lru-dev,
+               librust-nix-dev,
+               librust-num-traits-dev,
+               librust-once-cell-dev,
+               librust-portable-atomic-dev,
+               librust-rand-dev,
+               librust-rsconf-dev,
+               librust-rust-embed-dev,
+               librust-serial-test-dev,
+               librust-tempfile-dev,
+               librust-terminfo-dev (>= 0.9.0~),
+               librust-widestring-dev,
+               ncurses-term,
+               tmux <!nocheck>,
+               git <!nocheck>,
+Standards-Version: 4.7.0
 Homepage: http://fishshell.com/
 Vcs-Browser: https://salsa.debian.org/debian/fish
 Vcs-Git: https://salsa.debian.org/debian/fish.git

@@ -1,4 +1,4 @@
-#RUN: %fish -i %s
+#RUN: %fish -i %s | %filter-control-sequences
 # Note: ^ this is interactive so we test interactive behavior,
 # e.g. the fish_git_prompt variable handlers test `status is-interactive`.
 #REQUIRES: command -v git
@@ -40,11 +40,20 @@ echo "echo foo" > git-frobnicate
 chmod +x git-frobnicate
 
 complete -c git-frobnicate -xa 'foo bar baz'
+complete -c git-frobnicate -l onto -xa 'onto1 onto2'
 
 complete -C'git frobnicate '
 #CHECK: bar
 #CHECK: baz
 #CHECK: foo
+
+complete -C'git frobnicate --onto '
+#CHECK: onto1
+#CHECK: onto2
+
+complete -C'git frobnicate graft --onto '
+#CHECK: onto1
+#CHECK: onto2
 
 complete -C'git ' | grep '^add'\t
 # (note: actual tab character in the check here)
@@ -146,6 +155,34 @@ fish_git_prompt
 echo
 #CHECK: (newbranch +)
 
+set -e __fish_git_prompt_showdirtystate
+
+# Test displaying only stash count
+set -g __fish_git_prompt_show_informative_status 1
+set -g __fish_git_prompt_showstashstate 1
+set -g __fish_git_prompt_status_order stashstate
+set -g ___fish_git_prompt_char_stashstate ''
+set -g ___fish_git_prompt_char_cleanstate ''
+
+set -l identity -c user.email=banana@example.com -c user.name=banana
+git $identity commit -m Init >/dev/null
+echo 'changed' > foo
+# (some git versions don't allow stash without giving an email)
+git $identity stash >/dev/null
+fish_git_prompt
+echo
+#CHECK: (newbranch|1)
+
+git $identity stash pop >/dev/null
+fish_git_prompt
+echo
+#CHECK: (newbranch)
+
+set -e __fish_git_prompt_show_informative_status
+set -e __fish_git_prompt_showstashstate
+set -e __fish_git_prompt_status_order
+set -e ___fish_git_prompt_char_stashstate
+set -e ___fish_git_prompt_char_cleanstate
 
 
 # Turn on everything and verify we correctly ignore sus config files.
@@ -170,4 +207,3 @@ end
 
 $fish -c 'complete -C "git -C ./.gi"'
 # CHECK: ./.git/	Directory
-
