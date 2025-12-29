@@ -1,5 +1,3 @@
-.. _cmd-history:
-
 history - show and manipulate command history
 =============================================
 
@@ -17,6 +15,7 @@ Synopsis
     history save
     history clear
     history clear-session
+    history append COMMAND ...
 
 Description
 -----------
@@ -26,10 +25,10 @@ Description
 The following operations (sub-commands) are available:
 
 **search**
-    Returns history items matching the search string. If no search string is provided it returns all history items. This is the default operation if no other operation is specified. You only have to explicitly say ``history search`` if you wish to search for one of the subcommands. The ``--contains`` search option will be used if you don't specify a different search option. Entries are ordered newest to oldest unless you use the ``--reverse`` flag. If stdout is attached to a tty the output will be piped through your pager by the history function. The history builtin simply writes the results to stdout.
+    Returns history items matching the search string. If no search string is provided it returns all history items. This is the default operation if no other operation is specified. You only have to explicitly say ``history search`` if you wish to search for one of the subcommands. The ``--contains`` search option will be used if you don't specify a different search option. Entries are ordered newest to oldest unless you use the ``--reverse`` flag. If stdout is attached to a tty the output will be piped through your pager by the history function. The history builtin writes the results to stdout.
 
 **delete**
-    Deletes history items. The ``--contains`` search option will be used if you don't specify a different search option. If you don't specify ``--exact`` a prompt will be displayed before any items are deleted asking you which entries are to be deleted. You can enter the word "all" to delete all matching entries. You can enter a single ID (the number in square brackets) to delete just that single entry. You can enter more than one ID, or an ID range separated by a space to delete multiple entries. Just press [enter] to not delete anything. Note that the interactive delete behavior is a feature of the history function. The history builtin only supports ``--exact --case-sensitive`` deletion.
+    Deletes history items. The ``--contains`` search option will be used if you don't specify a different search option. If you don't specify ``--exact`` a prompt will be displayed before any items are deleted asking you which entries are to be deleted. You can enter the word "all" to delete all matching entries. You can enter a single ID (the number in square brackets) to delete just that single entry. You can enter more than one ID, or an ID range separated by a space to delete multiple entries. Press [enter] to not delete anything. Note that the interactive delete behavior is a feature of the history function. The history builtin only supports ``--exact --case-sensitive`` deletion.
 
 **merge**
     Immediately incorporates history changes from other sessions. Ordinarily ``fish`` ignores history changes from sessions started after the current one. This command applies those changes immediately.
@@ -43,12 +42,15 @@ The following operations (sub-commands) are available:
 **clear-session**
     Clears the history file from all activity of the current session. Note: If ``history merge`` or ``builtin history merge`` is run in a session, only the history after this will be erased.
 
+**append**
+    Appends commands to the history without needing to execute them.
+
 The following options are available:
 
 These flags can appear before or immediately after one of the sub-commands listed above.
 
 **-C** or **--case-sensitive**
-    Does a case-sensitive search. The default is case-insensitive. Note that prior to fish 2.4.0 the default was case-sensitive.
+    Does a case-sensitive search. The default is case-insensitive.
 
 **-c** or **--contains**
     Searches items in the history that contain the specified text string. This is the default for the **--search** flag. This is not currently supported by the **delete** subcommand.
@@ -58,6 +60,8 @@ These flags can appear before or immediately after one of the sub-commands liste
 
 **-p** or **--prefix**
     Searches items in the history that begin with the specified text string. This is not currently supported by the **delete** subcommand.
+
+.. _history-show-time:
 
 **-t** or **--show-time**
     Prepends each history entry with the date and time the entry was recorded. By default it uses the strftime format ``# %c%n``. You can specify another format; e.g., ``--show-time="%Y-%m-%d %H:%M:%S "`` or ``--show-time="%a%I%p"``. The short option, **-t**, doesn't accept a strftime format string; it only uses the default format. Any strftime format is allowed, including ``%s`` to get the raw UNIX seconds since the epoch.
@@ -83,10 +87,10 @@ Example
 
     history clear
     # Deletes all history items
-    
+
     history search --contains "foo"
     # Outputs a list of all previous commands containing the string "foo".
-    
+
     history delete --prefix "foo"
     # Interactively deletes commands which start with "foo" from the history.
     # You can select more than one entry by entering their IDs separated by a space.

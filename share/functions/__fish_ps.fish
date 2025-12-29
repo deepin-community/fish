@@ -1,5 +1,6 @@
+# localization: skip(private)
 function __fish_ps
-    switch (builtin realpath (command -v ps) | string match -r '[^/]+$')
+    switch (command -s ps | path resolve | path basename)
         case busybox
             command ps $argv
         case '*'

@@ -1,6 +1,3 @@
-.. _cmd-fish_indent:
-.. program::fish_indent
-
 fish_indent - indenter and prettifier
 =====================================
 
@@ -25,6 +22,12 @@ The following options are available:
 **-i** or **--no-indent**
     Do not indent commands; only reformat to one job per line.
 
+**--only-indent**
+    Do not reformat, only indent each line.
+
+**--only-unindent**
+    Do not reformat, only unindent each line.
+
 **-c** or **--check**
     Do not indent, only return 0 if the code is already indented as fish_indent would, the number of failed files otherwise. Also print the failed filenames if not reading from standard input.
 
@@ -32,16 +35,10 @@ The following options are available:
     Displays the current :program:`fish` version and then exits.
 
 **--ansi**
-    Colorizes the output using ANSI escape sequences, appropriate for the current :envvar:`TERM`, using the colors defined in the environment (such as :envvar:`fish_color_command`).
+    Colorizes the output using ANSI escape sequences using the colors defined in the environment (such as :envvar:`fish_color_command`).
 
 **--html**
     Outputs HTML, which supports syntax highlighting if the appropriate CSS is defined. The CSS class names are the same as the variable names, such as ``fish_color_command``.
-
-**-d** or **--debug=DEBUG_CATEGORIES**
-    Enable debug output and specify a pattern for matching debug categories. See :ref:`Debugging <debugging-fish>` in :doc:`fish <fish>` (1) for details.
-
-**-o** or **--debug-output=DEBUG_FILE**
-    Specify a file path to receive the debug output, including categories and ``fish_trace``. The default is standard error.
 
 **--dump-parse-tree**
     Dumps information about the parsed statements to standard error. This is likely to be of interest only to people working on the fish source code.

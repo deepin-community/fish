@@ -43,31 +43,63 @@ string length -q ""; and echo not zero length; or echo zero length
 # CHECK: zero length
 
 string pad foo
+#CHECK: foo
+string pad -C foo
 # CHECK: foo
 
-string pad -r -w 7 -c - foo
+string pad -r -w 7 --chars - foo
 # CHECK: foo----
+string pad -r -w 7 --chars - --center foo
+# CHECK: --foo--
+
+# might overflow when converting sign
+string sub --start -9223372036854775808 abc
+# CHECK: abc
 
 string pad --width 7 -c '=' foo
 # CHECK: ====foo
+string pad --width 7 -c '=' -C foo
+# CHECK: ==foo==
+string pad --width 8 -c '=' -C foo
+# CHECK: ===foo==
+string pad --width 8 -c '=' -Cr foo
+# CHECK: ==foo===
 
 echo \|(string pad --width 10 --right foo)\|
 # CHECK: |foo       |
+echo \|(string pad --width 10 --right --center foo)\|
+# CHECK: |   foo    |
+echo \|(string pad --width 10 --center foo)\|
+# CHECK: |    foo   |
 
 begin
     set -l fish_emoji_width 2
     # Pad string with multi-width emoji.
     string pad -w 4 -c . 🐟
     # CHECK: ..🐟
+    string pad -w 4 -c . -C 🐟
+    # CHECK: .🐟.
 
     # Pad with multi-width character.
     string pad -w 3 -c 🐟 .
     # CHECK: 🐟.
+    # string pad would rather the result actually be centerd, than it actually contain
+    # the padding character (so since it can't print half a 🐟, it instead prints a space which is half as wide)
+    string collect \|(string pad -w 3 -c 🐟 -C .)\|
+    # CHECK: | . |
+    string collect \|(string pad -w 7 -c 🐟 -C .)\|
+    # CHECK: |🐟 . 🐟|
 
     # Multi-width pad with remainder, complemented with a space.
     string pad -w 4 -c 🐟 . ..
     # CHECK: 🐟 .
     # CHECK: 🐟..
+    string collect \|(string pad -w 7 -c 🐟 -C . ..)\|
+    # CHECK: |🐟 . 🐟|
+    # CHECK: |🐟 ..🐟|
+    string collect \|(string pad -w 7 -c 🐟 -Cr . ..)\|
+    # CHECK: |🐟 . 🐟|
+    # CHECK: |🐟.. 🐟|
 end
 
 # Pad to the maximum length.
@@ -75,17 +107,35 @@ string pad -c . long longer longest
 # CHECK: ...long
 # CHECK: .longer
 # CHECK: longest
+string pad -c . -C long longer longest
+# CHECK: ..long.
+# CHECK: .longer
+# CHECK: longest
+string pad -c . -Cr long longer longest
+# CHECK: .long..
+# CHECK: longer.
+# CHECK: longest
 
 # This tests current behavior where the max width of an argument overrules
 # the width parameter. This could be changed if needed.
 string pad -c_ --width 5 longer-than-width-param x
 # CHECK: longer-than-width-param
 # CHECK: ______________________x
+string pad -c_ --width 5 --center longer-than-width-param x
+# CHECK: longer-than-width-param
+# CHECK: ___________x___________
+string pad -c_ --width 5 --center --right longer-than-width-param x
+# CHECK: longer-than-width-param
+# CHECK: ___________x___________
 
 # Current behavior is that only a single padding character is supported.
-# We can support longer strings in future without breaking compatibilty.
+# We can support longer strings in future without breaking compatibility.
 string pad -c ab -w4 .
 # CHECKERR: string pad: Padding should be a character 'ab'
+
+# nonprintable characters does not make sense
+string pad -c \u07 .
+# CHECKERR: string pad: Invalid padding character of width zero {{'\a'}}
 
 # Visible length. Let's start off simple, colors are ignored:
 string length --visible (set_color red)abc
@@ -175,6 +225,10 @@ string split "" abc
 # CHECK: b
 # CHECK: c
 
+string split --max 1 --right 12 "AB12CD"
+# CHECK: AB
+# CHECK: CD
+
 string split --fields=2 "" abc
 # CHECK: b
 
@@ -184,6 +238,39 @@ string split --fields=3,2 "" abc
 
 string split --fields=2,9 "" abc; or echo "exit 1"
 # CHECK: exit 1
+
+string split --fields=2-3-,9 "" a
+# CHECKERR: string split: 2-3-,9: invalid integer
+
+string split --fields=1-99999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999 "" abc
+# CHECKERR: string split: 1-99999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999: invalid integer
+
+string split --fields=99999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999-1 "" abc
+# CHECKERR: string split: 99999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999-1: invalid integer
+
+string split --fields=1--2 "" b
+# CHECKERR: string split: 1--2: invalid integer
+
+string split --fields=0 "" c
+# CHECKERR: string split: Invalid fields value '0'
+
+string split --fields=99999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999 "" abc
+# CHECKERR: string split: 99999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999: invalid integer
+
+string split --fields=1-0 "" d
+# CHECKERR: string split: Invalid range value for field '1-0'
+
+string split --fields=0-1 "" e
+# CHECKERR: string split: Invalid range value for field '0-1'
+
+string split --fields=-1 "" f
+# CHECKERR: string split: -1: invalid integer
+
+string split --fields=1a "" g
+# CHECKERR: string split: 1a: invalid integer
+
+string split --fields=a "" h
+# CHECKERR: string split: a: invalid integer
 
 string split --fields=1-3,5,9-7 "" 123456789
 # CHECK: 1
@@ -215,7 +302,13 @@ echo \x07 | string escape
 # CHECK: \cg
 
 string escape --style=script 'a b#c"\'d'
-# CHECK: a\ b\#c\"\'d
+# CHECK: 'a b#c"\'d'
+
+string escape --no-quoted --style=script 'a b#c"\'d'
+# CHECK: a\ b#c\"\'d
+
+string escape --no-quoted --style=script 'a #b'
+# CHECK: a\ \#b
 
 string escape --style=url 'a b#c"\'d'
 # CHECK: a%20b%23c%22%27d
@@ -261,9 +354,12 @@ string escape --style=var 中 | string unescape --style=var
 string escape --style=regex ".ext"
 string escape --style=regex "bonjour, amigo"
 string escape --style=regex "^this is a literal string"
+string escape --style=regex "hello
+world"
 # CHECK: \.ext
 # CHECK: bonjour, amigo
 # CHECK: \^this is a literal string
+# CHECK: hello\nworld
 
 ### Verify that we can correctly unescape the same strings
 #   we tested escaping above.
@@ -359,6 +455,14 @@ string replace -r "\s*newline\s*" "\n" "put a newline here"
 string replace -r -a "(\w)" "\$1\$1" ab
 # CHECK: aabb
 
+echo a | string replace b c -q
+or echo No replace fails
+# CHECK: No replace fails
+
+echo a | string replace -r b c -q
+or echo No replace regex fails
+# CHECK: No replace regex fails
+
 string replace --filter x X abc axc x def jkx
 or echo Unexpected exit status at line (status --current-line-number)
 # CHECK: aXc
@@ -415,8 +519,20 @@ string repeat -n 2 foo
 string repeat --count 2 foo
 # CHECK: foofoo
 
+string repeat 2 foo
+# CHECK: foofoo
+
+string repeat 2 -n 3
+# CHECK: 222
+
 echo foo | string repeat -n 2
 # CHECK: foofoo
+
+echo foo | string repeat 2
+# CHECK: foofoo
+
+string repeat foo
+# CHECKERR: string repeat: Invalid count value 'foo'
 
 string repeat -n2 -q foo; and echo "exit 0"
 # CHECK: exit 0
@@ -468,6 +584,22 @@ string repeat -n 5 --max 4 123 '' 789
 # CHECK:
 # CHECK: 7897
 
+# FIXME: handle overflowing nicely
+# overflow behaviour depends on 32 vs 64 bit
+
+# count here is isize::MAX
+# we store what to print as usize, so this will overflow
+# but we limit it to less than whatever the overflow is
+# so this should be fine
+# string repeat -m1 -n 9223372036854775807 aa
+# DONTCHECK: a
+
+# count is here (i64::MAX + 1) / 2
+# we end up overflowing, and the result is 0
+# but this should work fine, as we limit it way before the overflow
+# string repeat -m1 -n 4611686018427387904 aaaa
+# DONTCHECK: a
+
 # Historical string repeat behavior is no newline if no output.
 echo -n before
 string repeat -n 5 ''
@@ -497,8 +629,7 @@ string repeat -n; and echo "exit 0"
 # DONTCHECKERR: string repeat: Unknown option '-l'
 
 string repeat ""
-or echo string repeat empty string failed
-# CHECK: string repeat empty string failed
+# CHECKERR: string repeat: Invalid count value ''
 
 string repeat -n3 ""
 or echo string repeat empty string failed
@@ -766,6 +897,18 @@ string match -qer asd asd
 echo $status
 # CHECK: 0
 
+# should not be able to enable UTF mode
+string match -r "(*UTF).*" "aaa"
+# CHECKERR: string match: Regular expression compile error: using UTF is disabled by the application
+# CHECKERR: string match: (*UTF).*
+# CHECKERR: string match:      ^
+
+string replace -r "(*UTF).*" "aaa"
+# CHECKERR: string replace: Regular expression compile error: using UTF is disabled by the application
+# CHECKERR: string replace: (*UTF).*
+# CHECKERR: string replace:      ^
+
+
 string match -eq asd asd
 echo $status
 # CHECK: 0
@@ -791,7 +934,7 @@ echo $status
 function string
     builtin string $argv
 end
-# CHECKERR: checks/string.fish (line {{\d+}}): function: string: cannot use reserved keyword as function name
+# CHECKERR: {{.*}}checks/string.fish (line {{\d+}}): function: string: cannot use reserved keyword as function name
 # CHECKERR: function string
 # CHECKERR: ^
 
@@ -832,6 +975,12 @@ echo "foo1x foo2x foo3x" | string match -arg 'foo(\d)x'
 echo -n abc | string upper
 echo '<eol>'
 # CHECK: ABC<eol>
+
+# newline should not appear from nowhere when command does not split on newline
+echo -n abc | string collect
+echo '<eol>'
+# CHECK: abc<eol>
+
 printf \<
 printf my-password | string replace -ra . \*
 printf \>\n
@@ -861,6 +1010,37 @@ string shorten --max 2 --chars "" foo
 string shorten foo foobar
 # CHECK: foo
 # CHECK: fo…
+
+# pad with a bell, it has zero width, that's fine
+string shorten -c \a foo foobar | string escape
+# CHECK: foo
+# CHECK: foo\cg
+
+string shorten -c \aw foo foobar | string escape
+# CHECK: foo
+# CHECK: fo\cgw
+
+# backspace is fine!
+string shorten -c \b foo foobar | string escape
+# CHECK: foo
+# CHECK: foo\b
+
+string shorten -c \ba foo foobar | string escape
+# CHECK: foo
+# CHECK: fo\ba
+
+string shorten -c cool\b\b\b\b foo foobar | string escape
+# CHECK: foo
+# CHECK: foocool\b\b\b\b
+
+string shorten -c cool\b\b\b\b\b foo foobar | string escape
+# CHECK: foo
+# negative width ellipsis is fine
+# CHECK: foocool\b\b\b\b\b
+
+string shorten -c \a\aXX foo foobar | string escape
+# CHECK: foo
+# CHECK: f\cg\cgXX
 
 # A weird case - our minimum width here is 1,
 # so everything that goes over the width becomes "x"
@@ -910,7 +1090,12 @@ end
 string shorten -m6 (set_color blue)s(set_color red)t(set_color --bold brwhite)rin(set_color red)g(set_color yellow)-shorten | string escape
 # Renders like "strin…" in colors
 # Note that red sequence that we still pass on because it's width 0.
-# CHECK: \e\[34ms\e\[31mt\e\[1m\e\[37mrin\e\[31m…
+# CHECK: \e\[34ms\e\[31mt\e\[97m\e\[1mrin\e\[31m…
+
+# See that colors aren't counted in ellipsis
+string shorten -c (set_color blue)s(set_color red)t(set_color --bold brwhite)rin(set_color red)g -m 8 abcdefghijklmno | string escape
+# Renders like "abstring" in colors
+# CHECK: ab\e\[34ms\e\[31mt\e\[97m\e\[1mrin\e\[31mg
 
 set -l str (set_color blue)s(set_color red)t(set_color --bold brwhite)rin(set_color red)g(set_color yellow)-shorten
 for i in (seq 1 (string length -V -- $str))
@@ -959,3 +1144,69 @@ string shorten -m0 foo bar asodjsaoidj
 # CHECK: foo
 # CHECK: bar
 # CHECK: asodjsaoidj
+
+# backspaces are weird
+string shorten abc ab abcdef(string repeat -n 6 \b) | string escape
+# CHECK: a…
+# CHECK: ab
+# this line has length zero, since backspace removes it all
+# CHECK: abcdef\b\b\b\b\b\b
+
+# due to an integer overflow this might truncate the third backspaced one, it should not
+string shorten abc ab abcdef(string repeat -n 7 \b) | string escape
+# CHECK: a…
+# CHECK: ab
+# this line has length zero, since backspace removes it all
+# CHECK: abcdef\b\b\b\b\b\b\b
+
+# due to an integer overflow this might truncate
+string shorten abc \bab ab abcdef | string escape
+# CHECK: a…
+# backspace does not contribute length at the start
+# CHECK: \bab
+# CHECK: ab
+# CHECK: a…
+
+string shorten abc \babc ab abcdef | string escape
+# CHECK: a…
+# CHECK: \ba…
+# CHECK: ab
+# CHECK: a…
+
+# non-printable-escape-chars (in this case bell)
+string shorten abc ab abcdef(string repeat -n 6 \a) | string escape
+# CHECK: a…
+# CHECK: ab
+# CHECK: a…
+
+string shorten abc ab abcdef(string repeat -n 7 \a) | string escape
+# CHECK: a…
+# CHECK: ab
+# CHECK: a…
+
+string shorten abc \aab ab abcdef | string escape
+# CHECK: a…
+# non-printables have length 0
+# CHECK: \cgab
+# CHECK: ab
+# CHECK: a…
+
+string shorten abc \aabc ab abcdef | string escape
+# CHECK: a…
+# CHECK: \cga…
+# CHECK: ab
+# CHECK: a…
+
+printf "dog\ncat\nbat\ngnat\n" | string match -m2 "*at"
+# CHECK: cat
+# CHECK: bat
+
+printf "dog\ncat\nbat\nhog\n" | string match -rvm1 'at$'
+# CHECK: dog
+
+printf "dog\ncat\nbat\n" | string replace -rf --max-matches 1 'at$' 'aught'
+# CHECK: caught
+
+printf "dog\ncat\nbat\n" | string replace -r --max-matches 1 '^c' 'h'
+# CHECK: dog
+# CHECK: hat

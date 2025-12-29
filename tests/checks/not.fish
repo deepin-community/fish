@@ -8,3 +8,12 @@ echo $status
 not not sh -c 'exit 34'
 echo $status
 # CHECK: 34
+
+! -h
+# CHECKERR: Documentation for !
+
+function !
+    echo overridden! $argv
+end
+! -h
+# CHECK: overridden! -h

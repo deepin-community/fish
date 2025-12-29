@@ -27,11 +27,11 @@ function __fish_conda_subcommand
     set -l have_sub $status
 
     # get the commandline args without the "conda"
-    set -l toks (commandline -opc)[2..-1]
+    set -l toks (commandline -xpc)[2..-1]
 
-    # Remove any important options - if we had options with arguments,
+    # if we had options with arguments,
     # they'd need to be listed here to be removed.
-    argparse -i h/help v/version -- $toks 2>/dev/null
+    argparse -u -- $toks 2>/dev/null
     # Return false if it fails - this shouldn't really happen,
     # so all bets are off
     or return 2
@@ -44,19 +44,12 @@ function __fish_conda_subcommand
         if test "$subcmds[1]" = "$argv[1]"
             set -e argv[1]
             set -e subcmds[1]
-        else if string match -q -- '-*' $argv[1]
-            set -e argv[1]
         else
             return 1
         end
     end
 
-    # Skip any remaining options.
-    while string match -q -- '-*' $argv[1]
-        set -e argv[1]
-    end
-
-    # If we have no subcommand left,
+    # If we have no subcommand
     # we either matched all given subcommands or we need one.
     if not set -q argv[1]
         return $have_sub
@@ -138,7 +131,7 @@ __fish_conda clean -s s -l source-cache -d "Remove files from the source cache o
 
 __fish_conda config -l system -d "Write to the system .condarc file"
 __fish_conda config -l env -d "Write to the active conda environment .condarc file"
-__fish_conda config -l file -d "Write to the given file"
+__fish_conda config -l file -d "Write to the given file" -F
 __fish_conda config -l show -x -a "(__fish_conda_config_keys)" -d "Display configuration values"
 __fish_conda config -l show-sources -d "Display all identified configuration sources"
 __fish_conda config -l validate -d "Validate all configuration sources"
@@ -204,7 +197,7 @@ end
 
 # Option file
 for cmd in create install update
-    __fish_conda $cmd -l file -d 'Read package versions from the given file'
+    __fish_conda $cmd -l file -d 'Read package versions from the given file' -F
 end
 
 # Option force
@@ -350,4 +343,4 @@ __fish_conda search -l reverse-dependency -d "Perform a reverse dependency searc
 __fish_conda_top -a env -d "Conda options for environments"
 complete -c conda -n "__fish_conda_subcommand env" -a create -d "Create a new environment"
 complete -c conda -n "__fish_conda_subcommand env" -a list -d "List all conda environments"
-complete -c conda -n "__fish_conda_subcommand env create" -s f -l file -r -d "Create environment from yaml file"
+complete -c conda -n "__fish_conda_subcommand env create" -s f -l file -rF -d "Create environment from yaml file"

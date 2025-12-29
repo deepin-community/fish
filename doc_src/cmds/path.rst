@@ -1,5 +1,3 @@
-.. _cmd-path:
-
 path - manipulate and check paths
 =================================
 
@@ -8,12 +6,12 @@ Synopsis
 
 .. synopsis::
 
-    path basename GENERAL_OPTIONS [PATH ...]
+    path basename GENERAL_OPTIONS [(-E | --no-extension)] [PATH ...]
     path dirname GENERAL_OPTIONS  [PATH ...]
     path extension GENERAL_OPTIONS [PATH ...]
     path filter GENERAL_OPTIONS [-v | --invert]
         [-d] [-f] [-l] [-r] [-w] [-x]
-        [(-t | --type) TYPE] [(-p | --perm) PERMISSION] [PATH ...]
+        [(-t | --type) TYPE] [(-p | --perm) PERMISSION] [--all] [PATH ...]
     path is GENERAL_OPTIONS [(-v | --invert)] [(-t | --type) TYPE]
         [-d] [-f] [-l] [-r] [-w] [-x]
         [(-p | --perm) PERMISSION] [PATH ...]
@@ -22,7 +20,7 @@ Synopsis
     path resolve GENERAL_OPTIONS [PATH ...]
     path change-extension GENERAL_OPTIONS EXTENSION [PATH ...]
     path sort GENERAL_OPTIONS [-r | --reverse]
-        [-u | --unique] [--key=basename|dirname|path] [PATH ...]
+        [-u | --unique] [--key=(basename | dirname | path)] [PATH ...]
 
     GENERAL_OPTIONS
         [-z | --null-in] [-Z | --null-out] [-q | --quiet]
@@ -55,9 +53,11 @@ The following subcommands are available.
 
 ::
 
-    path basename [-z | --null-in] [-Z | --null-out] [-q | --quiet] [PATH ...]
+    path basename [-E | --no-extension] [-z | --null-in] [-Z | --null-out] [-q | --quiet] [PATH ...]
 
 ``path basename`` returns the last path component of the given path, by removing the directory prefix and removing trailing slashes. In other words, it is the part that is not the dirname. For files you might call it the "filename".
+
+If the ``-E`` or ``---no-extension`` option is used and the base name contained a period, the path is returned with the extension (or the last extension) removed, i.e. the "filename" without an extension (akin to calling ``path change-extension "" (path basename $path)``).
 
 It returns 0 if there was a basename, i.e. if the path wasn't empty or just slashes.
 
@@ -146,7 +146,7 @@ Examples
    > echo $path$extension
    # reconstructs the original path again.
    ./foo.mp4
-   
+
 .. _cmd-path-filter:
 
 "filter" subcommand
@@ -156,7 +156,7 @@ Examples
 
     path filter [-z | --null-in] [-Z | --null-out] [-q | --quiet] \
         [-d] [-f] [-l] [-r] [-w] [-x] \
-        [-v | --invert] [(-t | --type) TYPE] [(-p | --perm) PERMISSION] [PATH ...]
+        [-v | --invert] [(-t | --type) TYPE] [(-p | --perm) PERMISSION] [--all] [PATH ...]
 
 ``path filter`` returns all of the given paths that match the given checks. In all cases, the paths need to exist, nonexistent paths are always filtered.
 
@@ -177,6 +177,10 @@ With ``--invert``, the meaning of the filtering is inverted - any path that woul
 When a path starts with ``-``, ``path filter`` will prepend ``./`` to avoid it being interpreted as an option otherwise.
 
 It returns 0 if at least one path passed the filter.
+
+With ``--all``, return status 0 (true) if all paths pass the filter, and status 1 (false) if any path fails. This is equivalent to ``not path filter -v``. It produces no output, only a status.
+
+When ``--all`` combined with ``--invert``, it returns status 0 (true) if all paths fail the filter and status 1 (false) if any path passes.
 
 ``path is`` is shorthand for ``path filter -q``, i.e. just checking without producing output, see :ref:`The is subcommand <cmd-path-is>`.
 
@@ -208,6 +212,9 @@ Examples
    
    >_ path filter -fx $PATH/*
    # Prints all possible commands - the first entry of each name is what fish would execute!
+
+   >_ path filter --all /usr/bin /usr/argagagji
+   # This returns 1 (false) because not all paths pass the filter.
 
 .. _cmd-path-is:
 
@@ -277,7 +284,7 @@ Examples
 
     path normalize [-z | --null-in] [-Z | --null-out] [-q | --quiet] [PATH ...]
 
-``path normalize`` returns the normalized versions of all paths. That means it squashes duplicate "/" (except for two leading "//"), collapses "../" with earlier components and removes "." components.
+``path normalize`` returns the normalized versions of all paths. That means it squashes duplicate "/", collapses "../" with earlier components and removes "." components.
 
 Unlike ``realpath`` or ``path resolve``, it does not make the paths absolute. It also does not resolve any symlinks. As such it can operate on non-existent paths.
 
@@ -344,7 +351,7 @@ Examples
     path change-extension [-z | --null-in] [-Z | --null-out] \
         [-q | --quiet] EXTENSION [PATH ...]
 
-``path change-extension`` returns the given paths, with their extension changed to the given new extension. The extension is the part after (and including) the last ".", unless that "." followed a "/" or the basename is "." or "..", in which case there is no previous extension and the new one is simply added.
+``path change-extension`` returns the given paths, with their extension changed to the given new extension. The extension is the part after (and including) the last ".", unless that "." followed a "/" or the basename is "." or "..", in which case there is no previous extension and the new one is added.
 
 If the extension is empty, any previous extension is stripped, along with the ".". This is, of course, the inverse of ``path extension``.
 
@@ -365,19 +372,15 @@ Examples
 
    >_ path change-extension '' ../banana
    ../banana
-   # but status 1, because there was no extension.
 
    >_ path change-extension '' ~/.config
    /home/alfa/.config
-   # status 1
 
    >_ path change-extension '' ~/.config.d
    /home/alfa/.config
-   # status 0
 
    >_ path change-extension '' ~/.config.
    /home/alfa/.config
-   # status 0
    
 "sort" subcommand
 -----------------------------

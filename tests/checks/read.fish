@@ -1,6 +1,4 @@
-# RUN: %fish -C "set fish %fish" %s
-# Set term again explicitly to ensure behavior.
-set -gx TERM xterm
+# RUN: fish=%fish %fish %s
 # Read with no vars is not an error
 read
 
@@ -155,7 +153,7 @@ echo $foo
 echo newline | read -lz foo
 echo $foo
 #CHECK: newline
-#CHECK: 
+#CHECK:
 echo -n 'test ing' | read -lz foo bar
 print_vars foo bar
 #CHECK: 1 'test' 1 'ing'
@@ -247,7 +245,7 @@ if test (string length "$x") -ne $fish_read_limit
     echo reading with a limited amount of input data failed the length test
 end
 
-# Confirm reading non-interactively works -- \#4206 regression
+# Confirm reading non-interactively works -- #4206 regression
 echo abc\ndef | $fish -i -c 'read a; read b; set --show a; set --show b'
 #CHECK: $a: set in global scope, unexported, with 1 elements
 #CHECK: $a[1]: |abc|
@@ -303,7 +301,7 @@ echo $foo
 echo $bar
 #CHECK: b
 echo $baz
-#CHECK: 
+#CHECK:
 
 # Multi-char delimiters with -d
 echo a...b...c | read -l -d "..." a b c
@@ -389,3 +387,83 @@ echo foo | read status
 # CHECKERR: (Type 'help read' for related documentation)
 echo read $status
 # CHECK: read 2
+
+echo ' foo' | read -n 1 -la var
+set -S var
+#CHECK: $var: set in local scope, unexported, with 0 elements
+
+echo foo | read -n -1
+# CHECKERR: read: -1: invalid integer
+# CHECKERR: {{.*}}read.fish (line {{\d+}}):
+# CHECKERR: echo foo | read -n -1
+# CHECKERR: ^
+# CHECKERR: (Type 'help read' for related documentation)
+
+echo '1 ( (' | read -lat var
+set -S var
+# CHECK: $var: set in local scope, unexported, with 2 elements
+# CHECK: $var[1]: |1|
+# CHECK: $var[2]: |( (|
+
+echo '1 ) )' | read -lat var
+set -S var
+# CHECK: $var: set in local scope, unexported, with 2 elements
+# CHECK: $var[1]: |1|
+# CHECK: $var[2]: |)|
+
+echo '1 { {' | read -lat var
+set -S var
+# CHECK: $var: set in local scope, unexported, with 2 elements
+# CHECK: $var[1]: |1|
+# CHECK: $var[2]: |{ {|
+
+echo '1 } }' | read -lat var
+set -S var
+# CHECK: $var: set in local scope, unexported, with 2 elements
+# CHECK: $var[1]: |1|
+# CHECK: $var[2]: |}|
+
+# Raw tokens into named variables
+echo 'echo "&" a\ b &
+second line (dropped)' | read -l --tokenize-raw head tail
+set -S head tail
+# CHECK: $head: set in local scope, unexported, with 1 elements
+# CHECK: $head[1]: |echo|
+# CHECK: $tail: set in local scope, unexported, with 1 elements
+# CHECK: $tail[1]: |"&" a\\ b &|
+
+# Raw tokens into list
+echo 'echo "&" & a\ b
+second line (dropped)' | read -l --tokenize-raw -a rawlist
+set -S rawlist
+# CHECK: $rawlist: set in local scope, unexported, with 4 elements
+# CHECK: $rawlist[1]: |echo|
+# CHECK: $rawlist[2]: |"&"|
+# CHECK: $rawlist[3]: |&|
+# CHECK: $rawlist[4]: |a\\ b|
+
+echo 'echo "&" & a\ b
+second line' | read -l --tokenize-raw -a rawlist_null -z
+set -S rawlist_null
+# CHECK: $rawlist_null: set in local scope, unexported, with 8 elements
+# CHECK: $rawlist_null[1]: |echo|
+# CHECK: $rawlist_null[2]: |"&"|
+# CHECK: $rawlist_null[3]: |&|
+# CHECK: $rawlist_null[4]: |a\\ b|
+# CHECK: $rawlist_null[5]: |\n|
+# CHECK: $rawlist_null[6]: |second|
+# CHECK: $rawlist_null[7]: |line|
+# CHECK: $rawlist_null[8]: |\n|
+
+echo '1  {} "{}"' | read -lat var
+echo $var
+# CHECK: 1 {} {}
+
+printf \xf9\x98\xb1\x83\x8b | read -z out_of_range_codepoint
+set -S out_of_range_codepoint
+# CHECK: $out_of_range_codepoint: set in global scope, unexported, with 1 elements
+# CHECK: $out_of_range_codepoint[1]: |\Xf9\X98\Xb1\X83\X8b|
+
+printf \xff | { read invalid_utf8; set -S invalid_utf8 }
+# CHECK: $invalid_utf8: set in global scope, unexported, with 1 elements
+# CHECK: $invalid_utf8[1]: |\Xff|

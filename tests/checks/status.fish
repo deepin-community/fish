@@ -38,6 +38,9 @@ status --job-control=1none
 # Now set it to a valid mode.
 status job-control none
 
+status current-command | sed s/^/^/
+# CHECK: ^fish
+
 # Check status -u outside functions
 status current-function
 #CHECK: Not a function
@@ -54,9 +57,14 @@ eval test_function
 # Future Feature Flags
 status features
 #CHECK: stderr-nocaret          on  3.0 ^ no longer redirects stderr (historical, can no longer be changed)
-#CHECK: qmark-noglob            off 3.0 ? no longer globs
+#CHECK: qmark-noglob            on  3.0 ? no longer globs
 #CHECK: regex-easyesc           on  3.1 string replace -r needs fewer \'s
 #CHECK: ampersand-nobg-in-token on  3.4 & only backgrounds if followed by a separator
+#CHECK: remove-percent-self     off 4.0 %self is no longer expanded (use $fish_pid)
+#CHECK: test-require-arg        off 4.0 builtin test requires an argument
+#CHECK: mark-prompt             on  4.0 write OSC 133 prompt markers to the terminal
+#CHECK: ignore-terminfo         on  4.1 do not look up $TERM in terminfo database
+#CHECK: query-term              on  4.1 query the TTY to enable extra functionality
 status test-feature stderr-nocaret
 echo $status
 #CHECK: 0
@@ -105,3 +113,36 @@ end
 # CHECK: Failed write tests {{finished|skipped}}
 # CHECKERR: write: {{.*}}
 # CHECKERR: write: {{.*}}
+
+function test-stack-trace-main
+    status stack-trace
+end
+
+function test-stack-trace-other
+    test-stack-trace-main
+end
+
+printf "%s\n" (test-stack-trace-other | string replace \t '<TAB>')[1..4]
+# CHECK: in function 'test-stack-trace-main'
+# CHECK: <TAB>called on line {{\d+}} of file {{.*}}/status.fish
+# CHECK: in function 'test-stack-trace-other'
+# CHECK: <TAB>called on line {{\d+}} of file {{.*}}/status.fish
+
+functions -c test-stack-trace-other test-stack-trace-copy
+printf "%s\n" (test-stack-trace-copy | string replace \t '<TAB>')[1..4]
+# CHECK: in function 'test-stack-trace-main'
+# CHECK: <TAB>called on line {{\d+}} of file {{.*}}/status.fish
+# CHECK: in function 'test-stack-trace-copy'
+# CHECK: <TAB>called on line {{\d+}} of file {{.*}}/status.fish
+
+status test-terminal-feature
+and should have failed on missing arg
+# CHECKERR: status: test-terminal-feature: expected 1 arguments; got 0
+status test-terminal-feature 1 2
+and should have failed on too many args
+# CHECKERR: status: test-terminal-feature: expected 1 arguments; got 2
+status test-terminal-feature unrecognized-feature
+and should have failed on unrecognized feature
+# CHECKERR: status test-terminal-feature: unrecognized feature 'unrecognized-feature'
+status test-terminal-feature scroll-content-up
+and should have failed when running without a TTY

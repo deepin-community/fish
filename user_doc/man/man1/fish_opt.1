@@ -27,12 +27,12 @@ level margin: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .\" new: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .in \\n[rst2man-indent\\n[rst2man-indent-level]]u
 ..
-.TH "FISH_OPT" "1" "Mar 19, 2024" "3.7" "fish-shell"
+.TH "FISH_OPT" "1" "Nov 13, 2025" "4.2" "fish-shell"
 .SH NAME
 fish_opt \- create an option specification for the argparse command
 .SH SYNOPSIS
 .nf
-\fBfish_opt\fP [(\fB\-slor\fP | \fB\-\-multiple\-vals\fP\fB=\fP) \fIOPTNAME\fP]
+\fBfish_opt\fP [\fB\-s\fP \fIALPHANUM\fP] [\fB\-l\fP \fILONG\-NAME\fP] [\fB\-ormd\fP] [\fB\-\-long\-only\fP] [\fB\-v\fP \fICOMMAND\fP \fIOPTIONS\fP \&...\fB ]\fP
 \fBfish_opt\fP \fB\-\-help\fP
 .fi
 .sp
@@ -43,23 +43,30 @@ This command provides a way to produce option specifications suitable for use wi
 The following \fBargparse\fP options are available:
 .INDENT 0.0
 .TP
-\fB\-s\fP or \fB\-\-short\fP
-Takes a single letter that is used as the short flag in the option being defined. This option is mandatory.
+\fB\-s\fP or \fB\-\-short\fP \fIALPHANUM\fP
+Takes a single letter or number that is used as the short flag in the option being defined. Either this option or the \fB\-\-long\fP option must be provided.
 .TP
-\fB\-l\fP or \fB\-\-long\fP
+\fB\-l\fP or \fB\-\-long\fP \fILONG\-NAME\fP
 Takes a string that is used as the long flag in the option being defined. This option is optional and has no default. If no long flag is defined then only the short flag will be allowed when parsing arguments using the option specification.
 .TP
 \fB\-\-long\-only\fP
-The option being defined will only allow the long flag name to be used. The short flag name must still be defined (i.e., \fB\-\-short\fP must be specified) but it cannot be used when parsing arguments using this option specification.
+Deprecated. The option being defined will only allow the long flag name to be used, even if the short flag is defined (i.e., \fB\-\-short\fP is specified).
 .TP
 \fB\-o\fP or \fB\-\-optional\-val\fP
-Tthe option being defined can take a value, but it is optional rather than required. If the option is seen more than once when parsing arguments, only the last value seen is saved. This means the resulting flag variable created by \fBargparse\fP will zero elements if no value was given with the option else it will have exactly one element.
+The option being defined can take a value, but it is optional rather than required. If the option is seen more than once when parsing arguments, only the last value seen is saved. This means the resulting flag variable created by \fBargparse\fP will zero elements if no value was given with the option else it will have exactly one element.
 .TP
 \fB\-r\fP or \fB\-\-required\-val\fP
 The option being defined requires a value. If the option is seen more than once when parsing arguments, only the last value seen is saved. This means the resulting flag variable created by \fBargparse\fP will have exactly one element.
 .TP
-\fB\-\-multiple\-vals\fP
-The option being defined requires a value each time it is seen. Each instance is stored. This means the resulting flag variable created by \fBargparse\fP will have one element for each instance of this option in the arguments.
+\fB\-m\fP or \fB\-\-multiple\-vals\fP
+The value of each instance of the option is accumulated. If \fB\-\-optional\-val\fP is provided, the value is optional, and an empty string is stored if no value is provided. Otherwise, the \fB\-\-requiured\-val\fP option is implied and each instance of the option requires a value. This means the resulting flag variable created by \fBargparse\fP will have one element for each instance of this option in the arguments, even for instances that did not provide a value.
+.TP
+\fB\-d\fP or \fB\-\-delete\fP
+The option and any values will be deleted from the \fB$argv_opts\fP variables set by \fBargparse\fP
+(as with other options, it will also be deleted from \fB$argv\fP).
+.TP
+\fB\-v\fP or \fB\-\-validate\fP \fICOMMAND\fP \fIOPTION...\fP
+This option must be the last one, and requires one of \fB\-o\fP, \fB\-r\fP, or \fB\-m\fP\&. All the remaining arguments are interpreted a fish script to run to validate the value of the argument, see \fBargparse\fP documentation for more details. Note that the interpretation of \fICOMMAND\fP \fIOPTION...\fP is similar to \fBeval\fP, so you may need to quote or escape special characters \fItwice\fP if you want them to be interpreted literally when the validate script is run.
 .TP
 \fB\-h\fP or \fB\-\-help\fP
 Displays help about using this command.
@@ -70,12 +77,10 @@ Define a single option specification for the boolean help flag:
 .INDENT 0.0
 .INDENT 3.5
 .sp
-.nf
-.ft C
+.EX
 set \-l options (fish_opt \-s h \-l help)
 argparse $options \-\- $argv
-.ft P
-.fi
+.EE
 .UNINDENT
 .UNINDENT
 .sp
@@ -83,31 +88,39 @@ Same as above but with a second flag that requires a value:
 .INDENT 0.0
 .INDENT 3.5
 .sp
-.nf
-.ft C
+.EX
 set \-l options (fish_opt \-s h \-l help)
-set options $options (fish_opt \-s m \-l max \-\-required\-val)
+set options $options (fish_opt \-s m \-l max \-r)
 argparse $options \-\- $argv
-.ft P
-.fi
+.EE
 .UNINDENT
 .UNINDENT
 .sp
-Same as above but with a third flag that can be given multiple times saving the value of each instance seen and only the long flag name (\fB\-\-token\fP) can be used:
+Same as above but the value of the second flag cannot be the empty string:
 .INDENT 0.0
 .INDENT 3.5
 .sp
-.nf
-.ft C
-set \-l options (fish_opt \-\-short=h \-\-long=help)
-set options $options (fish_opt \-\-short=m \-\-long=max \-\-required\-val)
-set options $options (fish_opt \-\-short=t \-\-long=token \-\-multiple\-vals \-\-long\-only)
+.EX
+set \-l options (fish_opt \-s h \-l help)
+set options $options (fish_opt \-s m \-l max \-rv test \e$_flag_valu != \(dq\(aq\(aq\(dq)
 argparse $options \-\- $argv
-.ft P
-.fi
+.EE
+.UNINDENT
+.UNINDENT
+.sp
+Same as above but with a third flag that can be given multiple times saving the value of each instance seen and only a long flag name (\fB\-\-token\fP) is defined:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.EX
+set \-l options (fish_opt \-\-short=h \-\-long=help)
+set options $options (fish_opt \-\-short=m \-\-long=max \-\-required\-val \-\-validate test \e$_flag_valu != \(dq\(aq\(aq\(dq)
+set options $options (fish_opt \-\-long=token \-\-multiple\-vals)
+argparse $options \-\- $argv
+.EE
 .UNINDENT
 .UNINDENT
 .SH COPYRIGHT
-2023, fish-shell developers
+fish-shell developers
 .\" Generated by docutils manpage writer.
 .

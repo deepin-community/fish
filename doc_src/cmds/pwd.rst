@@ -1,5 +1,3 @@
-.. _cmd-pwd:
-
 pwd - output the current working directory
 ==========================================
 
@@ -18,8 +16,7 @@ Description
 .. only:: builder_man
 
           NOTE: This page documents the fish builtin ``pwd``.
-          To see the documentation on the ``pwd`` command you might have,
-          use ``command man pwd``.
+          To see the documentation on any non-fish versions, use ``command man pwd``.
 
 ``pwd`` outputs (prints) the current working directory.
 

@@ -1,11 +1,10 @@
-
 function __fish_complete_macos_java_version
     set -l json (/usr/libexec/java_home -X|plutil -convert json -o - -)
-    osascript -l JavaScript -s o -e "JSON.parse('$json').forEach(e => console.log(`\${e.JVMVersion}\t\${e.JVMArch} \${e.JVMName} by--exec \${e.JVMVendor}`))"
+    osascript -l JavaScript -s o -e "JSON.parse('$json').map(e => `\${e.JVMVersion}\t\${e.JVMArch} \${e.JVMName} by \${e.JVMVendor}`).join('\n')"
 end
 
 function __fish_complete_macos_java_home_exec
-    # seperate the buffer into two parts
+    # separate the buffer into two parts
     # where the first used to get the JAVA_HOME
     # and the second is the subcommand to complete
     set -l cmds (string replace -a -r ' *java_home *' ''  (commandline) )

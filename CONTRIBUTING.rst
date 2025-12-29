@@ -1,21 +1,63 @@
-Guidelines For Developers
-=========================
+####################
+Contributing To Fish
+####################
 
-This document provides guidelines for making changes to the fish-shell
-project. This includes rules for how to format the code, naming
-conventions, et cetera.
+This document tells you how you can contribute to fish.
+
+Fish is free and open source software, distributed under the terms of the GPLv2.
+
+Contributions are welcome, and there are many ways to contribute!
+
+Whether you want to change some of the core Rust source, enhance or add a completion script or function,
+improve the documentation or translate something, this document will tell you how.
+
+
+Mailing List
+============
+
+Send patches to the public mailing list: mailto:~krobelus/fish-shell@lists.sr.ht.
+Archives are available at https://lists.sr.ht/~krobelus/fish-shell/.
+
+GitHub
+======
+
+Fish is available on Github, at https://github.com/fish-shell/fish-shell.
+
+First, you'll need an account there, and you'll need a git clone of fish.
+Fork it on Github and then run::
+
+  git clone https://github.com/<USERNAME>/fish-shell.git
+
+This will create a copy of the fish repository in the directory fish-shell in your current working directory.
+
+Also, for most changes you want to run the tests and so you'd get a setup to compile fish.
+For that, you'll require:
+
+-  Rust - when in doubt, try rustup
+-  CMake
+-  PCRE2 (headers and libraries) - optional, this will be downloaded if missing
+-  gettext (only the msgfmt tool) - optional, for translation support
+-  Sphinx - optional, to build the documentation
+
+Of course not everything is required always - if you just want to contribute something to the documentation you'll just need Sphinx,
+and if the change is very simple and obvious you can just send it in. Use your judgement!
+
+Once you have your changes, open a pull request on https://github.com/fish-shell/fish-shell/pulls.
+
+Guidelines
+==========
 
 In short:
 
-- Be conservative in what you need (``C++11``, few dependencies)
-- Use automated tools to help you (including ``make test``, ``build_tools/style.fish`` and ``make lint``)
+- Be conservative in what you need (keep to the agreed minimum supported Rust version, limit new dependencies)
+- Use automated tools to help you (``build_tools/check.sh``)
 
 Contributing completions
-------------------------
+========================
 
 Completion scripts are the most common contribution to fish, and they are very welcome.
 
-In general, we'll take all well-written completion scripts for a command that is publically available.
+In general, we'll take all well-written completion scripts for a command that is publicly available.
 This means no private tools or personal scripts, and we do reserve the right to reject for other reasons.
 
 Before you try to contribute them to fish, consider if the authors of the tool you are completing want to maintain the script instead.
@@ -29,7 +71,7 @@ Completion scripts should
 
 1. Use as few dependencies as possible - try to use fish's builtins like ``string`` instead of ``grep`` and ``awk``,
    use ``python`` to read json instead of ``jq`` (because it's already a soft dependency for fish's tools)
-2. If it uses a common unix tool, use posix-compatible invocations - ideally it would work on GNU/Linux, macOS, the BSDs and other systems
+2. If it uses a common unix tool, use POSIX-compatible invocations - ideally it would work on GNU/Linux, macOS, the BSDs and other systems
 3. Option and argument descriptions should be kept short.
    The shorter the description, the more likely it is that fish can use more columns.
 4. Function names should start with ``__fish``, and functions should be kept in the completion file unless they're used elsewhere.
@@ -42,85 +84,48 @@ Put your completion script into share/completions/name-of-command.fish. If you h
 
 If you want to add tests, you probably want to add a littlecheck test. See below for details.
 
-Contributing to fish's C++ core
--------------------------------
+Contributing documentation
+==========================
 
-Fish uses C++11. Newer C++ features should not be used to make it possible to use on older systems.
+The documentation is stored in ``doc_src/``, and written in ReStructured Text and built with Sphinx.
 
-It does not use exceptions, they are disabled at build time with ``-fno-exceptions``.
+To build it locally, run from the main fish-shell directory::
 
-Don't introduce new dependencies unless absolutely necessary, and if you do,
-please make it optional with graceful failure if possible.
-Add any new dependencies to the README.rst under the *Running* and/or *Building* sections.
+    sphinx-build -j 8 -b html -n doc_src/ /tmp/fish-doc/
 
-Linters
--------
+which will build the docs as html in /tmp/fish-doc. You can open it in a browser and see that it looks okay.
 
-Automated analysis tools like cppcheck can point out
-potential bugs or code that is extremely hard to understand. They also
-help ensure the code has a consistent style and that it avoids patterns
-that tend to confuse people.
-
-To make linting the code easy there are two make targets: ``lint``,
-to lint any modified but not committed ``*.cpp`` files, and
-``lint-all`` to lint all files.
-
-Fish has custom cppcheck rules in the file ``.cppcheck.rule``. These
-help catch mistakes such as using ``wcwidth()`` rather than
-``fish_wcwidth()``. Please add a new rule if you find similar mistakes
-being made.
-
-Suppressing Lint Warnings
-~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Once in a while the lint tools emit a false positive warning. For
-example, cppcheck might suggest a memory leak is present when that is
-not the case. To suppress that cppcheck warning you should insert a line
-like the following immediately prior to the line cppcheck warned about:
-
-::
-
-   // cppcheck-suppress memleak // addr not really leaked
-
-The explanatory portion of the suppression comment is optional. For
-other types of warnings replace “memleak” with the value inside the
-parenthesis (e.g., “nullPointerRedundantCheck”) from a warning like the
-following:
-
-::
-
-   [src/complete.cpp:1727]: warning (nullPointerRedundantCheck): Either the condition 'cmd_node' is redundant or there is possible null pointer dereference: cmd_node.
+The builtins and various functions shipped with fish are documented in doc_src/cmds/.
 
 Code Style
-----------
+==========
 
-To ensure your changes conform to the style rules run
+For formatting, we use:
 
-::
-
-   build_tools/style.fish
-
-before committing your change. That will run our autoformatters:
-
-- ``git-clang-format`` for c++
+- ``rustfmt`` for Rust
 - ``fish_indent`` (shipped with fish) for fish script
-- ``black`` for python
+- ``ruff format`` for Python
 
-If you’ve already committed your changes that’s okay since it will then
-check the files in the most recent commit. This can be useful after
-you’ve merged another person’s change and want to check that it’s style
-is acceptable. However, in that case it will run ``clang-format`` to
-ensure the entire file, not just the lines modified by the commit,
-conform to the style.
-
-If you want to check the style of the entire code base run
+To reformat files, there is a script
 
 ::
 
    build_tools/style.fish --all
+   build_tools/style.fish somefile.rs some.fish
 
-That command will refuse to restyle any files if you have uncommitted
-changes.
+Fish Script Style Guide
+-----------------------
+
+1. All fish scripts, such as those in the *share/functions* and *tests*
+   directories, should be formatted using the ``fish_indent`` command.
+
+2. Function names should be in all lowercase with words separated by
+   underscores. Private functions should begin with an underscore. The
+   first word should be ``fish`` if the function is unique to fish.
+
+3. The first word of global variable names should generally be ``fish``
+   for public vars or ``_fish`` for private vars to minimize the
+   possibility of name clashes with user defined vars.
 
 Configuring Your Editor for Fish Scripts
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -158,65 +163,13 @@ made to run fish_indent via e.g.
    (add-hook 'fish-mode-hook (lambda ()
        (add-hook 'before-save-hook 'fish_indent-before-save)))
 
-Fish Script Style Guide
------------------------
+Minimum Supported Rust Version (MSRV) Policy
+--------------------------------------------
 
-1. All fish scripts, such as those in the *share/functions* and *tests*
-   directories, should be formatted using the ``fish_indent`` command.
-
-2. Function names should be in all lowercase with words separated by
-   underscores. Private functions should begin with an underscore. The
-   first word should be ``fish`` if the function is unique to fish.
-
-3. The first word of global variable names should generally be ``fish``
-   for public vars or ``_fish`` for private vars to minimize the
-   possibility of name clashes with user defined vars.
-
-C++ Style Guide
----------------
-
-1. The `Google C++ Style
-   Guide <https://google.github.io/styleguide/cppguide.html>`__ forms
-   the basis of the fish C++ style guide. There are two major deviations
-   for the fish project. First, a four, rather than two, space indent.
-   Second, line lengths up to 100, rather than 80, characters.
-
-2. The ``clang-format`` command is authoritative with respect to
-   indentation, whitespace around operators, etc.
-
-3. All names in code should be ``small_snake_case``. No Hungarian
-   notation is used. The names for classes and structs should be
-   followed by ``_t``.
-
-4. Always attach braces to the surrounding context.
-
-5. Indent with spaces, not tabs and use four spaces per indent.
-
-6. Document the purpose of a function or class with doxygen-style
-   comment blocks. e.g.:
-
-::
-
-   /**
-    * Sum numbers in a vector.
-    *
-    * @param values Container whose values are summed.
-    * @return sum of `values`, or 0.0 if `values` is empty.
-    */
-   double sum(std::vector<double> & const values) {
-       ...
-   }
-    */
-
-or
-
-::
-
-   /// brief description of somefunction()
-   void somefunction() {
+We support at least the version of ``rustc`` available in Debian Stable.
 
 Testing
--------
+=======
 
 The source code for fish includes a large collection of tests. If you
 are making any changes to fish, running these tests is a good way to make
@@ -228,222 +181,194 @@ You are strongly encouraged to add tests when changing the functionality
 of fish, especially if you are fixing a bug to help ensure there are no
 regressions in the future (i.e., we don’t reintroduce the bug).
 
-The tests can be found in three places:
+Unit tests live next to the implementation in Rust source files, in inline submodules (``mod tests {}``).
 
-- src/fish_tests.cpp for tests to the core C++ code
-- tests/checks for script tests, run by `littlecheck <https://github.com/ridiculousfish/littlecheck>`__
-- tests/pexpects for interactive tests using `pexpect <https://pexpect.readthedocs.io/en/stable/>`__
+System tests live in ``tests/``:
 
-When in doubt, the bulk of the tests should be added as a littlecheck test in tests/checks, as they are the easiest to modify and run, and much faster and more dependable than pexpect tests. The syntax is fairly self-explanatory. It's a fish script with the expected output in ``# CHECK:`` or ``# CHECKERR:`` (for stderr) comments.
+- ``tests/checks`` are run by `littlecheck <https://github.com/ridiculousfish/littlecheck>`__
+  and test noninteractive (script) behavior,
+  except for ``tests/checks/tmux-*`` which test interactive scenarios.
+- ``tests/pexpects`` tests interactive scenarios using `pexpect <https://pexpect.readthedocs.io/en/stable/>`__
 
-fish_tests.cpp is mostly useful for unit tests - if you wish to test that a function does the correct thing for given input, use it.
+When in doubt, the bulk of the tests should be added as a littlecheck test in tests/checks, as they are the easiest to modify and run, and much faster and more dependable than pexpect tests.
+The syntax is fairly self-explanatory.
+It's a fish script with the expected output in ``# CHECK:`` or ``# CHECKERR:`` (for stderr) comments.
+If your littlecheck test has a specific dependency, use ``# REQUIRE: ...`` with a POSIX sh script.
 
-The pexpects are written in python and can simulate input and output to/from a terminal, so they are needed for anything that needs actual interactivity. The runner is in build_tools/pexpect_helper.py, in case you need to modify something there.
+The pexpect tests are written in Python and can simulate input and output to/from a terminal, so they are needed for anything that needs actual interactivity.
+The runner is in tests/pexpect_helper.py, in case you need to modify something there.
+
+These tests can be run via the tests/test_driver.py Python script, which will set up the environment.
+It sets up a temporary $HOME and also uses it as the current directory, so you do not need to create a temporary directory in them.
+
+If you need a command to do something weird to test something, maybe add it to the ``fish_test_helper`` binary (in ``tests/fish_test_helper.c``).
 
 Local testing
-~~~~~~~~~~~~~
+-------------
 
-The tests can be run on your local computer on all operating systems.
+The tests can be run on your local system::
 
-::
+    cargo build
+    # Run unit tests
+    cargo test
+    # Run system tests
+    tests/test_driver.py target/debug
+    # Run a specific system test.
+    tests/test_driver.py target/debug tests/checks/abbr.fish
 
-   cmake path/to/fish-shell
-   make test
+Here, the first argument to test_driver.py refers to a directory with ``fish``, ``fish_indent`` and ``fish_key_reader`` in it.
+In this example we're in the root of the workspace and have run ``cargo build`` without ``--release``, so it's a debug build.
 
-Git hooks
-~~~~~~~~~
+To run all tests and linters, use::
 
-Since developers sometimes forget to run the tests, it can be helpful to
-use git hooks (see githooks(5)) to automate it.
+    build_tools/check.sh
 
-One possibility is a pre-push hook script like this one:
+Contributing Translations
+=========================
 
-.. code:: sh
+Fish uses GNU gettext to translate messages from English to other languages.
+We use custom tools for extracting messages from source files and to localize at runtime.
+This means that we do not have a runtime dependency on the gettext library.
+It also means that some features are not supported, such as message context and plurals.
+We also expect all files to be UTF-8-encoded.
+In practice, this should not matter much for contributing translations.
 
-   #!/bin/sh
-   #### A pre-push hook for the fish-shell project
-   # This will run the tests when a push to master is detected, and will stop that if the tests fail
-   # Save this as .git/hooks/pre-push and make it executable
+Translation sources are
+stored in the ``po`` directory, named ``ll_CC.po``, where ``ll`` is the
+two (or possibly three) letter ISO 639-1 language code of the target language
+(e.g. ``pt`` for Portuguese). ``CC`` is an ISO 3166 country/territory code,
+(e.g. ``BR`` for Brazil).
+An example for a valid name is ``pt_BR.po``, indicating Brazilian Portuguese.
+These are the files you will interact with when adding translations.
 
-   protected_branch='master'
+Adding translations for a new language
+--------------------------------------
 
-   # Git gives us lines like "refs/heads/frombranch SOMESHA1 refs/heads/tobranch SOMESHA1"
-   # We're only interested in the branches
-   while read from _ to _; do
-       if [ "x$to" = "xrefs/heads/$protected_branch" ]; then
-           isprotected=1
-       fi
-   done
-   if [ "x$isprotected" = x1 ]; then
-       echo "Running tests before push to master"
-       make test
-       RESULT=$?
-       if [ $RESULT -ne 0 ]; then
-           echo "Tests failed for a push to master, we can't let you do that" >&2
-           exit 1
-       fi
-   fi
-   exit 0
+Creating new translations requires the Gettext tools.
+More specifically, you will need ``msguniq`` and ``msgmerge`` for creating translations for a new
+language.
+To create a new translation, run::
 
-This will check if the push is to the master branch and, if it is, only
-allow the push if running ``make test`` succeeds. In some circumstances
-it may be advisable to circumvent this check with
-``git push --no-verify``, but usually that isn’t necessary.
+    build_tools/update_translations.fish po/ll_CC.po
 
-To install the hook, place the code in a new file
-``.git/hooks/pre-push`` and make it executable.
+This will create a new PO file containing all messages available for translation.
+If the file already exists, it will be updated.
 
-Coverity Scan
-~~~~~~~~~~~~~
+After modifying a PO file, you can recompile fish, and it will integrate the modifications you made.
+This requires that the ``msgfmt`` utility is installed (comes as part of ``gettext``).
+It is important that the ``localize-messages`` cargo feature is enabled, which it is by default.
+You can explicitly enable it using::
 
-We use Coverity’s static analysis tool which offers free access to open
-source projects. While access to the tool itself is restricted,
-fish-shell organization members should know that they can login
-`here <https://scan.coverity.com/projects/fish-shell-fish-shell?tab=overview>`__
-with their GitHub account. Currently, tests are triggered upon merging
-the ``master`` branch into ``coverity_scan_master``. Even if you are not
-a fish developer, you can keep an eye on our statistics there.
+    cargo build --features=localize-messages
 
-Installing the Required Tools
------------------------------
+Use environment variables to tell fish which language to use, e.g.::
 
-Installing the Linting Tools
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    LANG=pt_BR.utf8 fish
 
-To install the lint checkers on Mac OS X using Homebrew:
+or within the running fish shell::
 
-::
+    set LANG pt_BR.utf8
 
-   brew install cppcheck
+For more options regarding how to choose languages, see
+`the corresponding gettext documentation
+<https://www.gnu.org/software/gettext/manual/html_node/Locale-Environment-Variables.html>`__.
+One neat thing you can do is set a list of languages to check for translations in the order defined
+using the ``LANGUAGE`` variable, e.g.::
 
-To install the lint checkers on Debian-based Linux distributions:
+    set LANGUAGE pt_BR de_DE
 
-::
+to try to translate messages to Portuguese, if that fails try German, and if that fails too you will
+see the English version defined in the source code.
 
-   sudo apt-get install clang
-   sudo apt-get install cppcheck
+Modifying existing translations
+-------------------------------
 
-Installing the Formatting Tools
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+If you want to work on translations for a language which already has a corresponding ``po`` file, it
+is sufficient to edit this file. No other changes are necessary.
 
-Mac OS X:
+After recompiling fish, you should be able to see your translations in action. See the previous
+section for details.
 
-::
+Editing PO files
+----------------
 
-   brew install clang-format
+Many tools are available for editing translation files, including
+command-line and graphical user interface programs. For simple use, you can use your text editor.
 
-Debian-based:
+Open up the PO file, for example ``po/sv.po``, and you'll see something like::
 
-::
+    msgid "%s: No suitable job\n"
+    msgstr ""
 
-   sudo apt-get install clang-format
+The ``msgid`` here is the "name" of the string to translate, typically the English string to translate.
+The second line (``msgstr``) is where your translation goes.
 
-Message Translations
---------------------
+For example::
 
-Fish uses the GNU gettext library to translate messages from English to
-other languages.
+    msgid "%s: No suitable job\n"
+    msgstr "%s: Inget passande jobb\n"
+
+Any ``%s`` or ``%d`` are placeholders that fish will use for formatting at runtime. It is important that they match - the translated string should have the same placeholders in the same order.
+
+Also any escaped characters, like that ``\n`` newline at the end, should be kept so the translation has the same behavior.
+
+Our tests run ``msgfmt --check-format /path/to/file``, so they would catch mismatched placeholders - otherwise fish would crash at runtime when the string is about to be used.
+
+Be cautious about blindly updating an existing translation file.
+``msgid`` strings should never be updated manually, only by running the appropriate script.
+
+Modifications to strings in source files
+----------------------------------------
+
+If a string changes in the sources, the old translations will no longer work.
+They will be preserved in the PO files, but commented-out (starting with ``#~``).
+If you add/remove/change a translatable strings in a source file,
+run ``build_tools/update_translations.fish`` to propagate this to all translation files (``po/*.po``).
+This is only relevant for developers modifying the source files of fish or fish scripts.
+
+Setting Code Up For Translations
+--------------------------------
 
 All non-debug messages output for user consumption should be marked for
-translation. In C++, this requires the use of the ``_`` (underscore)
-macro:
+translation. In Rust, this requires the use of the ``wgettext!`` or ``wgettext_fmt!``
+macros:
 
 ::
 
-   streams.out.append_format(_(L"%ls: There are no jobs\n"), argv[0]);
+    streams.out.append(wgettext_fmt!("%s: There are no jobs\n", argv[0]));
 
 All messages in fish script must be enclosed in single or double quote
-characters. They must also be translated via a subcommand. This means
+characters for our message extraction script to find them.
+They must also be translated via a command substitution. This means
 that the following are **not** valid:
 
 ::
 
-   echo (_ hello)
-   _ "goodbye"
+    echo (_ hello)
+    _ "goodbye"
 
 Above should be written like this instead:
 
 ::
 
-   echo (_ "hello")
-   echo (_ "goodbye")
+    echo (_ "hello")
+    echo (_ "goodbye")
 
-Note that you can use either single or double quotes to enclose the
+You can use either single or double quotes to enclose the
 message to be translated. You can also optionally include spaces after
-the opening parentheses and once again before the closing parentheses.
+the opening parentheses or before the closing parentheses.
 
-Creating and updating translations requires the Gettext tools, including
-``xgettext``, ``msgfmt`` and ``msgmerge``. Translation sources are
-stored in the ``po`` directory, named ``LANG.po``, where ``LANG`` is the
-two letter ISO 639-1 language code of the target language (eg ``de`` for
-German).
+Updating Dependencies
+=====================
 
-To create a new translation, for example for German:
-
-* generate a ``messages.pot`` file by running ``build_tools/fish_xgettext.fish`` from
-  the source tree
-* copy ``messages.pot`` to ``po/LANG.po``
-
-To update a translation:
-
-* generate a ``messages.pot`` file by running
-  ``build_tools/fish_xgettext.fish`` from the source tree
-
-* update the existing translation by running
-  ``msgmerge --update --no-fuzzy-matching po/LANG.po messages.pot``
-
-Many tools are available for editing translation files, including
-command-line and graphical user interface programs.
-
-Be cautious about blindly updating an existing translation file. Trivial
-changes to an existing message (eg changing the punctuation) will cause
-existing translations to be removed, since the tools do literal string
-matching. Therefore, in general, you need to carefully review any
-recommended deletions.
-
-Read the `translations
-wiki <https://github.com/fish-shell/fish-shell/wiki/Translations>`__ for
-more information.
+To update dependencies, run ``build_tools/update-dependencies.sh``.
+This currently requires `updatecli <https://github.com/updatecli/updatecli>`__ and a few other tools.
 
 Versioning
-----------
+==========
 
 The fish version is constructed by the *build_tools/git_version_gen.sh*
 script. For developers the version is the branch name plus the output of
 ``git describe --always --dirty``. Normally the main part of the version
 will be the closest annotated tag. Which itself is usually the most
 recent release number (e.g., ``2.6.0``).
-
-Include What You Use
---------------------
-
-You should not depend on symbols being visible to a ``*.cpp`` module
-from ``#include`` statements inside another header file. In other words
-if your module does ``#include "common.h"`` and that header does
-``#include "signal.h"`` your module should not assume the sub-include is
-present. It should instead directly ``#include "signal.h"`` if it needs
-any symbol from that header. That makes the actual dependencies much
-clearer. It also makes it easy to modify the headers included by a
-specific header file without having to worry that will break any module
-(or header) that includes a particular header.
-
-To help enforce this rule the ``make lint`` (and ``make lint-all``)
-command will run the
-`include-what-you-use <https://include-what-you-use.org/>`__ tool. You
-can find the IWYU project on
-`github <https://github.com/include-what-you-use/include-what-you-use>`__.
-
-To install the tool on OS X you’ll need to add a
-`formula <https://github.com/jasonmp85/homebrew-iwyu>`__ then install
-it:
-
-::
-
-   brew tap jasonmp85/iwyu
-   brew install iwyu
-
-On Ubuntu you can install it via ``apt-get``:
-
-::
-
-   sudo apt-get install iwyu

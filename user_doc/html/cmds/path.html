@@ -5,12 +5,11 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>path - manipulate and check paths &#8212; fish-shell 3.7.1 documentation</title>
-    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=a864bcb0" />
-    <link rel="stylesheet" type="text/css" href="../_static/pydoctheme.css?v=4e2636db" />
-    <link rel="stylesheet" type="text/css" href="/docs/shared/style.css" />
-    <script src="../_static/documentation_options.js?v=5c477e40"></script>
-    <script src="../_static/doctools.js?v=888ff710"></script>
+    <title>path - manipulate and check paths &#8212; fish-shell 4.2.1 documentation</title>
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=4da8bbd6" />
+    <link rel="stylesheet" type="text/css" href="../_static/pydoctheme.css?v=f89b4716" />
+    <script src="../_static/documentation_options.js?v=6fb65176"></script>
+    <script src="../_static/doctools.js?v=9bcbadda"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
@@ -20,14 +19,14 @@
      
 
   </head><body><div id="fmain">  
-    <div class="related" role="navigation" aria-label="related navigation">
+    <div class="related" role="navigation" aria-label="Related">
       <h3>Navigation</h3>
       <ul>
     <li><img src="../_static/fish.png" alt=""
              style="width: 80px; height: 80px; vertical-align: middle; margin-top: -1px"/></li>
     <li><a href="https://fishshell.com/">fish-shell</a> &#187;</li>
     
-    <a href="../index.html">fish-shell 3.7.1 documentation</a> &#187;
+    <a href="../index.html">fish-shell 4.2.1 documentation</a> &#187;
     
 
           <li class="nav-item nav-item-1"><a href="../commands.html" accesskey="U">Commands</a> &#187;</li>
@@ -35,7 +34,7 @@
     <li class="right">
         
 
-    <div class="inline-search" style="display: none" role="search">
+    <div class="inline-search" role="search">
         <form class="inline-search" action="../search.html" method="get">
           <input placeholder="Quick search" type="text" name="q" />
           <input type="submit" value="Go" />
@@ -43,7 +42,6 @@
           <input type="hidden" name="area" value="default" />
         </form>
     </div>
-    <script type="text/javascript">$('.inline-search').show(0);</script>
     </li>
     
     <div id="old-docs-notice" style="display: none">
@@ -55,7 +53,7 @@
     </div>    
 
     <div class="document">
-      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
         <div class="sphinxsidebarwrapper">
 <div>
 <h3><a href="../index.html">Documents</a></h3>
@@ -71,11 +69,13 @@
 <li class="toctree-l1"><a class="reference internal" href="../prompt.html">Writing your own prompt</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../design.html">Design</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../relnotes.html">Release notes</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../terminal-compatibility.html">Terminal Compatibility</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../contributing.html">Contributing To Fish</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../license.html">License</a></li>
 </ul>
 
 </div>
-<div id="searchbox" style="display: none" role="search">
+<search id="searchbox" style="display: none" role="search">
   <h3 id="searchlabel">Quick search</h3>
     <div class="searchformwrapper">
     <form class="search" action="../search.html" method="get">
@@ -83,7 +83,7 @@
       <input type="submit" value="Go" />
     </form>
     </div>
-</div>
+</search>
 <script>document.getElementById('searchbox').style.display = "block"</script>
 <div>
 <h4><a href="../index.html">Sections</a></h4>
@@ -144,15 +144,15 @@
           <div class="body" role="main">
             
   <section id="path-manipulate-and-check-paths">
-<span id="cmd-path"></span><h1>path - manipulate and check paths<a class="headerlink" href="#path-manipulate-and-check-paths" title="Link to this heading">¶</a></h1>
+<h1>path - manipulate and check paths<a class="headerlink" href="#path-manipulate-and-check-paths" title="Link to this heading">¶</a></h1>
 <section id="synopsis">
 <h2>Synopsis<a class="headerlink" href="#synopsis" title="Link to this heading">¶</a></h2>
-<div class="highlight-fish-synopsis notranslate"><div class="highlight"><pre><span></span><span class="nf">path</span><span class="w"> </span><span class="no">basename</span><span class="w"> </span><span class="no">GENERAL_OPTIONS</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">PATH</span><span class="w"> </span><span class="g g-Other">...]</span>
+<div class="highlight-fish-synopsis notranslate"><div class="highlight"><pre><span></span><span class="nf">path</span><span class="w"> </span><span class="no">basename</span><span class="w"> </span><span class="no">GENERAL_OPTIONS</span><span class="w"> </span><span class="g g-Other">[(</span><span class="no">-E</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--no-extension</span><span class="g g-Other">)]</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">PATH</span><span class="w"> </span><span class="g g-Other">...]</span>
 <span class="nf">path</span><span class="w"> </span><span class="no">dirname</span><span class="w"> </span><span class="no">GENERAL_OPTIONS</span><span class="w">  </span><span class="g g-Other">[</span><span class="no">PATH</span><span class="w"> </span><span class="g g-Other">...]</span>
 <span class="nf">path</span><span class="w"> </span><span class="no">extension</span><span class="w"> </span><span class="no">GENERAL_OPTIONS</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">PATH</span><span class="w"> </span><span class="g g-Other">...]</span>
 <span class="nf">path</span><span class="w"> </span><span class="no">filter</span><span class="w"> </span><span class="no">GENERAL_OPTIONS</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">-v</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--invert</span><span class="g g-Other">]</span>
 <span class="w">    </span><span class="g g-Other">[</span><span class="no">-d</span><span class="g g-Other">]</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">-f</span><span class="g g-Other">]</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">-l</span><span class="g g-Other">]</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">-r</span><span class="g g-Other">]</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">-w</span><span class="g g-Other">]</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">-x</span><span class="g g-Other">]</span>
-<span class="w">    </span><span class="g g-Other">[(</span><span class="no">-t</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--type</span><span class="g g-Other">)</span><span class="w"> </span><span class="no">TYPE</span><span class="g g-Other">]</span><span class="w"> </span><span class="g g-Other">[(</span><span class="no">-p</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--perm</span><span class="g g-Other">)</span><span class="w"> </span><span class="no">PERMISSION</span><span class="g g-Other">]</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">PATH</span><span class="w"> </span><span class="g g-Other">...]</span>
+<span class="w">    </span><span class="g g-Other">[(</span><span class="no">-t</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--type</span><span class="g g-Other">)</span><span class="w"> </span><span class="no">TYPE</span><span class="g g-Other">]</span><span class="w"> </span><span class="g g-Other">[(</span><span class="no">-p</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--perm</span><span class="g g-Other">)</span><span class="w"> </span><span class="no">PERMISSION</span><span class="g g-Other">]</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">--all</span><span class="g g-Other">]</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">PATH</span><span class="w"> </span><span class="g g-Other">...]</span>
 <span class="nf">path</span><span class="w"> </span><span class="no">is</span><span class="w"> </span><span class="no">GENERAL_OPTIONS</span><span class="w"> </span><span class="g g-Other">[(</span><span class="no">-v</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--invert</span><span class="g g-Other">)]</span><span class="w"> </span><span class="g g-Other">[(</span><span class="no">-t</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--type</span><span class="g g-Other">)</span><span class="w"> </span><span class="no">TYPE</span><span class="g g-Other">]</span>
 <span class="w">    </span><span class="g g-Other">[</span><span class="no">-d</span><span class="g g-Other">]</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">-f</span><span class="g g-Other">]</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">-l</span><span class="g g-Other">]</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">-r</span><span class="g g-Other">]</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">-w</span><span class="g g-Other">]</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">-x</span><span class="g g-Other">]</span>
 <span class="w">    </span><span class="g g-Other">[(</span><span class="no">-p</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--perm</span><span class="g g-Other">)</span><span class="w"> </span><span class="no">PERMISSION</span><span class="g g-Other">]</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">PATH</span><span class="w"> </span><span class="g g-Other">...]</span>
@@ -161,7 +161,7 @@
 <span class="nf">path</span><span class="w"> </span><span class="no">resolve</span><span class="w"> </span><span class="no">GENERAL_OPTIONS</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">PATH</span><span class="w"> </span><span class="g g-Other">...]</span>
 <span class="nf">path</span><span class="w"> </span><span class="no">change-extension</span><span class="w"> </span><span class="no">GENERAL_OPTIONS</span><span class="w"> </span><span class="no">EXTENSION</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">PATH</span><span class="w"> </span><span class="g g-Other">...]</span>
 <span class="nf">path</span><span class="w"> </span><span class="no">sort</span><span class="w"> </span><span class="no">GENERAL_OPTIONS</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">-r</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--reverse</span><span class="g g-Other">]</span>
-<span class="w">    </span><span class="g g-Other">[</span><span class="no">-u</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--unique</span><span class="g g-Other">]</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">--key=basename</span><span class="g g-Other">|</span><span class="no">dirname</span><span class="g g-Other">|</span><span class="no">path</span><span class="g g-Other">]</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">PATH</span><span class="w"> </span><span class="g g-Other">...]</span>
+<span class="w">    </span><span class="g g-Other">[</span><span class="no">-u</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--unique</span><span class="g g-Other">]</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">--key=</span><span class="g g-Other">(</span><span class="no">basename</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">dirname</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">path</span><span class="g g-Other">)]</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">PATH</span><span class="w"> </span><span class="g g-Other">...]</span>
 
 <span class="nf">GENERAL_OPTIONS</span>
 <span class="w">    </span><span class="g g-Other">[</span><span class="no">-z</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--null-in</span><span class="g g-Other">]</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">-Z</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--null-out</span><span class="g g-Other">]</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">-q</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--quiet</span><span class="g g-Other">]</span>
@@ -182,10 +182,11 @@
 </section>
 <section id="basename-subcommand">
 <span id="cmd-path-basename"></span><h2>“basename” subcommand<a class="headerlink" href="#basename-subcommand" title="Link to this heading">¶</a></h2>
-<div class="highlight-fish-docs-samples notranslate"><div class="highlight"><pre><span></span><span class="nf">path</span><span class="w"> </span><span class="no">basename</span><span class="w"> </span><span class="no">[-z</span><span class="w"> </span><span class="p">|</span><span class="w"> </span><span class="nf">--null-in]</span><span class="w"> </span><span class="no">[-Z</span><span class="w"> </span><span class="p">|</span><span class="w"> </span><span class="nf">--null-out]</span><span class="w"> </span><span class="no">[-q</span><span class="w"> </span><span class="p">|</span><span class="w"> </span><span class="nf">--quiet]</span><span class="w"> </span><span class="no">[PATH</span><span class="w"> </span><span class="no">...]</span>
+<div class="highlight-fish-docs-samples notranslate"><div class="highlight"><pre><span></span><span class="nf">path</span><span class="w"> </span><span class="no">basename</span><span class="w"> </span><span class="no">[-E</span><span class="w"> </span><span class="p">|</span><span class="w"> </span><span class="nf">--no-extension]</span><span class="w"> </span><span class="no">[-z</span><span class="w"> </span><span class="p">|</span><span class="w"> </span><span class="nf">--null-in]</span><span class="w"> </span><span class="no">[-Z</span><span class="w"> </span><span class="p">|</span><span class="w"> </span><span class="nf">--null-out]</span><span class="w"> </span><span class="no">[-q</span><span class="w"> </span><span class="p">|</span><span class="w"> </span><span class="nf">--quiet]</span><span class="w"> </span><span class="no">[PATH</span><span class="w"> </span><span class="no">...]</span>
 </pre></div>
 </div>
 <p><code class="docutils literal notranslate"><span class="pre">path</span> <span class="pre">basename</span></code> returns the last path component of the given path, by removing the directory prefix and removing trailing slashes. In other words, it is the part that is not the dirname. For files you might call it the “filename”.</p>
+<p>If the <code class="docutils literal notranslate"><span class="pre">-E</span></code> or <code class="docutils literal notranslate"><span class="pre">---no-extension</span></code> option is used and the base name contained a period, the path is returned with the extension (or the last extension) removed, i.e. the “filename” without an extension (akin to calling <code class="docutils literal notranslate"><span class="pre">path</span> <span class="pre">change-extension</span> <span class="pre">&quot;&quot;</span> <span class="pre">(path</span> <span class="pre">basename</span> <span class="pre">$path)</span></code>).</p>
 <p>It returns 0 if there was a basename, i.e. if the path wasn’t empty or just slashes.</p>
 <section id="examples">
 <h3>Examples<a class="headerlink" href="#examples" title="Link to this heading">¶</a></h3>
@@ -268,7 +269,7 @@
 <span id="cmd-path-filter"></span><h2>“filter” subcommand<a class="headerlink" href="#filter-subcommand" title="Link to this heading">¶</a></h2>
 <div class="highlight-fish-docs-samples notranslate"><div class="highlight"><pre><span></span><span class="nf">path</span><span class="w"> </span><span class="no">filter</span><span class="w"> </span><span class="no">[-z</span><span class="w"> </span><span class="p">|</span><span class="w"> </span><span class="nf">--null-in]</span><span class="w"> </span><span class="no">[-Z</span><span class="w"> </span><span class="p">|</span><span class="w"> </span><span class="nf">--null-out]</span><span class="w"> </span><span class="no">[-q</span><span class="w"> </span><span class="p">|</span><span class="w"> </span><span class="nf">--quiet]</span><span class="nv"> \</span>
 <span class="nv">    </span><span class="no">[-d]</span><span class="w"> </span><span class="no">[-f]</span><span class="w"> </span><span class="no">[-l]</span><span class="w"> </span><span class="no">[-r]</span><span class="w"> </span><span class="no">[-w]</span><span class="w"> </span><span class="no">[-x]</span><span class="nv"> \</span>
-<span class="nv">    </span><span class="no">[-v</span><span class="w"> </span><span class="p">|</span><span class="w"> </span><span class="nf">--invert]</span><span class="w"> </span><span class="no">[</span><span class="o">(</span><span class="nf">-t</span><span class="w"> </span><span class="p">|</span><span class="w"> </span><span class="nf">--type</span><span class="o">)</span><span class="w"> </span><span class="no">TYPE]</span><span class="w"> </span><span class="no">[</span><span class="o">(</span><span class="nf">-p</span><span class="w"> </span><span class="p">|</span><span class="w"> </span><span class="nf">--perm</span><span class="o">)</span><span class="w"> </span><span class="no">PERMISSION]</span><span class="w"> </span><span class="no">[PATH</span><span class="w"> </span><span class="no">...]</span>
+<span class="nv">    </span><span class="no">[-v</span><span class="w"> </span><span class="p">|</span><span class="w"> </span><span class="nf">--invert]</span><span class="w"> </span><span class="no">[</span><span class="o">(</span><span class="nf">-t</span><span class="w"> </span><span class="p">|</span><span class="w"> </span><span class="nf">--type</span><span class="o">)</span><span class="w"> </span><span class="no">TYPE]</span><span class="w"> </span><span class="no">[</span><span class="o">(</span><span class="nf">-p</span><span class="w"> </span><span class="p">|</span><span class="w"> </span><span class="nf">--perm</span><span class="o">)</span><span class="w"> </span><span class="no">PERMISSION]</span><span class="w"> </span><span class="no">[--all]</span><span class="w"> </span><span class="no">[PATH</span><span class="w"> </span><span class="no">...]</span>
 </pre></div>
 </div>
 <p><code class="docutils literal notranslate"><span class="pre">path</span> <span class="pre">filter</span></code> returns all of the given paths that match the given checks. In all cases, the paths need to exist, nonexistent paths are always filtered.</p>
@@ -284,6 +285,8 @@
 <p>With <code class="docutils literal notranslate"><span class="pre">--invert</span></code>, the meaning of the filtering is inverted - any path that wouldn’t pass (including by not existing) passes, and any path that would pass fails.</p>
 <p>When a path starts with <code class="docutils literal notranslate"><span class="pre">-</span></code>, <code class="docutils literal notranslate"><span class="pre">path</span> <span class="pre">filter</span></code> will prepend <code class="docutils literal notranslate"><span class="pre">./</span></code> to avoid it being interpreted as an option otherwise.</p>
 <p>It returns 0 if at least one path passed the filter.</p>
+<p>With <code class="docutils literal notranslate"><span class="pre">--all</span></code>, return status 0 (true) if all paths pass the filter, and status 1 (false) if any path fails. This is equivalent to <code class="docutils literal notranslate"><span class="pre">not</span> <span class="pre">path</span> <span class="pre">filter</span> <span class="pre">-v</span></code>. It produces no output, only a status.</p>
+<p>When <code class="docutils literal notranslate"><span class="pre">--all</span></code> combined with <code class="docutils literal notranslate"><span class="pre">--invert</span></code>, it returns status 0 (true) if all paths fail the filter and status 1 (false) if any path passes.</p>
 <p><code class="docutils literal notranslate"><span class="pre">path</span> <span class="pre">is</span></code> is shorthand for <code class="docutils literal notranslate"><span class="pre">path</span> <span class="pre">filter</span> <span class="pre">-q</span></code>, i.e. just checking without producing output, see <a class="reference internal" href="#cmd-path-is"><span class="std std-ref">The is subcommand</span></a>.</p>
 <section id="id3">
 <h3>Examples<a class="headerlink" href="#id3" title="Link to this heading">¶</a></h3>
@@ -310,6 +313,9 @@
 
 <span class="gp">&gt;_ </span><span class="nf">path</span><span class="w"> </span><span class="no">filter</span><span class="w"> </span><span class="no">-fx</span><span class="w"> </span><span class="o">$PATH</span><span class="no">/</span><span class="o">*</span>
 <span class="go"># Prints all possible commands - the first entry of each name is what fish would execute!</span>
+
+<span class="gp">&gt;_ </span><span class="nf">path</span><span class="w"> </span><span class="no">filter</span><span class="w"> </span><span class="no">--all</span><span class="w"> </span><span class="no">/usr/bin</span><span class="w"> </span><span class="no">/usr/argagagji</span>
+<span class="go"># This returns 1 (false) because not all paths pass the filter.</span>
 </pre></div>
 </div>
 </section>
@@ -368,7 +374,7 @@
 <div class="highlight-fish-docs-samples notranslate"><div class="highlight"><pre><span></span><span class="nf">path</span><span class="w"> </span><span class="no">normalize</span><span class="w"> </span><span class="no">[-z</span><span class="w"> </span><span class="p">|</span><span class="w"> </span><span class="nf">--null-in]</span><span class="w"> </span><span class="no">[-Z</span><span class="w"> </span><span class="p">|</span><span class="w"> </span><span class="nf">--null-out]</span><span class="w"> </span><span class="no">[-q</span><span class="w"> </span><span class="p">|</span><span class="w"> </span><span class="nf">--quiet]</span><span class="w"> </span><span class="no">[PATH</span><span class="w"> </span><span class="no">...]</span>
 </pre></div>
 </div>
-<p><code class="docutils literal notranslate"><span class="pre">path</span> <span class="pre">normalize</span></code> returns the normalized versions of all paths. That means it squashes duplicate “/” (except for two leading “//”), collapses “../” with earlier components and removes “.” components.</p>
+<p><code class="docutils literal notranslate"><span class="pre">path</span> <span class="pre">normalize</span></code> returns the normalized versions of all paths. That means it squashes duplicate “/”, collapses “../” with earlier components and removes “.” components.</p>
 <p>Unlike <code class="docutils literal notranslate"><span class="pre">realpath</span></code> or <code class="docutils literal notranslate"><span class="pre">path</span> <span class="pre">resolve</span></code>, it does not make the paths absolute. It also does not resolve any symlinks. As such it can operate on non-existent paths.</p>
 <p>Because it operates on paths as strings and doesn’t resolve symlinks, it works sort of like <code class="docutils literal notranslate"><span class="pre">pwd</span> <span class="pre">-L</span></code> and <code class="docutils literal notranslate"><span class="pre">cd</span></code>. E.g. <code class="docutils literal notranslate"><span class="pre">path</span> <span class="pre">normalize</span> <span class="pre">link/..</span></code> will return <code class="docutils literal notranslate"><span class="pre">.</span></code>, just like <code class="docutils literal notranslate"><span class="pre">cd</span> <span class="pre">link;</span> <span class="pre">cd</span> <span class="pre">..</span></code> would return to the current directory. For a physical view of the filesystem, see <code class="docutils literal notranslate"><span class="pre">path</span> <span class="pre">resolve</span></code>.</p>
 <p>Leading “./” components are usually removed. But when a path starts with <code class="docutils literal notranslate"><span class="pre">-</span></code>, <code class="docutils literal notranslate"><span class="pre">path</span> <span class="pre">normalize</span></code> will add it instead to avoid confusion with options.</p>
@@ -422,7 +428,7 @@
 <span class="nv">    </span><span class="no">[-q</span><span class="w"> </span><span class="p">|</span><span class="w"> </span><span class="nf">--quiet]</span><span class="w"> </span><span class="no">EXTENSION</span><span class="w"> </span><span class="no">[PATH</span><span class="w"> </span><span class="no">...]</span>
 </pre></div>
 </div>
-<p><code class="docutils literal notranslate"><span class="pre">path</span> <span class="pre">change-extension</span></code> returns the given paths, with their extension changed to the given new extension. The extension is the part after (and including) the last “.”, unless that “.” followed a “/” or the basename is “.” or “..”, in which case there is no previous extension and the new one is simply added.</p>
+<p><code class="docutils literal notranslate"><span class="pre">path</span> <span class="pre">change-extension</span></code> returns the given paths, with their extension changed to the given new extension. The extension is the part after (and including) the last “.”, unless that “.” followed a “/” or the basename is “.” or “..”, in which case there is no previous extension and the new one is added.</p>
 <p>If the extension is empty, any previous extension is stripped, along with the “.”. This is, of course, the inverse of <code class="docutils literal notranslate"><span class="pre">path</span> <span class="pre">extension</span></code>.</p>
 <p>One leading dot on the extension is ignored, so “.mp3” and “mp3” are treated the same.</p>
 <p>It returns 0 if it was given any paths.</p>
@@ -436,19 +442,15 @@
 
 <span class="gp">&gt;_ </span><span class="nf">path</span><span class="w"> </span><span class="no">change-extension</span><span class="w"> </span><span class="s1">&#39;&#39;</span><span class="w"> </span><span class="no">../banana</span>
 <span class="go">../banana</span>
-<span class="go"># but status 1, because there was no extension.</span>
 
 <span class="gp">&gt;_ </span><span class="nf">path</span><span class="w"> </span><span class="no">change-extension</span><span class="w"> </span><span class="s1">&#39;&#39;</span><span class="w"> </span><span class="o">~</span><span class="no">/.config</span>
 <span class="go">/home/alfa/.config</span>
-<span class="go"># status 1</span>
 
 <span class="gp">&gt;_ </span><span class="nf">path</span><span class="w"> </span><span class="no">change-extension</span><span class="w"> </span><span class="s1">&#39;&#39;</span><span class="w"> </span><span class="o">~</span><span class="no">/.config.d</span>
 <span class="go">/home/alfa/.config</span>
-<span class="go"># status 0</span>
 
 <span class="gp">&gt;_ </span><span class="nf">path</span><span class="w"> </span><span class="no">change-extension</span><span class="w"> </span><span class="s1">&#39;&#39;</span><span class="w"> </span><span class="o">~</span><span class="no">/.config.</span>
 <span class="go">/home/alfa/.config</span>
-<span class="go"># status 0</span>
 </pre></div>
 </div>
 </section>
@@ -513,14 +515,14 @@
       </div> 
       <div class="clearer"></div>
     </div>  
-    <div class="related" role="navigation" aria-label="related navigation">
+    <div class="related" role="navigation" aria-label="Related">
       <h3>Navigation</h3>
       <ul>
     <li><img src="../_static/fish.png" alt=""
              style="width: 80px; height: 80px; vertical-align: middle; margin-top: -1px"/></li>
     <li><a href="https://fishshell.com/">fish-shell</a> &#187;</li>
     
-    <a href="../index.html">fish-shell 3.7.1 documentation</a> &#187;
+    <a href="../index.html">fish-shell 4.2.1 documentation</a> &#187;
     
 
           <li class="nav-item nav-item-1"><a href="../commands.html" >Commands</a> &#187;</li>
@@ -528,7 +530,7 @@
     <li class="right">
         
 
-    <div class="inline-search" style="display: none" role="search">
+    <div class="inline-search" role="search">
         <form class="inline-search" action="../search.html" method="get">
           <input placeholder="Quick search" type="text" name="q" />
           <input type="submit" value="Go" />
@@ -536,7 +538,6 @@
           <input type="hidden" name="area" value="default" />
         </form>
     </div>
-    <script type="text/javascript">$('.inline-search').show(0);</script>
     </li>
     
     <div id="old-docs-notice" style="display: none">
@@ -547,17 +548,17 @@
       </ul>
     </div>  
     <div class="footer">
-    &copy; Copyright 2023, fish-shell developers.
+    &copy; Copyright fish-shell developers.
     <br />
     <a href="https://github.com/fish-shell/fish-shell/issues">Found a bug</a>?
     <br />
 
-    Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 7.2.6.
+    Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 8.2.3.
     </div>
 </div>
 
 <script type="text/javascript">
- FISH_DOCS_VERSION = "3.7";
+ FISH_DOCS_VERSION = "4.2";
 
  function copy_to_clipboard(it) {
      // Find the pre tag we're interested in.
@@ -611,7 +612,6 @@
       }
   })();
 </script>
-<script defer type="text/javascript" src="/docs/shared/script.js"></script>
 
   </body>
 </html>

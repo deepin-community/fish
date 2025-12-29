@@ -1,7 +1,6 @@
 # name: Nim
 # author: Guilhem "Nim" Saurel − https://github.com/nim65s/dotfiles/
 
-
 function fish_prompt
     # This prompt shows:
     # - green lines if the last return command is OK, red otherwise
@@ -80,9 +79,6 @@ function fish_prompt
     _nim_prompt_wrapper $retc '' (date +%X)
 
     # Vi-mode
-    # The default mode prompt would be prefixed, which ruins our alignment.
-    function fish_mode_prompt
-    end
 
     if test "$fish_key_bindings" = fish_vi_key_bindings
         or test "$fish_key_bindings" = fish_hybrid_key_bindings
@@ -94,7 +90,6 @@ function fish_prompt
                 set mode (set_color --bold green)I
             case replace_one
                 set mode (set_color --bold green)R
-                echo '[R]'
             case replace
                 set mode (set_color --bold cyan)R
             case visual
@@ -104,12 +99,11 @@ function fish_prompt
         _nim_prompt_wrapper $retc '' $mode
     end
 
-
     # Virtual Environment
     set -q VIRTUAL_ENV_DISABLE_PROMPT
     or set -g VIRTUAL_ENV_DISABLE_PROMPT true
     set -q VIRTUAL_ENV
-    and _nim_prompt_wrapper $retc V (basename "$VIRTUAL_ENV")
+    and _nim_prompt_wrapper $retc V (path basename "$VIRTUAL_ENV")
 
     # git
     set -l prompt_git (fish_git_prompt '%s')
@@ -118,7 +112,7 @@ function fish_prompt
 
     # Battery status
     type -q acpi
-    and test (acpi -a 2> /dev/null | string match -r off)
+    and acpi -a 2>/dev/null | string match -rq off
     and _nim_prompt_wrapper $retc B (acpi -b | cut -d' ' -f 4-)
 
     # New line
@@ -140,4 +134,8 @@ function fish_prompt
     set_color -o red
     echo -n '$ '
     set_color normal
+end
+
+# The default mode prompt would be prefixed, which ruins our alignment.
+function fish_mode_prompt
 end

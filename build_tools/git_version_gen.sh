@@ -47,24 +47,24 @@ then
     # HACK: Git failed, so we keep the current version file.
     # This helps in case you built fish as a normal user
     # and then try to `sudo make install` it.
-    date +%s > ${OUTPUT_DIR}fish-build-version-witness.txt
+    date +%s > "${OUTPUT_DIR}"fish-build-version-witness.txt
     exit 0
 fi
 
 if test -r "$FBVF"
 then
-	VC=$(grep -v '^#' "$FBVF" | tr -d '"' | sed -e 's/^FISH_BUILD_VERSION=//')
+	VC=$(cat "$FBVF")
 else
 	VC="unset"
 fi
 
 # Maybe output the FBVF
-# It looks like FISH_BUILD_VERSION="2.7.1-621-ga2f065e6"
+# It looks like "2.7.1-621-ga2f065e6"
 test "$VN" = "$VC" || {
-	echo >&2 "FISH_BUILD_VERSION=$VN"
-	echo "FISH_BUILD_VERSION=\"$VN\"" >"$FBVF"
+	echo >&2 "$VN"
+	echo "$VN" >"$FBVF"
 }
 
 # Output the fish-build-version-witness.txt
 # See https://cmake.org/cmake/help/v3.4/policy/CMP0058.html
-date +%s > ${OUTPUT_DIR}fish-build-version-witness.txt
+date +%s > "${OUTPUT_DIR}"fish-build-version-witness.txt

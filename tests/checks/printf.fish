@@ -7,7 +7,7 @@ printf "%d %d\n" 1 2 3
 printf "Hello %d %i %f %F %g %G\n" 1 2 3 4 5 6
 # CHECK: Hello 1 2 3.000000 4.000000 5 6
 
-printf "%x %X %o %llu\n" 10 11 8 -1
+printf "%x %X %o %u\n" 10 11 8 -1
 # CHECK: a B 10 18446744073709551615
 
 # %a has OS-dependent output - see #1139
@@ -124,6 +124,15 @@ printf '%d\n' 0g
 echo $status
 # CHECK: 1
 
+printf '%f\n' 0x2
+# CHECK: 2.000000
+
+printf '%f\n' 0x2p3
+# CHECK: 16.000000
+
+printf '%.1f\n' -0X1.5P8
+# CHECK: -336.0
+
 # Test that we ignore options
 printf -a
 printf --foo
@@ -138,3 +147,28 @@ echo
 printf --help
 echo
 # CHECK: --help
+
+# This is how mc likes to encode the directory we should cd to.
+printf '%b\n' '\0057foo\0057bar\0057'
+# CHECK: /foo/bar/
+
+printf %18446744073709551616s
+# CHECKERR: Number out of range
+
+# Test non-ASCII behavior
+printf '|%3s|\n' 'ö'
+# CHECK: |  ö|
+printf '|%3s|\n' '🇺🇳'
+#CHECK: | 🇺🇳|
+printf '|%.3s|\n' '🇺🇳🇺🇳'
+#CHECK: |🇺🇳|
+printf '|%.3s|\n' 'a🇺🇳'
+#CHECK: |a🇺🇳|
+printf '|%.3s|\n' 'aa🇺🇳'
+#CHECK: |aa|
+printf '|%3.3s|\n' 'aa🇺🇳'
+#CHECK: | aa|
+printf '|%.1s|\n' '𒈙a'
+#CHECK: |𒈙|
+printf '|%3.3s|\n' '👨‍👨‍👧‍👧'
+#CHECK: | 👨‍👨‍👧‍👧|

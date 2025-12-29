@@ -1,3 +1,4 @@
+# localization: skip(private)
 function __fish_print_hostnames -d "Print a list of known hostnames"
     # This function used to primarily query `getent hosts` and only read from `/etc/hosts` if
     # `getent` did not exist or `getent hosts` failed, based off the (documented) assumption that
@@ -19,7 +20,7 @@ function __fish_print_hostnames -d "Print a list of known hostnames"
 
     # Print nfs servers from /etc/fstab
     if test -r /etc/fstab
-        string match -r '^\s*[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3]:|^[a-zA-Z\.]*:' </etc/fstab |
+        string match -r '^\s*[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}:|^[a-zA-Z\.]*:' </etc/fstab |
             string replace -r ':.*' ''
     end
 
@@ -38,7 +39,7 @@ function __fish_print_hostnames -d "Print a list of known hostnames"
     if functions -q ssh
         # Get alias and commandline options.
         set -l ssh_func_tokens (functions ssh | string match '*command ssh *' | string split ' ')
-        set -l ssh_command $ssh_func_tokens (commandline -cpo)
+        set -l ssh_command $ssh_func_tokens (commandline -cpx)
         # Extract ssh config path from last -F short option.
         if contains -- -F $ssh_command
             set -l ssh_config_path_is_next 1
@@ -76,6 +77,11 @@ function __fish_print_hostnames -d "Print a list of known hostnames"
 
             set -l new_paths
             for path in $paths
+                # while ssh_config is using brackets to resolve env, they should be removed
+                # example
+                # in ssh_config: ${SOME_PATH}
+                # in fish:       $SOME_PATH
+                set path (string replace -r '\${([^}]+)}' '$1' $path)
                 set -l expanded_path
                 # Scope "relative" paths in accordance to ssh path resolution
                 if string match -qrv '^[~/]' $path
@@ -111,7 +117,7 @@ function __fish_print_hostnames -d "Print a list of known hostnames"
             # Multiple names for a single host can be given separated by spaces, so just split it explicitly (#6698).
             string replace -rfi '^\s*Host\s+(\S.*?)\s*$' '$1' -- $contents | string split " " | string match -rv '[\*\?]'
             # Also extract known_host paths.
-            set known_hosts $known_hosts (string replace -rfi '.*KnownHostsFile\s*' '' -- $contents)
+            set known_hosts $known_hosts (string replace -rfi '.*KnownHostsFile\s*' '' -- $contents | string split " ")
         end
     end
 

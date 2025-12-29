@@ -1,4 +1,4 @@
-# RUN: %fish -C 'set -g fish %fish' %s
+# RUN: fish=%fish %fish %s
 #
 # Test function, loops, conditionals and some basic elements
 #
@@ -143,6 +143,11 @@ echo -e 'abc\121def'
 echo -e 'abc\1212def'
 #CHECK: abcQdef
 #CHECK: abcQ2def
+# Test octal overflow: \5555 = 555 octal = 365 decimal, wraps to 109 decimal (155 octal)
+# Followed by literal '5' character (065 octal)
+echo -ne '\5555' | display_bytes
+#CHECK: 0000000 155 065
+#CHECK: 0000002
 echo -e 'abc\cdef' # won't output a newline!
 #CHECK: abc
 echo ''
@@ -157,6 +162,9 @@ echo -e 'abc\x21def'
 echo -e 'abc\x211def'
 #CHECK: abc!def
 #CHECK: abc!1def
+
+echo \UDE01
+#CHECK: �
 
 # Comments allowed in between lines (#1987)
 echo before comment \
@@ -421,10 +429,6 @@ for foo in 1 2 3
 end
 
 # Check that these error correctly.
-# Simplify __fish_print_help, as it's noisy.
-function __fish_print_help
-    echo $argv[2..]
-end
 $dyn_break
 eval break
 #CHECKERR: break: Not inside of loop
@@ -433,6 +437,15 @@ $dyn_continue
 eval continue
 #CHECKERR: continue: Not inside of loop
 #CHECKERR: continue: Not inside of loop
+
+break -h
+#CHECKERR: Documentation for break
+break --help
+#CHECKERR: Documentation for break
+$dyn_break -h
+#CHECKERR: Documentation for break
+continue -h
+#CHECKERR: Documentation for continue
 
 # Test implicit cd. This should do nothing.
 ./
@@ -500,7 +513,7 @@ type --query cp
 echo $status
 #CHECK: 0
 
-jobs --query 0
+jobs --query 1
 echo $status
 #CHECK: 1
 

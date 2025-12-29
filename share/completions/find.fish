@@ -6,7 +6,6 @@ complete -c find -s P -d "Never follow symlinks"
 complete -c find -s L -o follow -d "Follow symlinks"
 complete -c find -s H -d "Don't follow symlinks (except for command line arguments)"
 
-
 # General options
 
 complete -c find -o daystart -d "Measure from the beginning of today rather than from 24 hours ago"
@@ -42,7 +41,7 @@ complete -c find -o empty -d "File is empty and is either a regular file or a di
 complete -c find -o executable -d "File is executable"
 complete -c find -o false -d "Always false"
 complete -c find -o fstype -d "File is on filesystem of specified type" -a "(__fish_print_filesystems)" -x
-complete -c find -o gid -d "Numeric group id of file" -x -a "(__fish_complete_group_ids)"
+complete -c find -o gid -d "Numeric group ID of file" -x -a "(__fish_complete_group_ids)"
 complete -c find -o group -d "Group name of file" -x -a "(__fish_complete_groups)"
 
 complete -c find -o ilname -d "File is symlink matching specified case insensitive pattern" -x
@@ -83,7 +82,6 @@ complete -c find -o user -d "File's owner" -x -a "(__fish_complete_users)"
 complete -c find -o xtype -d "Check type of file - in case of symlink, check the file that is not checked by -type" -x -a $type_comp
 complete -c find -o context -d "File's security context matches specified pattern" -x
 
-
 # Actions
 
 complete -c find -o delete -d "Delete selected files"
@@ -92,16 +90,15 @@ complete -c find -o execdir -d "Execute specified command for each located file,
 complete -c find -o fls -d "List file in ls -dils format, write to specified file" -F
 complete -c find -o fprint -d "Print full file names into specified file" -F
 complete -c find -o fprint0 -d "Print null separated full file names into specified file" -F
-complete -c find -o fprintf -d "Print formated data into specified file" -F
+complete -c find -o fprintf -d "Print formatted data into specified file" -F
 complete -c find -o ok -d "Execute specified command for each located file after asking user" -r
 complete -c find -o print -d "Print full file names"
 complete -c find -o okdir -d "Execute a command for each located file, in its directory, after asking" -r
 complete -c find -o print0 -d "Print null separated full file names"
-complete -c find -o printf -d "Print formated data" -x
+complete -c find -o printf -d "Print formatted data" -x
 complete -c find -o prune -d "Do not recurse unless -depth is specified"
 complete -c find -o quit -d "Exit at once"
 complete -c find -o ls -d "List file in ls -dils format" -r
-
 
 # Grouping
 

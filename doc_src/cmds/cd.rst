@@ -1,5 +1,3 @@
-.. _cmd-cd:
-
 cd - change directory
 =====================
 
@@ -12,6 +10,12 @@ Synopsis
 
 Description
 -----------
+
+.. only:: builder_man
+
+          NOTE: This page documents the fish builtin ``cd``.
+          To see the documentation on any non-fish versions, use ``command man cd``.
+
 ``cd`` changes the current working directory.
 
 If *DIRECTORY* is given, it will become the new directory. If no parameter is given, the :envvar:`HOME` environment variable will be used.

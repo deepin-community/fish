@@ -1,5 +1,3 @@
-.. _cmd-fish_git_prompt:
-
 fish_git_prompt - output git information for use in a prompt
 ============================================================
 
@@ -8,7 +6,7 @@ Synopsis
 
 .. synopsis::
 
-    fish_git_prompt
+    fish_git_prompt [FORMAT]
 
 ::
 
@@ -23,6 +21,8 @@ Description
 The ``fish_git_prompt`` function displays information about the current git repository, if any.
 
 `Git <https://git-scm.com>`_ must be installed.
+
+It is possible to modify the output format by passing an argument. The default value is ``" (%s)"``.
 
 There are numerous customization options, which can be controlled with git options or fish variables. git options, where available, take precedence over the fish variable with the same function. git options can be set on a per-repository or global basis. git options can be set with the ``git config`` command, while fish variables can be set as usual with the :doc:`set <set>` command.
 
@@ -108,7 +108,7 @@ Variables used with ``showupstream`` (also implied by informative status):
 
 - ``$__fish_git_prompt_char_upstream_ahead`` (>, ↑) - the character for the commits this repository is ahead of upstream
 - ``$__fish_git_prompt_char_upstream_behind`` (<, ↓) - the character for the commits this repository is behind upstream
-- ``$__fish_git_prompt_char_upstream_diverged`` (<>) - the symbol if this repository is both ahead and behind upstream
+- ``$__fish_git_prompt_char_upstream_diverged`` (<>, ↓↑) - the symbol if this repository is both ahead and behind upstream
 - ``$__fish_git_prompt_char_upstream_equal`` (=) - the symbol if this repo is equal to upstream
 - ``$__fish_git_prompt_char_upstream_prefix`` ('')
 - ``$__fish_git_prompt_color_upstream``

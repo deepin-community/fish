@@ -6,11 +6,10 @@ function __blender_echo_input_file_name
     # Find last argument ending in .blend (or .blend1, etc.)
     # This is because a Blender invocation can open multiple blend file
     # sequentially, so we need to find the last one up to this point.
-    set -l path (commandline -poc |
+    set -l path (commandline -pxc |
         string match -r '.*\\.blend[0-9]*$' |
         tail --lines=1)
-    # Using eval to expand ~ and variables specified on the commandline.
-    eval echo $path
+    echo $path
 end
 
 function __blender_list_scenes
@@ -78,13 +77,13 @@ complete -c blender -n 'not __blender_player' -o x -l use-extension -a '0\tfalse
 # Animation Playback Options:
 complete -c blender -n 'not __blender_player' -o a -d 'Run as animation player'
 
-complete -c blender -n '__blender_player' -o p -x -d 'Specify position and size'
-complete -c blender -n '__blender_player' -o m -d 'Read from disk (do not buffer)'
-complete -c blender -n '__blender_player' -o f -x -d 'Specify FPS to start with'
-complete -c blender -n '__blender_player' -o j -x -d 'Specify frame step'
-complete -c blender -n '__blender_player' -o s -x -d 'Specify start frame'
-complete -c blender -n '__blender_player' -o e -x -d 'Specify end frame'
-complete -c blender -n '__blender_player' -o c -x -d 'Memory in MB for cache'
+complete -c blender -n __blender_player -o p -x -d 'Specify position and size'
+complete -c blender -n __blender_player -o m -d 'Read from disk (do not buffer)'
+complete -c blender -n __blender_player -o f -x -d 'Specify FPS to start with'
+complete -c blender -n __blender_player -o j -x -d 'Specify frame step'
+complete -c blender -n __blender_player -o s -x -d 'Specify start frame'
+complete -c blender -n __blender_player -o e -x -d 'Specify end frame'
+complete -c blender -n __blender_player -o c -x -d 'Memory in MB for cache'
 
 # Window Options:
 complete -c blender -n 'not __blender_player' -o w -l window-border -d 'Show window borders'
@@ -128,7 +127,7 @@ complete -c blender -n 'not __blender_player' -l debug-memory -d 'Enable fully g
 complete -c blender -n 'not __blender_player' -l debug-jobs -d 'Enable time profiling for background jobs'
 complete -c blender -n 'not __blender_player' -l debug-python -d 'Enable debug messages for Python'
 complete -c blender -n 'not __blender_player' -l debug-depsgraph -d 'Enable all debug messages for dependency graph'
-complete -c blender -n 'not __blender_player' -l debug-depsgraph-eval -d 'Enable debug messages for dependency graph related on evalution'
+complete -c blender -n 'not __blender_player' -l debug-depsgraph-eval -d 'Enable debug messages for dependency graph related on evaluation'
 complete -c blender -n 'not __blender_player' -l debug-depsgraph-build -d 'Enable debug messages for dependency graph related on its construction'
 complete -c blender -n 'not __blender_player' -l debug-depsgraph-tag -d 'Enable debug messages for dependency graph related on tagging'
 complete -c blender -n 'not __blender_player' -l debug-depsgraph-no-threads -d 'Enable single treaded evaluation for dependency graph'
@@ -137,7 +136,7 @@ complete -c blender -n 'not __blender_player' -l debug-depsgraph-pretty -d 'Enab
 complete -c blender -n 'not __blender_player' -l debug-depsgraph-uuid -d 'Enable virefication for dependency graph session-wide identifiers'
 complete -c blender -n 'not __blender_player' -l debug-ghost -d 'Enable debug messages for Ghost'
 complete -c blender -n 'not __blender_player' -l debug-wintab -d 'Enable debug messages for Wintab'
-complete -c blender -n 'not __blender_player' -l debug-gpu -d 'Enable GPU debug context and infromation for OpenGL'
+complete -c blender -n 'not __blender_player' -l debug-gpu -d 'Enable GPU debug context and information for OpenGL'
 complete -c blender -n 'not __blender_player' -l debug-gpu-force-workarounds -d 'Enable workarounds for typical GPU issues'
 complete -c blender -n 'not __blender_player' -l debug-wm -d 'Enable debug messages for window manager'
 complete -c blender -n 'not __blender_player' -l debug-xr -d 'Enable debug messages for virtual reality contexts'

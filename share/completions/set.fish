@@ -7,7 +7,7 @@
 #
 
 function __fish_set_is_color -a foreground background -d 'Test if We are specifying a color value for the prompt'
-    set -l cmd (commandline -poc)
+    set -l cmd (commandline -pxc)
     set -e cmd[1]
     for i in $cmd
         switch $i
@@ -28,12 +28,13 @@ function __fish_set_is_color -a foreground background -d 'Test if We are specify
 end
 
 function __fish_set_is_locale -d 'Test if We are specifying a locale value for the prompt'
-    set -l cmd (commandline -poc)
+    set -l cmd (commandline -pxc)
     set -e cmd[1]
+    set -l locale_vars (__fish_locale_vars)
     for i in $cmd
         switch $i
 
-            case LANG LC_ALL LC_COLLATE LC_CTYPE LC_MESSAGES LC_MONETARY LC_NUMERIC LC_TIME
+            case $locale_vars
                 return 0
 
             case '-*'
@@ -53,17 +54,22 @@ function __fish_complete_special_vars
         FISH_DEBUG "list of enabled debug categories" \
         FISH_DEBUG_OUTPUT "debug output path" \
         umask "current file creation mask" \
-        fish_handle_reflow "if fish should repaint prompt when the term resizes" \
-        fish_trace "print cmds as they execute, like set -x" \
-        fish_emoji_width "cols wide fish assumes emoji render as" \
-        fish_key_bindings "name of function that sets binds" \
-        fish_autosuggestion_enabled "turns autosuggestions on or off" \
         fish_ambiguous_width "affects computed width of east asian chars" \
+        fish_autosuggestion_enabled "set to 0 to turn autosuggestions off" \
+        fish_cursor_end_mode "set to 'inclusive' to disallow moving the cursor beyond the command line end" \
+        fish_cursor_selection_mode "set to 'inclusive' if selections should include the cursor" \
+        fish_emoji_width "cols wide fish assumes emoji render as" \
         fish_escape_delay_ms "How long fish waits to distinguish escape and alt" \
         fish_greeting "The message to display at start (also a function)" \
+        fish_handle_reflow "if fish should repaint prompt when the term resizes" \
         fish_history "The session id to store history under" \
+        fish_key_bindings "name of function that sets binds" \
+        fish_term24bit "set to 0 to use the color palette instead of true-colors" \
+        fish_term256 "set to 0 to use the 16-color palette instead of 256" \
         fish_trace "Enables execution tracing (if set to non-empty value)" \
+        fish_transient_prompt "set to 1 to re-run prompts before pushing them to scrollback" \
         fish_user_paths "A list of dirs to prepend to PATH"
+
 end
 
 #
@@ -89,37 +95,46 @@ complete -c set -n "__fish_is_nth_token 1" -s p -l prepend -d "Prepend value to 
 complete -c set -n "__fish_is_nth_token 1" -s S -l show -d "Show variable"
 complete -c set -n "__fish_is_nth_token 1" -l path -d "Make variable as a path variable"
 complete -c set -n "__fish_is_nth_token 1" -l unpath -d "Make variable not as a path variable"
+complete -c set -n "__fish_is_nth_token 1" -l no-event -d "Don't emit an event"
 
 #TODO: add CPP code to generate list of read-only variables and exclude them from the following completions
 
 # Complete using preexisting variable names
-complete -c set -n '__fish_is_nth_token 1; and not __fish_seen_argument -s e -l erase; and not __fish_seen_argument -s l -s g -s U -l local -l global -l universal' -x -a "(set -l | string match -rv '^__' | string replace ' ' \t'Local Variable: ')"
-complete -c set -n '__fish_is_nth_token 1; and not __fish_seen_argument -s e -l erase; and not __fish_seen_argument -s l -s g -s U -l local -l global -l universal' -x -a "(set -g | string match -rv '^__' | string replace ' ' \t'Global Variable: ')"
-complete -c set -n '__fish_is_nth_token 1; and not __fish_seen_argument -s e -l erase; and not __fish_seen_argument -s l -s g -s U -l local -l global -l universal' -x -a "(set -U | string match -rv '^__' | string replace ' ' \t'Universal Variable: ')"
+set -l maybe_filter_private_vars '
+    string match (
+        if string match -qr -- "^_" "$(commandline -t)": then
+            echo "*"
+        else
+            echo -rv
+            echo "^__"
+        end
+    )'
+# We do not *filter* these by the given scope because you might want to set e.g. a global to shadow a universal.
+complete -c set -n '__fish_is_nth_token 1; and not __fish_seen_argument -s e -l erase' -x -a "(set -U | $maybe_filter_private_vars | string replace ' ' \t'Universal Variable: ')"
+complete -c set -n '__fish_is_nth_token 1; and not __fish_seen_argument -s e -l erase' -x -a "(set -g | $maybe_filter_private_vars | string replace -r '^((?:history|fish_killring) ).*' '\$1' | string replace ' ' \t'Global Variable: ')"
+complete -c set -n '__fish_is_nth_token 1; and not __fish_seen_argument -s e -l erase' -x -a "(set -l | $maybe_filter_private_vars | string replace ' ' \t'Local Variable: ')"
 # Complete some fish configuration variables even if they aren't set.
 complete -c set -n '__fish_is_nth_token 1; and not __fish_seen_argument -s e -l erase' -x -a "(__fish_complete_special_vars)"
-# Complete scope-specific variables
-complete -c set -n '__fish_is_nth_token 1; and __fish_seen_argument -s l -l local' -x -a "(set -l | string replace ' ' \t'Local Variable: ')"
-complete -c set -n '__fish_is_nth_token 1; and __fish_seen_argument -s g -l global' -x -a "(set -g | string replace ' ' \t'Global Variable: ')"
-complete -c set -n '__fish_is_nth_token 1; and __fish_seen_argument -s U -l universal' -x -a "(set -U | string replace ' ' \t'Universal Variable: ')"
 
 # Complete using preexisting variable names for `set --erase`
+complete -c set -n '__fish_seen_argument -s e -l erase; and not __fish_seen_argument -s l -s U -s g -l local -l global -l Universal' -f -a "(set -U | string replace ' ' \tUniversal\ Variable:\ )"
 complete -c set -n '__fish_seen_argument -s e -l erase; and not __fish_seen_argument -s l -s U -s g -l local -l global -l Universal' -f -a "(set -g | string replace ' ' \tGlobal\ Variable:\ )"
 complete -c set -n '__fish_seen_argument -s e -l erase; and not __fish_seen_argument -s l -s U -s g -l local -l global -l Universal' -f -a "(set -l | string replace ' ' \tLocal\ Variable:\ )"
-complete -c set -n '__fish_seen_argument -s e -l erase; and not __fish_seen_argument -s l -s U -s g -l local -l global -l Universal' -f -a "(set -U | string replace ' ' \tUniversal\ Variable:\ )"
 # Complete scope-specific variables for `set --erase`
-complete -c set -n '__fish_seen_argument -s e -l erase; and __fish_seen_argument -s g -l global' -f -a "(set -g | string replace ' ' \t'Global Variable: ')"
 complete -c set -n '__fish_seen_argument -s e -l erase; and __fish_seen_argument -s U -l universal' -f -a "(set -U | string replace ' ' \t'Universal Variable: ')"
+complete -c set -n '__fish_seen_argument -s e -l erase; and __fish_seen_argument -s g -l global' -f -a "(set -g | string replace ' ' \t'Global Variable: ')"
 complete -c set -n '__fish_seen_argument -s e -l erase; and __fish_seen_argument -s l -l local' -f -a "(set -l | string replace ' ' \t'Local Variable: ')"
 
 # Color completions
 complete -c set -n '__fish_set_is_color true false' -x -a '(set_color --print-colors)' -d 'text color'
 complete -c set -n '__fish_set_is_color false true' -a '--background=(set_color --print-colors)'
+complete -c set -n '__fish_set_is_color false true' -a '--underline-color=(set_color --print-colors)'
 complete -c set -n '__fish_set_is_color true false' -a --bold -x
 complete -c set -n '__fish_set_is_color true false' -a --dim -x
 complete -c set -n '__fish_set_is_color true false' -a --italics -x
 complete -c set -n '__fish_set_is_color true true' -a --reverse -x
 complete -c set -n '__fish_set_is_color true false' -a --underline -x
+complete -c set -n '__fish_set_is_color true false' -a--underline={double,curly,dotted,dashed} -x
 
 # Locale completions
 complete -c set -n '__fish_set_is_locale; and not __fish_seen_argument -s e -l erase' -x -a '(command -sq locale; and locale -a)' -d Locale

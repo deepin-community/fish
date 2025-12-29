@@ -1,4 +1,4 @@
-#RUN: %fish -C 'set -l fish %fish' %s
+#RUN: fish=%fish %fish %s
 time sleep 0
 
 # These are a tad awkward because it picks the correct unit and adapts whitespace.
@@ -37,6 +37,18 @@ not time true
 #CHECKERR: {{.*}}
 #CHECKERR: {{.*}}
 #CHECKERR: {{.*}}
+
+not time a=b true
+#CHECKERR: ___{{.*}}
+#CHECKERR: {{.*}}
+#CHECKERR: {{.*}}
+#CHECKERR: {{.*}}
+
+# Currently illegal syntax. Same in zsh. POSIX shells call the external command "time" here.
+a=b time true
+#CHECKERR: Documentation for time
+not a=b time true
+#CHECKERR: Documentation for time
 
 $fish -c 'time true&'
 #CHECKERR: fish: {{.*}}

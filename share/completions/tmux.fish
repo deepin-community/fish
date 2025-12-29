@@ -1,24 +1,111 @@
 function __fish_tmux_sessions -d 'available sessions'
-    tmux list-sessions -F "#S	#{session_windows} windows created: #{session_created_string} [#{session_width}x#{session_height}]#{session_attached}" | sed 's/0$//;s/1$/ (attached)/' 2>/dev/null
+    tmux list-sessions -F "#S"\t"#{session_windows} windows created: #{session_created_string} [#{session_width}x#{session_height}]#{session_attached}" | sed 's/0$//;s/1$/ (attached)/' 2>/dev/null
 end
 
 function __fish_tmux_clients -d 'connected clients'
-    tmux list-clients -F "#{client_tty}	#S: Created: #{client_created_string} [#{client_width}x#{client_height} #{client_termname}]" 2>/dev/null
+    tmux list-clients -F "#{client_tty}"\t"#S: Created: #{client_created_string} [#{client_width}x#{client_height} #{client_termname}]" 2>/dev/null
 end
 
-function __fish_tmux_panes -d 'window panes'
-    #fully qualified pane names
-    tmux list-panes -F '#S:#W.#P	session:window.pane' 2>/dev/null
+# These are meant to be used with `complete --keep-order`
+function __fish_tmux_panes -d "list tmux panes in the current session"
+    set -l pane_details_format (
+        string join '' \
+        '[#W] #{=/15/...:pane_title}' \
+        '#{?pane_marked, <marked>,}' \
+        '#{?window_active, <active #{?pane_active,pane,win.}>,}'
+        # TODO: Could show <zoomed>/<invisible> for active/inactive panes in a zoomed window
+    )
+    # panes by themselves (current window)
+    # For pane commands, `tmux` understands an integer to mean "pane
+    # with this index in the current window"
+    tmux list-panes -F "#P"\t"#D $pane_details_format" 2>/dev/null
 
-    #panes by themselves
-    tmux list-panes -F '#P	pane' 2>/dev/null
+    # window.pane index
+    tmux list-panes -s -F "#I.#P"\t"#D $pane_details_format" 2>/dev/null
 
-    #windows by themselves
-    tmux list-panes -F '#W	window' 2>/dev/null
+    # unique pane id
+    # These ids start with `%` and do not change when panes are reordered,
+    # nor when they are moved to another window or session. We show them
+    # for context in above completions, and support completing them.
+    tmux list-panes -s -F "#D"\t"#I.#P $pane_details_format" | sort -n -k 1.2 2>/dev/null
+
+    # We could also add the panes in the `session:window.pane` syntax,
+    # but there's not reason to use it in the common case where the
+    # person is interested in the current tmux session (or there is only
+    # one tmux session). This can also be confusing when "sesssion groups"
+    # are used
+end
+
+function __fish_tmux_buffers -d buffers
+    tmux list-buffers -F '#{buffer_name}'\t'#{buffer_sample}' 2>/dev/null
+end
+
+# Meant to be used with `complete --keep-order`, since tmux follows numerical order
+function __fish_tmux_windows -d "list tmux windows in the current session"
+    # Using the same notation as tmux's default status bar. Could use <marked>, <active>, etc.
+    # Unlike tmux's statusbar , we add a space for readability
+    set -l window_flags '#{?window_active, *,}#{?window_marked_flag, M,}#{?window_zoomed_flag, Z,}'
+
+    # In window context, an integer means a window index in this session
+    tmux list-windows -F "#I"\t"#W$window_flags" 2>/dev/null
+
+    # Showing windows in other sessions can be confusing e.g. if there
+    # are session groups. So, we assume the user is interested in the
+    # current (or only) session.
 end
 
 #don't allow dirs in the completion list...
 complete -c tmux -x
+
+###############  Begin: Dynamic Completions Using `tmux list-commands` ###############
+
+# The dynamic completions are exhaustive. The manual completions below override
+# them with better-documented completions and custom completions for some
+# arguments, e.g. for target panes, but only have partial coverage.
+function __fish_tmux_parse_lscm_usage
+    set -l lscm (tmux list-commands -F "#{command_list_name} #{command_list_alias}"\t"#{command_list_usage}" 2>/dev/null)
+    or return
+
+    for cmd_tab_usage in $lscm
+        set -l split_command (string split --max 2 \t -- $cmd_tab_usage)
+        set -l cmdnames $split_command[1]
+        set -l usage $split_command[2]
+
+        complete -c tmux -n __fish_use_subcommand -a "$cmdnames"
+
+        # $usage has the form '[-ABCD] [-L|-S|-U] [-e arg-name] [positional-arg-name]'
+        for item in (string match -ag --regex '\[([^\]]+)\]' $usage)
+            if not set -l item (string trim -l -c - -- $item)
+                continue
+            end
+            if set -l split_item (string split -n --max 2 " " -- "$item")
+                # The option should always have length 1 by tmux convention,
+                # but we double-check to avoid syntax errors.
+                if [ "$(string length $split_item[1])" = 1 ]
+                    complete -c tmux -xs $split_item[1] -n "__fish_seen_subcommand_from $cmdnames" -d "$split_item[2]"
+                end
+            else
+                for char in (string split '' -- "$item")
+                    if string match -q -r '\||-' -- $char
+                        # TODO: Actually treat exclusive args, [-L|-S|-U], as exclusive
+                        # For now, we just ignore the `-`s and `|`s
+                        continue
+                    end
+                    complete -c tmux -n "__fish_seen_subcommand_from $cmdnames" -s $char
+                end
+            end
+        end
+    end
+end
+
+__fish_tmux_parse_lscm_usage
+functions -e __fish_tmux_parse_lscm_usage
+
+# Completions for `tmux list-commands` itself
+set -l all_commands (tmux list-commands -F "#{command_list_name} #{command_list_alias}" 2>/dev/null)
+and complete -c tmux -n "__fish_seen_subcommand_from list-commands lscm" -x -a "$all_commands"
+
+###############  End:   Dynamic Completions Using `tmux list-commands` ###############
 
 ###############  Begin: Front  Flags ###############
 #these do not require parameters
@@ -94,6 +181,8 @@ complete -c tmux -n __fish_use_subcommand -a $rename -d 'rename session'
 complete -c tmux -n __fish_use_subcommand -a $showmsgs -d 'save msgs in status bar in per-client msg log'
 
 complete -c tmux -n __fish_use_subcommand -a $source -d 'execute commands from path'
+complete -c tmux -n "__fish_seen_subcommand_from $source" -F
+
 complete -c tmux -n __fish_use_subcommand -a $start -d 'start tmux server if not running; do not create a session'
 
 complete -c tmux -n __fish_use_subcommand -a $suspendc -d 'send SIGTSTP signal to client (tty stop)'
@@ -113,14 +202,183 @@ complete -c tmux -xs t -n "__fish_seen_subcommand_from $detach $lockc $refresh $
 complete -c tmux -xs c -n "__fish_seen_subcommand_from $switchc" -a '(__fish_tmux_clients)' -d target-client
 
 #commands with the -F format flag
-complete -c tmux -n "__fish_seen_subcommand_from $lsc $ls" -rs F -d 'format string'
+complete -c tmux -n "__fish_seen_subcommand_from $lsc $ls" -xs F -d 'format string'
+
+#commands that take shell commands
+complete -c tmux -x -n "__fish_seen_subcommand_from $new " -a '(__fish_complete_subcommand --fcs-skip=2)'
 
 ###############  End: Clients and Sessions ###############
 
 ###############  Begin: Windows and Panes ###############
-#TODO - these commands are not currently implemented.
-#there is a section in the tmux man page that has the same title as this section
-#use the "Clients and Sessions" code as an example when implementing this
+
+set -l breakp "break-pane breakp"
+set -l capturep "capture-pane capturep"
+set -l chooseclient choose-client
+set -l choosetree choose-tree
+set -l customizemode customize-mode
+set -l displayp "display-panes displayp"
+set -l findw "find-window findw"
+set -l joinp "join-pane joinp move-pane movep"
+set -l killp "kill-pane killp"
+set -l killw "kill-window killw"
+set -l lastp "last-pane lastp"
+set -l lastw "last-window lastw"
+set -l linkw "link-window linkw"
+set -l lsp "list-panes lsp"
+set -l lsw "list-windows lsw"
+set -l movew "move-window movew"
+set -l neww "new-window neww"
+set -l nextl "next-layout nextl"
+set -l next "next-window next"
+set -l pipep "pipe-pane pipep"
+set -l prevl "previous-layout prevl"
+set -l prev "previous-window prev"
+set -l renamew "rename-window renamew"
+set -l resizep "resize-pane resizep"
+set -l resizew "resize-window resizew"
+set -l respawnp "respawn-pane respawnp"
+set -l respawnw "respawn-window respawnw"
+set -l rotatew "rotate-window rotatew"
+set -l selectl "select-layout selectl"
+set -l selectp "select-pane selectp"
+set -l selectw "select-window selectw"
+set -l splitw "split-window splitw"
+set -l swapp "swap-pane swapp"
+set -l swapw "swap-window swapw"
+set -l unlinkw "unlink-window unlinkw"
+
+complete -c tmux -n __fish_use_subcommand -a $breakp -d 'break pane off into a new window'
+
+complete -c tmux -n __fish_use_subcommand -a $capturep -d 'capture contents of a pane into a buffer'
+complete -c tmux -n "__fish_seen_subcommand_from $capturep" -xs a -d 'capture alternate screen'
+complete -c tmux -n "__fish_seen_subcommand_from $capturep" -xs p -d 'output to stdout'
+complete -c tmux -n "__fish_seen_subcommand_from $capturep" -xs e -d 'include color escapes'
+complete -c tmux -n "__fish_seen_subcommand_from $capturep" -xs C -d 'escape non-printable chars'
+
+complete -c tmux -n __fish_use_subcommand -a $chooseclient -d 'interactively choose client'
+complete -c tmux -n __fish_use_subcommand -a $choosetree -d 'interactively choose session/window/pane'
+complete -c tmux -n __fish_use_subcommand -a $customizemode -d 'interactively customize settings'
+complete -c tmux -n __fish_use_subcommand -a $displayp -d 'display a visible indicator for each pane'
+complete -c tmux -n __fish_use_subcommand -a $findw -d 'interactively choose window matching pattern'
+
+complete -c tmux -n __fish_use_subcommand -a $joinp -d 'split destination pane and move source pane into one of the halves'
+# $joinp takes a subset of $splitw arguments
+complete -c tmux -n "__fish_seen_subcommand_from $joinp $splitw" -xs b -d 'before target'
+complete -c tmux -n "__fish_seen_subcommand_from $joinp $splitw" -xs h -d horizontal
+complete -c tmux -n "__fish_seen_subcommand_from $joinp $splitw" -xs v -d vertical
+complete -c tmux -n "__fish_seen_subcommand_from $joinp $splitw" -xs l -d 'size in lines/cols'
+complete -c tmux -n "__fish_seen_subcommand_from $joinp $splitw" -xs f -d 'full height/width'
+
+complete -c tmux -n __fish_use_subcommand -a $killp -d 'destroy a pane'
+complete -c tmux -n __fish_use_subcommand -a $killw -d 'destroy a window'
+complete -c tmux -n __fish_use_subcommand -a $lastp -d 'select the previously selected pane'
+complete -c tmux -n __fish_use_subcommand -a $lastw -d 'select the previously selected window'
+complete -c tmux -n __fish_use_subcommand -a $linkw -d 'link source window to destination window'
+
+complete -c tmux -n __fish_use_subcommand -a $lsp -d 'list panes'
+complete -c tmux -n "__fish_seen_subcommand_from $lsp" -xs s -d 'all in session'
+
+complete -c tmux -n __fish_use_subcommand -a $lsw -d 'list windows'
+complete -c tmux -n __fish_use_subcommand -a $movew -d 'move window'
+
+complete -c tmux -n __fish_use_subcommand -a $neww -d 'create a new window'
+complete -c tmux -n "__fish_seen_subcommand_from $neww" -xs k -d 'replace if exists'
+complete -c tmux -n "__fish_seen_subcommand_from $neww" -xs S -d 'select if exists'
+
+complete -c tmux -n __fish_use_subcommand -a $nextl -d 'rearrange panes in a window according to the next layout'
+complete -c tmux -n __fish_use_subcommand -a $next -d 'move to the next window in the session'
+complete -c tmux -n __fish_use_subcommand -a $pipep -d 'pipe output from pane to a shell command'
+complete -c tmux -n __fish_use_subcommand -a $prevl -d 'rearrange panes in a window according to the previous layout'
+complete -c tmux -n __fish_use_subcommand -a $prev -d 'move to the previous window in the session'
+complete -c tmux -n __fish_use_subcommand -a $renamew -d 'rename a window'
+
+complete -c tmux -n __fish_use_subcommand -a $resizep -d 'resize a pane'
+complete -c tmux -n "__fish_seen_subcommand_from $resizep" -xs M -d 'begin mouse resize'
+complete -c tmux -n "__fish_seen_subcommand_from $resizep" -xs T -d 'trim below cursor'
+
+complete -c tmux -n __fish_use_subcommand -a $resizew -d 'resize a window'
+complete -c tmux -n __fish_use_subcommand -a $respawnp -d 'reactivate a pane where a command exited'
+complete -c tmux -n __fish_use_subcommand -a $respawnw -d 'reactivate a window where a command exited'
+complete -c tmux -n __fish_use_subcommand -a $rotatew -d 'rotate panes within a window'
+
+complete -c tmux -n __fish_use_subcommand -a $selectl -d 'rearrange panes according to a given layout'
+set -l layouts 'even-horizontal even-vertical main-horizontal main-horizontal-mirrored main-vertical main-vertical-mirrored tiled'
+complete -c tmux -n "__fish_seen_subcommand_from $selectl" -x -a "$layouts" -d 'predefined layout'
+
+complete -c tmux -n __fish_use_subcommand -a $selectp -d 'activate specific pane'
+complete -c tmux -n "__fish_seen_subcommand_from $selectp" -xs d -d 'disable input'
+complete -c tmux -n "__fish_seen_subcommand_from $selectp" -xs e -d 'enable input'
+complete -c tmux -n "__fish_seen_subcommand_from $selectp" -xs l -d 'previously selected'
+complete -c tmux -n "__fish_seen_subcommand_from $selectp" -xs m -d mark
+complete -c tmux -n "__fish_seen_subcommand_from $selectp" -xs M -d unmark
+
+complete -c tmux -n __fish_use_subcommand -a $selectw -d 'activate specific window'
+complete -c tmux -n "__fish_seen_subcommand_from $selectw" -xs l -d 'previously selected'
+complete -c tmux -n "__fish_seen_subcommand_from $selectw" -xs p -d previous
+complete -c tmux -n "__fish_seen_subcommand_from $selectw" -xs n -d next
+
+complete -c tmux -n __fish_use_subcommand -a $splitw -d 'create a new pane by splitting target-pane'
+# See also $joinp's arguments
+complete -c tmux -n "__fish_seen_subcommand_from $splitw" -xs I -d 'show stdin contents'
+
+complete -c tmux -n __fish_use_subcommand -a $swapp -d 'swap two panes'
+complete -c tmux -n __fish_use_subcommand -a $swapw -d 'swap two windows'
+complete -c tmux -n __fish_use_subcommand -a $unlinkw -d 'unlink target-window'
+
+## commands with pane flag
+complete -c tmux -n "__fish_seen_subcommand_from $breakp $joinp $swapp" -xs s --keep-order -a '(__fish_tmux_panes)' -d 'source pane'
+complete -c tmux -n "__fish_seen_subcommand_from $capturep $chooseclient $choosetree $customizemode $findw" -xs t --keep-order -a '(__fish_tmux_panes)' -d 'target pane'
+complete -c tmux -n "__fish_seen_subcommand_from $killp $pipep $resizep $respawnp $selectl $selectp $splitw" -xs t --keep-order -a '(__fish_tmux_panes)' -d 'target pane'
+# Unclear if there's a meaningful difference between "target pane" and "destination pane", but tmux makes the distinction
+complete -c tmux -n "__fish_seen_subcommand_from $joinp $swapp" -xs t --keep-order -a '(__fish_tmux_panes)' -d 'destination pane'
+
+## commands with window flag
+complete -c tmux -n "__fish_seen_subcommand_from $linkw $movew $swapw" \
+    --keep-order -a '(__fish_tmux_windows)' -xs s -d 'source window'
+complete -c tmux -n "__fish_seen_subcommand_from $breakp $linkw $movew $neww $swapw" \
+    --keep-order -a '(__fish_tmux_windows)' -xs t -d 'destination window'
+complete -c tmux -n "__fish_seen_subcommand_from $killw $lastp $nextl $prevl $renamew" \
+    --keep-order -a '(__fish_tmux_windows)' -xs t -d 'target window'
+complete -c tmux -n "__fish_seen_subcommand_from $resizew $reswpawnw $rotatew $selectw $unlinkw" \
+    --keep-order -a '(__fish_tmux_windows)' -xs t -d 'target window'
+
+## commands with session flag
+complete -c tmux -n "__fish_seen_subcommand_from $lastw $lsw $next $prev" -xs t -a '(__fish_tmux_sessions)' -d 'target session'
+
+## commands with the -F format flag
+complete -c tmux -n "__fish_seen_subcommand_from $breakp $lsp $lsw $neww $chooseclient $choosetree" -xs F -d 'format string'
+
+## commands with -s/-t flags that are not panes/sessions/windows  (nice completion not yet implemented)
+complete -c tmux -n "__fish_seen_subcommand_from $displayp" -xs t -d 'target client'
+complete -c tmux -n "__fish_seen_subcommand_from $lsp" -xs t -d target
+
+#commands that take shell commands
+complete -c tmux -x -n "__fish_seen_subcommand_from $neww $pipep $respawnp $respawnw $splitw" \
+    -a '(__fish_complete_subcommand --fcs-skip=2)'
+
+# Common boolean flags. TODO: -P for "print info", -Z for "zoom"
+complete -c tmux -n "__fish_seen_subcommand_from $breakp $joinp $linkw $neww $movew $splitw $swapp $swapp" -xs d -d 'do not activate'
+
+set -l updownleftright "$resizep $resizew $selectp "
+complete -c tmux -n "__fish_seen_subcommand_from $updownleftright" -xs D -d down
+complete -c tmux -n "__fish_seen_subcommand_from $updownleftright" -xs U -d up
+complete -c tmux -n "__fish_seen_subcommand_from $updownleftright" -xs L -d left
+complete -c tmux -n "__fish_seen_subcommand_from $updownleftright" -xs R -d right
+
+set -l before_after "$breakp $linkw $movew $neww "
+complete -c tmux -n "__fish_seen_subcommand_from $before_after" -xs a -d after
+complete -c tmux -n "__fish_seen_subcommand_from $before_after" -xs b -d before
+
+# Boolean flags, ct'd. Unclear why these are not -a/-b for after/before
+set -l updownnextprev "$rotatew $swapp "
+complete -c tmux -n "__fish_seen_subcommand_from $updownnextprev" -xs D -d down/next
+complete -c tmux -n "__fish_seen_subcommand_from $updownnextprev" -xs U -d up/prev
+
+# Boolean flags, ct'd. When `-a` does not mean "after"
+complete -c tmux -n "__fish_seen_subcommand_from $lsp $lsw" -xs a -d 'all on this server'
+complete -c tmux -n "__fish_seen_subcommand_from $killp $killw" -xs a -d 'all except chosen'
+complete -c tmux -n "__fish_seen_subcommand_from $prev $next" -xs a -d 'with alert'
+
 ###############  End:   Windows and Panes ###############
 
 ###############  Begin: Key Bindings ###############
@@ -130,30 +388,35 @@ set -l send 'send-keys send'
 set -l sendprefix send-prefix
 set -l unbind 'unbind-key unbind'
 
-set -l key_table 'vi-edit emacs-edit vi-choice emacs-choice vi-copy emacs-copy'
-
 complete -c tmux -n __fish_use_subcommand -a $bind -d 'bind key to command'
 complete -c tmux -n "__fish_seen_subcommand_from $bind" -s c -d 'bind for command mode instead of normal mode'
 complete -c tmux -n "__fish_seen_subcommand_from $bind" -s n -d 'make the binding work without using a prefix key'
 complete -c tmux -n "__fish_seen_subcommand_from $bind" -s r -d 'key may repeat'
-complete -c tmux -n "__fish_seen_subcommand_from $bind" -xs t -d 'choose key table for binding' -xa "$key_table"
 
 complete -c tmux -n __fish_use_subcommand -a $lsk -d 'list all key bindings'
-complete -c tmux -n "__fish_seen_subcommand_from $lsk" -s t -d 'key table' -xa "$key_table"
 
-complete -c tmux -n __fish_use_subcommand -a $send -d 'list all key bindings'
+complete -c tmux -n __fish_use_subcommand -a $send -d 'send key or event'
 complete -c tmux -n "__fish_seen_subcommand_from $send" -s R -d 'reset terminal state'
-complete -c tmux -n "__fish_seen_subcommand_from $send" -xs t -a '(__fish_tmux_panes)' -d 'target pane'
+# TODO: Could list all possible copy mode commands
+complete -c tmux -n "__fish_seen_subcommand_from $send" -s X -d 'copy mode command'
+complete -c tmux -n "__fish_seen_subcommand_from $send" -s l -d 'literal chars'
+complete -c tmux -n "__fish_seen_subcommand_from $send" -s H -d 'hex-encoded chars'
+complete -c tmux -n "__fish_seen_subcommand_from $send" -xs t --keep-order -a '(__fish_tmux_panes)' -d 'target pane'
 
 complete -c tmux -n __fish_use_subcommand -a $sendprefix -d 'send the prefix key'
 complete -c tmux -n "__fish_seen_subcommand_from $sendprefix" -s 2 -d 'use secondary prefix'
-complete -c tmux -n "__fish_seen_subcommand_from $sendprefix" -xs t -a '(__fish_tmux_panes)' -d 'target pane'
+complete -c tmux -n "__fish_seen_subcommand_from $sendprefix" -xs t --keep-order -a '(__fish_tmux_panes)' -d 'target pane'
 
 complete -c tmux -n __fish_use_subcommand -a $unbind -d 'unbind the command bound to key'
 complete -c tmux -n "__fish_seen_subcommand_from $unbind" -s a -d 'remove all key bindings'
 complete -c tmux -n "__fish_seen_subcommand_from $unbind" -s c -d 'binding for command mode'
 complete -c tmux -n "__fish_seen_subcommand_from $unbind" -s n -d 'command bound to key without a prefix (if any) removed'
-complete -c tmux -n "__fish_seen_subcommand_from $unbind" -xs t -d 'key table' -xa "$key_table"
+
+# key table commands
+# TODO: Could parse output of `tmux lsk` to get a dynamic list that includes any user key tables
+set -l key_table 'copy-mode copy-mode-vi prefix root'
+complete -c tmux -n "__fish_seen_subcommand_from $bind $unbind $lsk" -xs T -d 'key table' -xa "$key_table"
+complete -c tmux -n "__fish_seen_subcommand_from $switchc" -xs T -d 'switch client key table' -xa "$key_table"
 
 ###############  End:   Key Bindings ###############
 
@@ -273,8 +536,8 @@ set -l options \
     synchronize-panes \
     window-active-style \
     window-style
-complete -c tmux -n '__fish_use_subcommand' -a "$setoption" -d 'Set or unset option'
-complete -c tmux -n '__fish_use_subcommand' -a "$showoptions" -d 'Show set options'
+complete -c tmux -n __fish_use_subcommand -a "$setoption" -d 'Set or unset option'
+complete -c tmux -n __fish_use_subcommand -a "$showoptions" -d 'Show set options'
 complete -c tmux -n "__fish_seen_subcommand_from $setoption $showoptions" -s p -d 'Pane option'
 complete -c tmux -n "__fish_seen_subcommand_from $setoption $showoptions" -s w -d 'Window option'
 complete -c tmux -n "__fish_seen_subcommand_from $setoption $showoptions" -s s -d 'Server option'
@@ -284,8 +547,8 @@ complete -c tmux -n "__fish_seen_subcommand_from $setoption" -s u -d 'Unset opti
 complete -c tmux -n "__fish_seen_subcommand_from $setoption" -s U -d 'Unset option, also in child panes'
 complete -c tmux -n "__fish_seen_subcommand_from $setoption" -s o -d 'Prevent override'
 complete -c tmux -n "__fish_seen_subcommand_from $setoption" -s q -d 'Suppress ambiguous option errors'
-complete -c tmux -n "__fish_seen_subcommand_from $setoption" -s a -d 'Append'
-complete -c tmux -n "__fish_seen_subcommand_from $setoption $showoptions" -s t -x -d 'Target pane' -a '(__fish_tmux_panes)'
+complete -c tmux -n "__fish_seen_subcommand_from $setoption" -s a -d Append
+complete -c tmux -n "__fish_seen_subcommand_from $setoption $showoptions" -s t -x -d 'Target pane' --keep-order -a '(__fish_tmux_panes)'
 complete -c tmux -n "__fish_seen_subcommand_from $showoptions" -s q -d 'No error if unset'
 complete -c tmux -n "__fish_seen_subcommand_from $showoptions" -s v -d 'Only show value'
 complete -c tmux -n "__fish_seen_subcommand_from $showoptions" -s H -d 'Include hooks'
@@ -321,15 +584,49 @@ complete -c tmux -n "__fish_seen_subcommand_from $commandprompt" -s t -xa '(__fi
 
 complete -c tmux -n __fish_use_subcommand -a $display -d 'Display a message'
 complete -c tmux -n "__fish_seen_subcommand_from $display" -s p -d 'print to stdout'
-complete -c tmux -n "__fish_seen_subcommand_from $display" -s t -xa '(__fish_tmux_panes)' -d target-pane
+complete -c tmux -n "__fish_seen_subcommand_from $display" -s t --keep-order -xa '(__fish_tmux_panes)' -d target-pane
 complete -c tmux -n "__fish_seen_subcommand_from $display" -s c -xa '(__fish_tmux_clients)' -d target-client
 
 ###############  End:   Status Line ###############
 
 ###############  Begin: Buffers ###############
-#TODO - these commands are not currently implemented.
-#there is a section in the tmux man page that has the same title as this section
-#use the "Clients and Sessions" code as an example when implementing this
+
+set -l choosebuffer choose-buffer
+set -l clearhist "clearhist clear-history"
+set -l deleteb "deleteb delete-buffer"
+set -l lsb "lsb list-buffers"
+set -l loadb "loadb load-buffer"
+set -l pasteb "pasteb paste-buffer"
+set -l saveb "saveb save-buffer"
+set -l setb "setb set-buffer"
+set -l showb "showb show-buffer"
+
+complete -c tmux -n __fish_use_subcommand -a $choosebuffer -d 'interactively choose buffer'
+complete -c tmux -n __fish_use_subcommand -a $clearhist -d 'forget history for a pane'
+complete -c tmux -n __fish_use_subcommand -a $deleteb -d 'delete buffer'
+complete -c tmux -n __fish_use_subcommand -a $lsb -d 'list buffers'
+complete -c tmux -n __fish_use_subcommand -a $loadb -d 'load buffer from path, use - for stdin'
+complete -c tmux -n __fish_use_subcommand -a $pasteb -d 'paste buffer to pane'
+complete -c tmux -n __fish_use_subcommand -a $saveb -d 'save buffer to path'
+complete -c tmux -n __fish_use_subcommand -a $setb -d 'set buffer to value'
+complete -c tmux -n __fish_use_subcommand -a $showb -d 'print buffer to stdout'
+
+## commands with buffer flag
+complete -c tmux -n "__fish_seen_subcommand_from $deleteb $loadb $pasteb $saveb $setb $showb" -xs b -a '(__fish_tmux_buffers)' --keep-order -d 'buffer name'
+complete -c tmux -n "__fish_seen_subcommand_from $setb" -xs n -a '(__fish_tmux_buffers)' --keep-order -d 'new buffer name'
+
+## commands with target pane flag
+complete -c tmux -n "__fish_seen_subcommand_from $choosebuffer $clearhist $pasteb" -xs t --keep-order -a '(__fish_tmux_panes)' -d 'target pane'
+
+#commands with the -F format flag
+complete -c tmux -n "__fish_seen_subcommand_from $choosebuffer $lsb" -xs F -d 'format string'
+
+#commands with the -f filter flag
+complete -c tmux -n "__fish_seen_subcommand_from $choosebuffer $loadb $lsb" -xs f -d 'filter format string'
+
+# Commands that take paths
+complete -c tmux -n "__fish_seen_subcommand_from $loadb $saveb" --force-files
+
 ###############  End:   Buffers ###############
 
 ###############  Begin: Miscellaneous ###############

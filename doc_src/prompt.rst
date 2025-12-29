@@ -15,7 +15,7 @@ Unlike other shells, fish's prompt is built by running a function - :doc:`fish_p
 
 - :doc:`fish_prompt <cmds/fish_prompt>`, which is the main prompt function
 - :doc:`fish_right_prompt <cmds/fish_right_prompt>`, which is shown on the right side of the terminal.
-- :doc:`fish_mode_prompt <cmds/fish_mode_prompt>`, which is shown if :ref:`vi-mode <vi-mode>` is used.
+- :doc:`fish_mode_prompt <cmds/fish_mode_prompt>`, which is shown if :ref:`vi mode <vi-mode>` is used.
 
 These functions are run, and whatever they print is displayed as the prompt (minus one trailing newline).
 
@@ -53,8 +53,8 @@ The ``--`` indicates to ``string`` that no options can come after it, in case we
 
 There are other ways to remove the space, including ``echo -s`` and :doc:`printf <cmds/printf>`.
 
-Adding colo(u)r
----------------
+Adding color
+------------
 
 This prompt is functional, but a bit boring. We could add some color.
 
@@ -72,11 +72,13 @@ So, taking our previous prompt and adding some color::
 
 A "normal" color tells the terminal to go back to its normal formatting options.
 
-What ``set_color`` does internally is to print an escape sequence that tells the terminal to change color. So if you see something like::
+``set_color`` works by producing an escape sequence, which is a special piece of text that terminals
+interpret as instructions - for example, to change color. So ``set_color red`` produces the same
+effect as::
 
-  echo \e\[31mfoo
+  echo \e\[31m
 
-that could just be ``set_color red``.
+Although you can write your own escape sequences by hand, it's much easier to use ``set_color``.
 
 Shortening the working directory
 --------------------------------
@@ -112,7 +114,7 @@ First of all, since every command (except for :doc:`set <cmds/set>`) changes the
 
   set -l last_status $status
   
-And after that, you can set a string if it not zero::
+And after that, you can set a string if it is not zero::
   
   # Prompt status only if it's not 0
   set -l stat
@@ -146,9 +148,57 @@ And it looks like:
 .. parsed-literal::
     :class: highlight
 
+    :green:`~/M/L/Oneknowing`>false
     :green:`~/M/L/Oneknowing`\ :red:`[1]`>_
 
 after we run ``false`` (which returns 1).
+
+.. _transient-prompt:
+
+Transient prompt
+----------------
+
+To enable transient prompt functionality, set the :envvar:`fish_transient_prompt` variable to 1::
+
+  set -g fish_transient_prompt 1
+
+With this set, fish re-runs prompt functions with a ``--final-rendering`` argument before running a commandline.
+So you can use it to declutter your old prompts. For example if you want to see only the current directory name when you scroll up::
+
+  function fish_prompt
+      set -l last_status $status
+      set -l stat
+      set -l pwd
+      # Check if it's a transient or final prompt
+      if contains -- --final-rendering $argv
+          set pwd (path basename $PWD)
+      else
+          set pwd (prompt_pwd)
+          # Prompt status only if it's not 0
+          if test $last_status -ne 0
+              set stat (set_color red)"[$last_status]"(set_color normal)
+          end
+      end
+
+      string join '' -- (set_color green) $pwd (set_color normal) $stat '>'
+  end
+
+Now running two commands in the same directory could result in this screen:
+
+.. role:: green
+.. role:: red
+.. parsed-literal::
+    :class: highlight
+
+    :green:`Oneknowing`>false
+    :green:`~/M/L/Oneknowing`\ :red:`[1]`>_
+
+Save the prompt
+---------------
+
+Once you are happy with your prompt, you can save it with ``funcsave fish_prompt`` (see :doc:`cmds/funcsave`) or write it to ~/.config/fish/functions/fish_prompt.fish yourself.
+
+If you want to edit it again, open that file or use ``funced fish_prompt`` (see :doc:`cmds/funced`).
 
 Where to go from here?
 ----------------------
@@ -156,14 +206,14 @@ Where to go from here?
 We have now built a simple but working and usable prompt, but of course more can be done.
 
 - Fish offers more helper functions:
-  - ``prompt_login`` to describe the user/hostname/container or ``prompt_hostname`` to describe just the host
-  - ``fish_is_root_user`` to help with changing the symbol for root.
-  - ``fish_vcs_prompt`` to show version control information (or ``fish_git_prompt`` / ``fish_hg_prompt`` / ``fish_svn_prompt`` to limit it to specific systems)
-- You can add a right prompt by changing :doc:`fish_right_prompt <cmds/fish_right_prompt>` or a vi-mode prompt by changing :doc:`fish_mode_prompt <cmds/fish_mode_prompt>`.
+   - ``prompt_login`` to describe the user/hostname/container or ``prompt_hostname`` to describe just the host
+   - ``fish_is_root_user`` to help with changing the symbol for root.
+   - ``fish_vcs_prompt`` to show version control information (or ``fish_git_prompt`` / ``fish_hg_prompt`` / ``fish_svn_prompt`` to limit it to specific systems)
+- You can add a right prompt by changing :doc:`fish_right_prompt <cmds/fish_right_prompt>` or a vi mode prompt by changing :doc:`fish_mode_prompt <cmds/fish_mode_prompt>`.
 - Some prompts have interesting or advanced features
-  - Add the time when the prompt was printed
-  - Show various integrations like python's venv
-  - Color the parts differently.
+   - Add the time when the prompt was printed
+   - Show various integrations like python's venv
+   - Color the parts differently.
 
 You can look at fish's sample prompts for inspiration. Open up :doc:`fish_config <cmds/fish_config>`, find one you like and pick it. For example::
 

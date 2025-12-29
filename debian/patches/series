@@ -1,1 +1,5 @@
-rustc-Protect-against-lines-starting-with--.patch
+patched-rust-pcre2.patch
+relax-deps.patch
+downgrade-phf-0.11.patch
+disable-unix_path.patch
+fix-libc-timespec.patch

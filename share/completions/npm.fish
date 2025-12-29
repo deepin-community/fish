@@ -4,11 +4,11 @@
 # see also Fish's large set of completions for examples:
 # https://github.com/fish-shell/fish-shell/tree/master/share/completions
 
-source $__fish_data_dir/functions/__fish_npm_helper.fish
+__fish_npm_helper
 set -l npm_install "npm install --global"
 
 function __fish_npm_needs_command
-    set -l cmd (commandline -opc)
+    set -l cmd (commandline -xpc)
 
     if test (count $cmd) -eq 1
         return 0
@@ -18,7 +18,7 @@ function __fish_npm_needs_command
 end
 
 function __fish_npm_using_command
-    set -l cmd (commandline -opc)
+    set -l cmd (commandline -xpc)
 
     if test (count $cmd) -gt 1
         if contains -- $cmd[2] $argv
@@ -37,7 +37,7 @@ function __fish_npm_needs_option
     return 1
 end
 
-# list available npm scripts and their parial content
+# list available npm scripts and their partial content
 function __fish_parse_npm_run_completions
     while read -l name
         set -l trim 20
@@ -69,7 +69,7 @@ end
 complete -f -c npm -n __fish_npm_needs_command -a 'run-script run' -d 'Run arbitrary package scripts'
 for c in run-script run rum urn
     complete -f -c npm -n "__fish_npm_using_command $c" -a "(__fish_npm_run)"
-    complete -f -c npm -n "__fish_npm_using_command $c" -l if-present -d "Don't error on nonexistant script"
+    complete -f -c npm -n "__fish_npm_using_command $c" -l if-present -d "Don't error on nonexistent script"
     complete -f -c npm -n "__fish_npm_using_command $c" -l ignore-scripts -d "Don't run pre-, post- and life-cycle scripts"
     complete -x -c npm -n "__fish_npm_using_command $c" -s script-shell -d 'The shell to use for scripts'
     complete -f -c npm -n "__fish_npm_using_command $c" -l foreground-scripts -d 'Run all build scripts in the foreground'
@@ -141,6 +141,7 @@ complete -f -c npm -n '__fish_npm_using_command cache' -s h -l help -d 'Display 
 # install-ci-test
 complete -f -c npm -n __fish_npm_needs_command -a 'ci clean-install' -d 'Clean install a project'
 complete -f -c npm -n __fish_npm_needs_command -a 'install-ci-test cit' -d 'Install a project with a clean slate and run tests'
+# typos are intentional
 for c in ci clean-install ic install-clean isntall-clean install-ci-test cit clean-install-test sit
     complete -x -c npm -n "__fish_npm_using_command $c" -l install-strategy -a 'hoisted nested shallow linked' -d 'Install strategy'
     complete -x -c npm -n "__fish_npm_using_command $c" -l omit -a 'dev optional peer' -d 'Omit dependency type'
@@ -406,12 +407,14 @@ end
 complete -c npm -n __fish_npm_needs_command -a 'install add i' -d 'Install a package'
 complete -f -c npm -n __fish_npm_needs_command -a 'install-test it' -d 'Install package(s) and run tests'
 complete -f -c npm -n __fish_npm_needs_command -a 'link ln' -d 'Symlink a package folder'
-for c in install add i 'in' ins inst insta instal isnt isnta isntal isntall install-test it link ln
+# typos are intentional
+for c in install add i in ins inst insta instal isnt isnta isntal isntall install-test it link ln
     complete -f -c npm -n "__fish_npm_using_command $c" -s S -l save -d 'Save to dependencies'
     complete -f -c npm -n "__fish_npm_using_command $c" -l no-save -d 'Prevents saving to dependencies'
     complete -f -c npm -n "__fish_npm_using_command $c" -s P -l save-prod -d 'Save to dependencies'
     complete -f -c npm -n "__fish_npm_using_command $c" -s D -l save-dev -d 'Save to devDependencies'
     complete -f -c npm -n "__fish_npm_using_command $c" -s O -l save-optional -d 'Save to optionalDependencies'
+    complete -f -c npm -n "__fish_npm_using_command $c" -l save-peer -d 'Save to peerDependencies'
     complete -f -c npm -n "__fish_npm_using_command $c" -s B -l save-bundle -d 'Also save to bundleDependencies'
     complete -f -c npm -n "__fish_npm_using_command $c" -s E -l save-exact -d 'Save dependency with exact version'
     complete -f -c npm -n "__fish_npm_using_command $c" -s g -l global -d 'Install package globally'
@@ -524,8 +527,8 @@ complete -x -c npm -n '__fish_npm_using_command profile' -n "not __fish_seen_sub
 complete -x -c npm -n '__fish_npm_using_command profile' -n "not __fish_seen_subcommand_from $profile_commands" -a disable-2fa -d 'Disables two-factor authentication'
 complete -x -c npm -n '__fish_npm_using_command profile' -n "not __fish_seen_subcommand_from $profile_commands" -a get -d 'Display profile properties'
 complete -x -c npm -n '__fish_npm_using_command profile' -n "not __fish_seen_subcommand_from $profile_commands" -a set -d 'Set the value of a profile property'
-complete -x -c npm -n '__fish_npm_using_command profile' -n '__fish_seen_subcommand_from enable-2fa' -a auth-only -d 'Requiere an OTP on profile changes'
-complete -x -c npm -n '__fish_npm_using_command profile' -n '__fish_seen_subcommand_from enable-2fa' -a auth-and-writes -d 'Also requiere an OTP on package changes'
+complete -x -c npm -n '__fish_npm_using_command profile' -n '__fish_seen_subcommand_from enable-2fa' -a auth-only -d 'Require an OTP on profile changes'
+complete -x -c npm -n '__fish_npm_using_command profile' -n '__fish_seen_subcommand_from enable-2fa' -a auth-and-writes -d 'Also require an OTP on package changes'
 complete -f -c npm -n '__fish_npm_using_command profile' -s h -l help -d 'Display help'
 
 # prune

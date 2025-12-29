@@ -1,0 +1,16 @@
+Description: libc::timespec has a private __pad field on some platforms.
+ Use std::mem::zeroed() to create it, as an initialized timespec struct
+ should have been all zero.
+Forwarded: not-needed
+Last-Update: 2025-11-21
+--- a/src/input_common.rs
++++ b/src/input_common.rs
+@@ -549,4 +549,4 @@
+-    let timeout = libc::timespec {
+-        tv_sec: (wait_nsec / NSEC_PER_SEC).try_into().unwrap(),
+-        tv_nsec: (wait_nsec % NSEC_PER_SEC).try_into().unwrap(),
+-    };
++    let mut timeout: libc::timespec = unsafe { std::mem::zeroed() };
++    timeout.tv_sec = (wait_nsec / NSEC_PER_SEC).try_into().unwrap();
++    timeout.tv_nsec = (wait_nsec % NSEC_PER_SEC).try_into().unwrap();
++    ;

@@ -1,5 +1,3 @@
-.. _cmd-umask:
-
 umask - set or get the file creation mode mask
 ==============================================
 
@@ -13,6 +11,11 @@ Synopsis
 
 Description
 -----------
+
+.. only:: builder_man
+
+          NOTE: This page documents the fish builtin ``umask``.
+          To see the documentation on any non-fish versions, use ``command man umask``.
 
 ``umask`` displays and manipulates the "umask", or file creation mode mask, which is used to restrict the default access to files.
 

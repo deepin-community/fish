@@ -6,12 +6,23 @@
 # full list see the documentation:
 # http://www.sphinx-doc.org/en/master/config
 
-import glob
+from glob import glob
 import os.path
 import subprocess
 import sys
+from pathlib import Path
+from sphinx.highlighting import lexers
 from sphinx.errors import SphinxWarning
 from docutils import nodes
+
+try:
+    import sphinx_markdown_builder
+
+    extensions = [
+        "sphinx_markdown_builder",
+    ]
+except ImportError:
+    pass
 
 # -- Helper functions --------------------------------------------------------
 
@@ -35,11 +46,47 @@ def issue_role(name, rawtext, text, lineno, inliner, options=None, content=None)
     return [link], []
 
 
+def extract_sections(app, env):
+    if app.builder.name != "man":
+        return
+    output_file = app.config.fish_help_sections_output
+    if output_file == "":
+        return
+
+    import re
+
+    sections = []
+    for docname, info in env.tocs.items():
+        for node in info.traverse():
+            if not isinstance(node, nodes.reference):
+                continue
+            anchor = node["anchorname"]
+            if re.match(r"^#id\d+$", anchor):
+                continue
+            if anchor and docname.startswith("cmds/"):
+                continue
+            if anchor and docname == "relnotes":
+                continue
+            sections.append(docname + anchor)
+    sections.sort()
+    for section in sections:
+        assert re.match(r"[\w-]", section), (
+            f"Unsupported characters in section path: {section}"
+        )
+    help_sections = "".join(f"{section}\n" for section in sections)
+    Path(output_file).write_text(
+        f"""pub static HELP_SECTIONS: &str = "{help_sections}";"""
+    )
+
+
+def remove_fish_indent_lexer(app):
+    if app.builder.name in ("man", "markdown"):
+        del lexers["fish-docs-samples"]
+
+
 # -- Load our extensions -------------------------------------------------
 def setup(app):
     # Our own pygments lexers
-    from sphinx.highlighting import lexers
-
     this_dir = os.path.dirname(os.path.realpath(__file__))
     sys.path.insert(0, this_dir)
     from fish_indent_lexer import FishIndentLexer
@@ -50,7 +97,16 @@ def setup(app):
     app.add_directive("synopsis", FishSynopsisDirective)
 
     app.add_config_value("issue_url", default=None, rebuild="html")
+    app.add_config_value(
+        "fish_help_sections_output",
+        default=os.environ.get("FISH_SPHINX_HELP_SECTIONS_OUTPUT", ""),
+        rebuild="man",
+        types=str,
+    )
     app.add_role("issue", issue_role)
+
+    app.connect("builder-inited", remove_fish_indent_lexer)
+    app.connect("env-updated", extract_sections)
 
 
 # The default language to assume
@@ -59,15 +115,26 @@ highlight_language = "fish-docs-samples"
 # -- Project information -----------------------------------------------------
 
 project = "fish-shell"
-copyright = "2023, fish-shell developers"
+copyright = "fish-shell developers"
 author = "fish-shell developers"
 issue_url = "https://github.com/fish-shell/fish-shell/issues"
 
 # Parsing FISH-BUILD-VERSION-FILE is possible but hard to ensure that it is in the right place
 # fish_indent is guaranteed to be on PATH for the Pygments highlighter anyway
-ret = subprocess.check_output(
-    ("fish_indent", "--version"), stderr=subprocess.STDOUT
-).decode("utf-8")
+if "FISH_BUILD_VERSION_FILE" in os.environ:
+    f = open(os.environ["FISH_BUILD_VERSION_FILE"], "r")
+    ret = f.readline().strip()
+elif "FISH_BUILD_VERSION" in os.environ:
+    ret = os.environ["FISH_BUILD_VERSION"]
+else:
+    ret = subprocess.check_output(
+        ("../build_tools/git_version_gen.sh", "--stdout"), stderr=subprocess.STDOUT
+    ).decode("utf-8")
+
+predetermined_timestamp = os.environ.get("FISH_SPHINX_BUILD_DATE")
+if predetermined_timestamp:
+    today = predetermined_timestamp
+
 # The full version, including alpha/beta/rc tags
 release = ret.strip().split(" ")[-1]
 # The short X.Y version
@@ -113,7 +180,7 @@ html_theme_path = ["."]
 html_theme = "python_docs_theme"
 
 # Shared styles across all doc versions.
-html_css_files = ["/docs/shared/style.css"]
+html_css_files = []
 
 # Don't add a weird "_sources" directory
 html_copy_source = False
@@ -178,6 +245,8 @@ def get_command_description(path, name):
 # Unbreak it (#7996)
 man_make_section_directory = False
 
+man_show_urls = True
+
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
 man_pages = [
@@ -186,6 +255,7 @@ man_pages = [
     ("language", "fish-language", "", [author], 1),
     ("interactive", "fish-interactive", "", [author], 1),
     ("relnotes", "fish-releasenotes", "", [author], 1),
+    ("terminal-compatibility", "fish-terminal-compatibility", "", [author], 1),
     ("completions", "fish-completions", "", [author], 1),
     ("prompt", "fish-prompt-tutorial", "", [author], 1),
     (
@@ -197,7 +267,7 @@ man_pages = [
     ),
     ("faq", "fish-faq", "", [author], 1),
 ]
-for path in sorted(glob.glob("cmds/*")):
+for path in sorted(set(glob("cmds/*.rst")) - set(glob("cmds/*.inc.rst"))):
     docname = os.path.splitext(path)[0]
     cmd = os.path.basename(docname)
     man_pages.append((docname, cmd, get_command_description(path, cmd), "", 1))

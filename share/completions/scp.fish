@@ -1,14 +1,13 @@
 # Load completions shared by various ssh tools like ssh, scp and sftp.
 __fish_complete_ssh scp
 
-
 # Helper functions to simplify the completions.
 function __scp2ssh_port_number
     # There is a silly inconsistency between the ssh and scp commands regarding the short flag name
     # for specifying the TCP port number. This function deals with that by extracting the port
-    # number if present and emitting it as a flag appropriate for ssh.
+    # number if present.
     set -l port (commandline -c | string match -r -- ' -P ?(\d+)\b')
-    and echo -p\n$port[2]
+    and echo $port[2]
 end
 
 function __scp_remote_target
@@ -38,28 +37,34 @@ end
 #
 
 # Inherit user/host completions from ssh
-complete -c scp -d Remote -n "__fish_no_scp_remote_specified; and not string match -e : (commandline -ct)" -a "(complete -C'ssh ' | string replace -r '\t.*' ':')"
+complete -c scp -d Remote -n "__fish_no_scp_remote_specified; and not string match -e -- : (commandline -ct)" -a "(complete -C'ssh ' | string replace -r '\t.*' ':')"
 
 # Local path
 complete -c scp -d "Local Path" -n "not string match @ -- (commandline -ct)"
 
 # Remote path
 # Get the list of remote files from the scp target.
-string match -rq 'OpenSSH_(?<major>\d+)\.*' -- (ssh -V 2>&1)
-if test "$major" -ge 9
-    complete -c scp -d "Remote Path" -f -n "commandline -ct | string match -e ':'" -a "
-    (__scp_remote_target):( \
-            command ssh (__scp2ssh_port_number) -o 'BatchMode yes' (__scp_remote_target) command\ ls\ -dp\ (__scp_remote_path_prefix)\* 2>/dev/null
-    )
-    "
-else
-    complete -c scp -d "Remote Path" -f -n "commandline -ct | string match -e ':'" -a "
-    (__scp_remote_target):( \
-            command ssh (__scp2ssh_port_number) -o 'BatchMode yes' (__scp_remote_target) command\ ls\ -dp\ (__scp_remote_path_prefix | string unescape)\* 2>/dev/null |
+complete -c scp -d "Remote Path" -f -n "commandline -ct | string match -e ':'" -a '
+    (__scp_remote_target):(
+        if not set -q __fish_scp_sftp
+            if set -l tmp (__fish_mktemp_relative fish-scp)
+                and scp -P(__scp2ssh_port_number) -o "BatchMode yes" -q -O $tmp (__scp_remote_target):/dev/null
+                set -g __fish_scp_sftp true
+            else
+                set -g __fish_scp_sftp false
+            end
+            if set -q tmp[1]
+                rm $tmp
+            end
+        end
+        if $__fish_scp_sftp
+            command ssh -p(__scp2ssh_port_number) -o "BatchMode yes" (__scp_remote_target) command\ ls\ -dp\ (__scp_remote_path_prefix)\* 2>/dev/null
+        else
+            command ssh -p(__scp2ssh_port_number) -o "BatchMode yes" (__scp_remote_target) command\ ls\ -dp\ (__scp_remote_path_prefix | string unescape)\* 2>/dev/null |
             string escape -n
+        end
     )
-    "
-end
+'
 
 complete -c scp -s 3 -d "Copies between two remote hosts are transferred through the local host"
 complete -c scp -s B -d "Batch mode"

@@ -1,7 +1,5 @@
 .. highlight:: fish-docs-samples
 
-.. _tutorial:
-
 Tutorial
 ========
 
@@ -27,9 +25,7 @@ which means you are all set up and can start using fish::
     you@hostname ~>
 
 
-This prompt that you see above is the fish default prompt: it shows your username, hostname, and working directory.
-- to change this prompt see :ref:`how to change your prompt <prompt>`
-- to switch to fish permanently see :ref:`Default Shell <default-shell>`.
+This prompt that you see above is the fish default prompt: it shows your username, hostname, and working directory. You can customize it, see :ref:`how to change your prompt <prompt>`.
 
 From now on, we'll pretend your prompt is just a ``>`` to save space.
 
@@ -41,11 +37,11 @@ This tutorial assumes a basic understanding of command line shells and Unix comm
 
 If you have a strong understanding of other shells, and want to know what fish does differently, search for the magic phrase *unlike other shells*, which is used to call out important differences.
 
-Or, if you want a quick overview over the differences to other shells like Bash, see :ref:`Fish For Bash Users <fish_for_bash_users>`.
+Or, if you want a quick overview over the differences to other shells like Bash, see :doc:`Fish For Bash Users <fish_for_bash_users>`.
 
-For the full, detailed description of how to use fish interactively, see :ref:`Interactive Use <interactive>`.
+For the full, detailed description of how to use fish interactively, see :doc:`Interactive Use <interactive>`.
 
-For a comprehensive description of fish's scripting language, see :ref:`The Fish Language<language>`.
+For a comprehensive description of fish's scripting language, see :doc:`The Fish Language <language>`.
 
 Running Commands
 ----------------
@@ -79,7 +75,7 @@ Run ``help`` to open fish's help in a web browser, and ``man`` with the page (li
 
 To open this section, use ``help getting-help``.
 
-Fish works by running commands, which are often also installed on your computer. Usually these commands also provide help in the man system, so you can get help for them there. Try ``man ls`` to get help on your computer's ``ls`` command.
+This only works for fish's own documentation for itself and its built-in commands (the "builtins"). For any other commands on your system, they should provide their own documentation, often in the man system. For example ``man ls`` should tell you about your computer's ``ls`` command.
 
 Syntax Highlighting
 -------------------
@@ -117,62 +113,13 @@ These colors, and many more, can be changed by running ``fish_config``, or by mo
 
 For example, if you want to disable (almost) all coloring::
 
-  fish_config theme choose none
+  fish_config theme choose None
 
 This picks the "none" theme. To see all themes::
 
   fish_config theme show
 
 Just running ``fish_config`` will open up a browser interface that allows you to pick from the available themes.
-
-Wildcards
----------
-
-Fish supports the familiar wildcard ``*``. To list all JPEG files::
-
-    > ls *.jpg
-    lena.jpg
-    meena.jpg
-    santa maria.jpg
-
-
-You can include multiple wildcards::
-
-    > ls l*.p*
-    lena.png
-    lesson.pdf
-
-
-The recursive wildcard ``**`` searches directories recursively::
-
-    > ls /var/**.log
-    /var/log/system.log
-    /var/run/sntp.log
-
-
-If that directory traversal is taking a long time, you can :kbd:`Control`\ +\ :kbd:`C` out of it.
-
-For more, see :ref:`Wildcards <expand-wildcard>`.
-
-Pipes and Redirections
-----------------------
-
-You can pipe between commands with the usual vertical bar::
-
-    > echo hello world | wc
-          1       2      12
-
-stdin and stdout can be redirected via the familiar ``<`` and ``>``. stderr is redirected with a ``2>``.
-
-::
-
-    > grep fish < /etc/shells > ~/output.txt 2> ~/errors.txt
-
-To redirect stdout and stderr into one file, you can use ``&>``::
-
-    > make &> make_output.txt
-
-For more, see :ref:`Input and output redirections <redirects>` and :ref:`Pipes <pipes>`.
 
 Autosuggestions
 ---------------
@@ -201,7 +148,7 @@ And history too. Type a command once, and you can re-summon it by just typing a 
     :prompt:`>` :red:`r`:gray:`sync -avze ssh . myname@somelonghost.com:/some/long/path/doo/dee/doo/dee/doo`
 
 
-To accept the autosuggestion, hit :kbd:`→` (right arrow) or :kbd:`Control`\ +\ :kbd:`F`. To accept a single word of the autosuggestion, :kbd:`Alt`\ +\ :kbd:`→` (right arrow). If the autosuggestion is not what you want, just ignore it.
+To accept the autosuggestion, hit :kbd:`right` (``→``) or :kbd:`ctrl-f`. To accept a single word of the autosuggestion, :kbd:`alt-right` (``→``). If the autosuggestion is not what you want, just ignore it.
 
 If you don't like autosuggestions, you can disable them by setting ``$fish_autosuggestion_enabled`` to 0::
 
@@ -212,12 +159,12 @@ Tab Completions
 
 A rich set of tab completions work "out of the box".
 
-Press :kbd:`Tab` and fish will attempt to complete the command, argument, or path:
+Press :kbd:`tab` and fish will attempt to complete the command, argument, or path:
 
 .. parsed-literal::
     :class: highlight
 
-    :prompt:`>` :red:`/pri`:kbd:`Tab` => :command:`/private/`
+    :prompt:`>` :red:`/pri`:kbd:`tab` => :command:`/private/`
 
 
 If there's more than one possibility, it will list them:
@@ -225,7 +172,7 @@ If there's more than one possibility, it will list them:
 .. parsed-literal::
     :class: highlight
 
-    :prompt:`>` :red:`~/stuff/s`:kbd:`Tab`
+    :prompt:`>` :red:`~/stuff/s`:kbd:`tab`
     ~/stuff/script.sh  :gray:`(command)`  ~/stuff/sources/  :gray:`(directory)`
 
 
@@ -236,8 +183,8 @@ fish can also complete many commands, like git branches:
 .. parsed-literal::
     :class: highlight
 
-    :prompt:`>` :command:`git` :param:`merge pr`:kbd:`Tab` => :command:`git` :param:`merge prompt_designer`
-    :prompt:`>` :command:`git` :param:`checkout b`:kbd:`Tab`
+    :prompt:`>` :command:`git` :param:`merge pr`:kbd:`tab` => :command:`git` :param:`merge prompt_designer`
+    :prompt:`>` :command:`git` :param:`checkout b`:kbd:`tab`
     builtin_list_io_merge :gray:`(Branch)`  builtin_set_color :gray:`(Branch)` busted_events :gray:`(Tag)`
 
 Try hitting tab and see what fish can do!
@@ -366,20 +313,70 @@ You can iterate over a list (or a slice) with a for loop::
     # entry: /sbin
     # entry: /usr/local/bin
 
-Lists adjacent to other lists or strings are expanded as :ref:`cartesian products <cartesian-product>` unless quoted (see :ref:`Variable expansion <expand-variable>`)::
+One particular bit is that you can use lists like :ref:`Brace expansion <expand-brace>`. If you attach another string to a list, it'll combine every element of the list with the string::
 
-    > set a 1 2 3
-    > set 1 a b c
-    > echo $a$1
-    1a 2a 3a 1b 2b 3b 1c 2c 3c
-    > echo $a" banana"
-    1 banana 2 banana 3 banana
-    > echo "$a banana"
-    1 2 3 banana
+    > set mydirs /usr/bin /bin
+    > echo $mydirs/fish # this is just like {/usr/bin,/bin}/fish
+    /usr/bin/fish /bin/fish
 
-This is similar to :ref:`Brace expansion <expand-brace>`.
+This also means that, if the list is empty, there will be no argument::
+
+    > set empty # no argument
+    > echo $empty/this_is_gone # prints an empty line
+    
+If you quote the list, it will be used as one string and so you'll get one argument even if it is empty.
 
 For more, see :ref:`Lists <variables-lists>`.
+For more on combining lists with strings (or even other lists), see :ref:`cartesian products <cartesian-product>` and :ref:`Variable expansion <expand-variable>`.
+
+Wildcards
+---------
+
+Fish supports the familiar wildcard ``*``. To list all JPEG files::
+
+    > ls *.jpg
+    lena.jpg
+    meena.jpg
+    santa maria.jpg
+
+
+You can include multiple wildcards::
+
+    > ls l*.p*
+    lena.png
+    lesson.pdf
+
+
+The recursive wildcard ``**`` searches directories recursively::
+
+    > ls /var/**.log
+    /var/log/system.log
+    /var/run/sntp.log
+
+
+If that directory traversal is taking a long time, you can :kbd:`ctrl-c` out of it.
+
+For more, see :ref:`Wildcards <expand-wildcard>`.
+
+Pipes and Redirections
+----------------------
+
+You can pipe between commands with the usual vertical bar::
+
+    > echo hello world | wc
+          1       2      12
+
+stdin and stdout can be redirected via the familiar ``<`` and ``>``. stderr is redirected with a ``2>``.
+
+::
+
+    > grep fish < /etc/shells > ~/output.txt 2> ~/errors.txt
+
+To redirect stdout and stderr into one file, you can use ``&>``::
+
+    > make &> make_output.txt
+
+For more, see :ref:`Input and output redirections <redirects>` and :ref:`Pipes <pipes>`.
 
 
 Command Substitutions
@@ -485,8 +482,6 @@ As mentioned in :ref:`the section on the semicolon <tut-semicolon>`, this can al
     and echo "Backup successful"
     or echo "Backup failed"
 
-.. _tut-conditionals:
-
 Conditionals (If, Else, Switch)
 -------------------------------
 
@@ -584,7 +579,7 @@ You can see the source for any function by passing its name to ``functions``::
 
 For more, see :ref:`Functions <syntax-function>`.
 
-.. [#] There is a function called :doc:`alias <cmds/alias>`, but it's just a shortcut to make functions. fish also provides :ref:`abbreviations <abbreviations>`, through the :ref:`abbr <cmd-abbr>` command.
+.. [#] There is a function called :doc:`alias <cmds/alias>`, but it's just a shortcut to make functions. fish also provides :ref:`abbreviations <abbreviations>`, through the :doc:`abbr <cmds/abbr>` command.
 
 Loops
 -----
@@ -632,12 +627,12 @@ You can define your own prompt from the command line:
 
 Then, if you are happy with it, you can save it to disk by typing ``funcsave fish_prompt``. This saves the prompt in ``~/.config/fish/functions/fish_prompt.fish``. (Or, if you want, you can create that file manually from the start.)
 
-Multiple lines are OK. Colors can be set via :doc:`set_color <cmds/set_color>`, passing it named ANSI colors, or hex RGB values::
+Multiple lines are OK. Colors can be set via :doc:`set_color <cmds/set_color>` by passing it named ANSI colors, or hex RGB values::
 
     function fish_prompt
         set_color purple
         date "+%m/%d/%y"
-        set_color F00
+        set_color FF0000
         echo (pwd) '>' (set_color normal)
     end
 
@@ -651,7 +646,9 @@ This prompt would look like:
     :red:`/home/tutorial >` _
 
 
-You can choose among some sample prompts by running ``fish_config`` for a web UI or ``fish_config prompt`` for a simpler version inside your terminal.
+See also :doc:`Writing your own prompt <prompt>`.
+
+You can choose among sample prompts by running ``fish_config`` for a web UI or ``fish_config prompt`` for a simpler version inside your terminal.
 
 $PATH
 -----
@@ -751,6 +748,7 @@ Now in another shell::
     > echo $EDITOR
     vim
 
+You only need to set universal variables once interactively. There is no need to add them to your :ref:`config files <configuration>`. For more details, see :ref:`Universal Variables <variables-universal>`.
 
 Ready for more?
 ---------------
