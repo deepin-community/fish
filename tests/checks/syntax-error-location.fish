@@ -1,4 +1,4 @@
-#RUN: %fish -C 'set -g fish %fish' %s
+#RUN: fish=%fish %fish %s
 
 # A $status used as a command should not impact the location of other errors.
 echo 'echo foo | exec grep # this exec is not allowed!
@@ -25,7 +25,7 @@ FOO=BAR (true one)
 # more things
 ' | $fish 2>| string replace -r '(.*)' '<$1>'
 
-# CHECK: <fish: command substitutions not allowed here>
+# CHECK: <fish: command substitutions not allowed in command position. Try var=(your-cmd) $var ...>
 # CHECK: <FOO=BAR (true one)>
 # CHECK: <        ^~~~~~~~~^>
 
@@ -68,10 +68,25 @@ $fish -c 'echo {$,}'
 
 echo "bind -M" | $fish
 # CHECKERR: bind: -M: option requires an argument
-# CHECKERR: Standard input (line 1): 
+# CHECKERR: Standard input (line 1):
 # CHECKERR: bind -M
 # CHECKERR: ^
 # CHECKERR: (Type 'help bind' for related documentation)
+
+$fish -c 'if -e; end'
+# CHECKERR: fish: Unknown command: -e
+# CHECKERR: fish:
+# CHECKERR: if -e; end
+# CHECKERR:    ^^
+
+$fish -c 'begin --notanoption; end'
+# CHECKERR: fish: Unknown command: --notanoption
+# CHECKERR: fish:
+# CHECKERR: begin --notanoption; end
+# CHECKERR:       ^~~~~~~~~~~~^
+
+$fish -c 'begin --help'
+# CHECKERR: Documentation for begin
 
 $fish -c 'echo (for status in foo; end)'
 # CHECKERR: fish: for: status: cannot overwrite read-only variable
@@ -99,6 +114,11 @@ $fish -c 'echo (time echo foo &)'
 # CHECKERR: in command substitution
 # CHECKERR: fish: Invalid arguments
 # CHECKERR: echo (time echo foo &)
+# CHECKERR: ^~~~~~~~~~~~~~~~^
+
+$fish -c 'time begin; end &'
+# CHECKERR: fish: 'time' is not supported for background jobs. Consider using 'command time'.
+# CHECKERR: time begin; end &
 # CHECKERR: ^~~~~~~~~~~~~~~~^
 
 $fish -c 'echo (set -l foo 1 2 3; for $foo in foo; end)'

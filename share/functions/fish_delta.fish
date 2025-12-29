@@ -20,11 +20,17 @@ function fish_delta
     end
 
     # TODO: Do we want to keep the vendor dirs in here?
-    set -l default_function_path $__fish_data_dir/functions
+    set -l default_function_path
+    if not __fish_is_standalone
+        set default_function_path $__fish_data_dir/functions
+    end
     test "$vendormode" = default && set -a default_function_path $__fish_vendor_functionsdirs
 
-    set -l default_complete_path $__fish_data_dir/completions
-    test "$vendormode" = default && set -a default_completions_path $__fish_vendor_completionsdirs
+    set -l default_complete_path
+    if not __fish_is_standalone
+        set default_complete_path $__fish_data_dir/completions
+    end
+    test "$vendormode" = default && set -a default_complete_path $__fish_vendor_completionsdirs
 
     set -l default_conf_path
     test "$vendormode" = default && set -a default_conf_path $__fish_vendor_confdirs
@@ -49,7 +55,7 @@ function fish_delta
         end
         # We don't care about generated completions.
         # They shouldn't be compared at all.
-        contains -- $dir $default_complete_path $__fish_user_data_dir/generated_completions
+        contains -- $dir $default_complete_path $__fish_cache_dir/generated_completions
         or set -a user_complete_path $dir
     end
 
@@ -96,6 +102,11 @@ function fish_delta
             # because they are being run.
             test "$vars[1]" = user_conf_path
             and set all_changed 1
+            set -l dir
+            test "$vars[2]" = default_complete_path
+            and set dir completions
+            test "$vars[2]" = default_function_path
+            and set dir functions
             set -e vars[..2]
             set -l files (path filter -rf -- $user_var/$argv.fish)
             set -q argv[1]
@@ -105,28 +116,40 @@ function fish_delta
 
             for file in $files
                 set -l bn (path basename -- $file)
-                set -l def (path filter -rf -- $default_var/$bn)[1]
-                or begin
-                    if test $all_changed = 0
-                        set -ql _flag_n
-                        and printf (_ "%sNew%s: %s\n") $colors[2] $colors[1] $file
-                        continue
-                    else
-                        set def /dev/null
-                    end
+                set -l default_exists false
+                if set -q dir[1]; and contains $dir/$bn (__fish_data_list_files $dir)
+                    set default_exists true
+                else if test $all_changed = 0
+                    set -ql _flag_n
+                    and printf (_ "%sNew%s: %s\n") $colors[2] $colors[1] $file
+                    continue
                 end
-
                 if type -q diff
-                    # We execute diff twice - once to figure out if it's changed,
-                    # so we can get nicer output.
-                    #
-                    if not diff -q -- $file $def >/dev/null 2>&1
-                        printf (_ "%sChanged%s: %s\n") $colors[3] $colors[1] $file
-                        not set -ql _flag_d[1]
-                        and diff -u -- $def $file
-                    else
-                        printf (_ "%sUnmodified%s: %s\n") $colors[4] $colors[1] $file
+                    function __fish_delta_diff -V _flag_d -V colors -V file -a default_file
+                        # We execute diff twice - once to figure out if it's changed,
+                        # so we can get nicer output.
+                        #
+                        if not diff -q -- $file $default_file >/dev/null 2>&1
+                            printf (_ "%sChanged%s: %s\n") $colors[3] $colors[1] $file
+                            not set -ql _flag_d[1]
+                            and diff -u -- $default_file $file
+                        else
+                            printf (_ "%sUnmodified%s: %s\n") $colors[4] $colors[1] $file
+                        end
                     end
+                    function __fish_delta_diff_maybe_file -a maybe_default_file
+                        set -l tmpfile (mktemp)
+                        cat $maybe_default_file >$tmpfile
+                        __fish_delta_diff $tmpfile
+                        command rm $tmpfile
+                    end
+                    if $default_exists
+                        __fish_data_with_file $dir/$bn __fish_delta_diff_maybe_file
+                    else
+                        __fish_delta_diff /dev/null
+                    end
+                    functions --erase __fish_delta_diff
+                    functions --erase __fish_delta_diff_maybe_file
                 else
                     # Without diff, we can't really tell if the contents are the same.
                     printf (_ "%sPossibly changed%s: %s\n") $colors[3] $colors[1] $file

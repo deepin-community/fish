@@ -10,7 +10,7 @@ A shell is a program that helps you operate your computer by starting other prog
 
 Some of the special features of fish are:
 
-- **Extensive UI**: :ref:`Syntax highlighting <color>`, :ref:`autosuggestions`, :ref:`tab completion <tab-completion>` and selection lists that can be navigated and filtered.
+- **Extensive UI**: :ref:`Syntax highlighting <syntax-highlighting>`, :ref:`autosuggestions`, :ref:`tab completion <tab-completion>` and selection lists that can be navigated and filtered.
 
 - **No configuration needed**: fish is designed to be ready to use immediately, without requiring extensive configuration.
 
@@ -21,18 +21,18 @@ This page explains how to install and set up fish and where to get more informat
 Where to go?
 ============
 
-If this is your first time using fish, see the :ref:`tutorial <tutorial>`.
+If this is your first time using fish, see the :doc:`tutorial <tutorial>`.
 
-If you are already familiar with other shells like bash and want to see the scripting differences, see :ref:`Fish For Bash Users <fish_for_bash_users>`.
+If you are already familiar with other shells like bash and want to see the scripting differences, see :doc:`Fish For Bash Users <fish_for_bash_users>`.
 
-For a comprehensive overview of fish's scripting language, see :ref:`The Fish Language <language>`.
+For an overview of fish's scripting language, see :doc:`The Fish Language <language>`. If it would be useful in a script file, it's here.
 
-For information on using fish interactively, see :ref:`Interactive use <interactive>`.
+For information on using fish interactively, see :doc:`Interactive use <interactive>`. If it's about key presses, syntax highlighting or anything else that needs an interactive terminal session, look here.
 
 If you need to install fish first, read on, the rest of this document will tell you how to get, install and configure fish.
 
-Installation
-============
+Setup
+=====
 
 This section describes how to install, uninstall, start, and exit :command:`fish`. It also explains how to make fish the default shell.
 
@@ -56,14 +56,12 @@ Once fish has been installed, open a terminal. If fish is not the default shell:
 
     > exit
 
-.. _default-shell:
-
 Default Shell
 -------------
 
 There are multiple ways to switch to fish (or any other shell) as your default.
 
-The simplest method is to set your terminal emulator (eg GNOME Terminal, Apple's Terminal.app, or Konsole) to start fish directly. See its configuration and set the program to start to ``/usr/local/bin/fish`` (if that's where fish is installed - substitute another location as appropriate).
+The simplest method is to set your terminal emulator (e.g. GNOME Terminal, Apple's Terminal.app, or Konsole) to start fish directly. See its configuration and set the program to start to ``/usr/local/bin/fish`` (the exact path depends on how you installed fish).
 
 Alternatively, you can set fish as your login shell so that it will be started by all terminal logins, including SSH.
 
@@ -75,13 +73,13 @@ To change your login shell to fish:
 
 1. Add the shell to ``/etc/shells`` with::
 
-    > echo /usr/local/bin/fish | sudo tee -a /etc/shells
+    > command -v fish | sudo tee -a /etc/shells
 
 2. Change your default shell with::
 
-    > chsh -s /usr/local/bin/fish
+    > chsh -s "$(command -v fish)"
 
-Again, substitute the path to fish for ``/usr/local/bin/fish`` - see ``command -s fish`` inside fish. To change it back to another shell, just substitute ``/usr/local/bin/fish`` with ``/bin/bash``, ``/bin/tcsh`` or ``/bin/zsh`` as appropriate in the steps above.
+To change it back to another shell, substitute ``fish`` with ``bash``, ``tcsh`` or ``zsh`` as appropriate in the above command.
 
 Uninstalling
 ------------
@@ -150,13 +148,11 @@ Resources
 
 - The `GitHub page <https://github.com/fish-shell/fish-shell/>`_
 
-- The official `Gitter channel <https://gitter.im/fish-shell/fish-shell>`_
+- The official `Matrix room <https://matrix.to/#/#fish-shell:matrix.org>`_
 
 - The official mailing list at `fish-users@lists.sourceforge.net <https://lists.sourceforge.net/lists/listinfo/fish-users>`_
 
 If you have an improvement for fish, you can submit it via the GitHub page.
-
-.. _other_pages:
 
 Other help pages
 ================
@@ -174,4 +170,6 @@ Other help pages
    prompt
    design
    relnotes
+   terminal-compatibility
+   contributing
    license

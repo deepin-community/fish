@@ -1,5 +1,3 @@
-.. _cmd-jobs:
-
 jobs - print currently running jobs
 ===================================
 
@@ -13,6 +11,11 @@ Synopsis
 
 Description
 -----------
+
+.. only:: builder_man
+
+          NOTE: This page documents the fish builtin ``jobs``.
+          To see the documentation on any non-fish versions, use ``command man jobs``.
 
 ``jobs`` prints a list of the currently running :ref:`jobs <syntax-job-control>` and their status.
 

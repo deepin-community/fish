@@ -1,4 +1,5 @@
-function __fish_complete_zfs_write_once_properties -d "Completes with ZFS properties which can only be written at filesystem creation, and only be read thereafter"
+# localization: tier3
+function __fish_complete_zfs_write_once_properties
     set -l OS ""
     switch (uname)
         case Linux
@@ -26,5 +27,11 @@ function __fish_complete_zfs_write_once_properties -d "Completes with ZFS proper
         echo -e "casesensitivity\tCase sensitivity (sensitive, insensitive)"
     else
         echo -e "casesensitivity\tCase sensitivity (sensitive, insensitive, mixed)"
+    end
+    if __fish_is_openzfs
+        echo -e "keylocation\tSpecify key location/type"
+        echo -e "pbkdf2iters\tNumber of PBKDF2 iterations"
+        echo -e "keyformat\tSpecify key format"
+        echo -e "encryption\tEncryption of dataset"
     end
 end

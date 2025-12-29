@@ -99,11 +99,25 @@ set -l name1 (functions name1)
 set -l name1a (functions name1a)
 set -l name3 (functions name3)
 set -l name3a (functions name3a)
-# First line for the non-copied function is "# Defined in checks/function.fish" - skip it to work around #6575.
+# First two lines for the copied and non-copied functions are different. Skip it for now.
 test "$name1[3..-1]" = "$name1a[3..-1]"; and echo "1 = 1a"
 #CHECK: 1 = 1a
 test "$name3[3..-1]" = "$name3a[3..-1]"; and echo "3 = 3a"
 #CHECK: 3 = 3a
+
+# Test the first two lines.
+string join \n -- $name1[1..2]
+#CHECK: # Defined in {{(?:(?!, copied).)*}}
+#CHECK: function name1 --argument-names arg1 arg2
+string join \n -- $name1a[1..2]
+#CHECK: # Defined in {{.*}}, copied in {{.*}}
+#CHECK: function name1a --argument-names arg1 arg2
+string join \n -- $name3[1..2]
+#CHECK: # Defined in {{(?:(?!, copied).)*}}
+#CHECK: function name3 --argument-names arg1 arg2
+string join \n -- $name3a[1..2]
+#CHECK: # Defined in {{.*}}, copied in {{.*}}
+#CHECK: function name3a --argument-names arg1 arg2
 
 function test
     echo banana
@@ -124,28 +138,105 @@ touch $tmpdir/actual_function.fish
 
 begin
     set -l fish_function_path $tmpdir
-    functions
+    functions | grep '^$\|directory\|^actual_function$'
 end
 # CHECK: actual_function
 
-# these are functions defined either in this file,
-# or eagerly in share/config.fish.
-# I don't know of a way to ignore just them.
-#
-# CHECK: bg
-# CHECK: disown
-# CHECK: fg
-# CHECK: fish_command_not_found
-# CHECK: fish_sigtrap_handler
-# CHECK: frob
-# CHECK: kill
-# CHECK: name1
-# CHECK: name1a
-# CHECK: name3
-# CHECK: name3a
-# CHECK: t
-# CHECK: wait
-
 rm -r $tmpdir
+
+functions -e foo
+
+function foo -p bar; end
+# CHECKERR: {{.*}}function.fish (line {{\d+}}): function: 'bar' is not a valid process ID
+# CHECKERR: function foo -p bar; end
+# CHECKERR: ^~~~~~~~~~~~~~~~~~~^
+
+function foo --argument-names "banana pajama"; end
+# CHECKERR: {{.*}}function.fish (line {{\d+}}): function: banana pajama: invalid variable name. See `help identifiers`
+# CHECKERR: function foo --argument-names "banana pajama"; end
+# CHECKERR: ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+
+
+function foo --argument-names status; end
+# CHECKERR: {{.*}}function.fish (line {{\d+}}): function: variable 'status' is read-only
+# CHECKERR: function foo --argument-names status; end
+# CHECKERR: ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+
+echo status $status
+# CHECK: status 2
+
+function foo --argument-names foo status; end
+# CHECKERR: {{.*}}function.fish (line {{\d+}}): function: variable 'status' is read-only
+# CHECKERR: function foo --argument-names foo status; end
+# CHECKERR: ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+
+functions -q foo
+echo exists $status
+# CHECK: exists 1
+
+# If a function is changed as part of its own arguments, then we see the change.
+# This codifies historic behavior.
+function foo; echo before; end
+foo (function foo; echo after; end)
+# CHECK: after
+
+# If a function is deleted as part of its own arguments, then we see the change.
+# This codifies historic behavior.
+function foo; echo before; end
+foo (functions --erase foo)
+# CHECKERR: error: Unknown function 'foo'
+
+function ()
+end
+# CHECKERR: {{.*}}/tests/checks/function.fish (line {{\d+}}): function: function name required
+# CHECKERR: function ()
+# CHECKERR: ^
+
+# Tests the --argument-names and --inherit-variable can overwrite argv
+function t --argument-names a argv c
+    echo $argv
+end
+t 1 2 3
+#CHECK: 2
+
+function t -a argv
+    echo $argv
+end
+t 1 2 3
+#CHECK: 1
+
+function outer
+    function inner -v argv -V argv
+        echo $argv
+    end
+    set -gx argv 4 5 6
+end
+outer 1 2 3
+#CHECK: 1 2 3
+
+for flag in --on-process-exit --on-job-exit
+    for invalid_pid in (math 2 ^ 31) -1 -(math 2 ^ 31)
+        function invalid $flag=$invalid_pid
+        end
+    end
+    # CHECKERR: {{.*}}/function.fish (line {{\d+}}): function: '2147483648' is not a valid process ID
+    # CHECKERR:     function invalid $flag=$invalid_pid
+    # CHECKERR:     ^
+    # CHECKERR: {{.*}}/function.fish (line {{\d+}}): function: '-1' is not a valid process ID
+    # CHECKERR:     function invalid $flag=$invalid_pid
+    # CHECKERR:     ^
+    # CHECKERR: {{.*}}/function.fish (line {{\d+}}): function: '-2147483648' is not a valid process ID
+    # CHECKERR:     function invalid $flag=$invalid_pid
+    # CHECKERR:     ^
+    # CHECKERR: {{.*}}/function.fish (line {{\d+}}): function: '2147483648' is not a valid process ID
+    # CHECKERR:     function invalid $flag=$invalid_pid
+    # CHECKERR:     ^
+    # CHECKERR: {{.*}}/function.fish (line {{\d+}}): function: '-1' is not a valid process ID
+    # CHECKERR:     function invalid $flag=$invalid_pid
+    # CHECKERR:     ^
+    # CHECKERR: {{.*}}/function.fish (line {{\d+}}): function: '-2147483648' is not a valid process ID
+    # CHECKERR:     function invalid $flag=$invalid_pid
+    # CHECKERR:     ^
+end
 
 exit 0

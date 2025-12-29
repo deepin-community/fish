@@ -27,17 +27,17 @@ level margin: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .\" new: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .in \\n[rst2man-indent\\n[rst2man-indent-level]]u
 ..
-.TH "PATH" "1" "Mar 19, 2024" "3.7" "fish-shell"
+.TH "PATH" "1" "Nov 13, 2025" "4.2" "fish-shell"
 .SH NAME
 path \- manipulate and check paths
 .SH SYNOPSIS
 .nf
-\fBpath\fP \fBbasename\fP \fIGENERAL_OPTIONS\fP [\fIPATH\fP \&...]
+\fBpath\fP \fBbasename\fP \fIGENERAL_OPTIONS\fP [(\fB\-E\fP | \fB\-\-no\-extension\fP)] [\fIPATH\fP \&...]
 \fBpath\fP \fBdirname\fP \fIGENERAL_OPTIONS\fP  [\fIPATH\fP \&...]
 \fBpath\fP \fBextension\fP \fIGENERAL_OPTIONS\fP [\fIPATH\fP \&...]
 \fBpath\fP \fBfilter\fP \fIGENERAL_OPTIONS\fP [\fB\-v\fP | \fB\-\-invert\fP]
     [\fB\-d\fP] [\fB\-f\fP] [\fB\-l\fP] [\fB\-r\fP] [\fB\-w\fP] [\fB\-x\fP]
-    [(\fB\-t\fP | \fB\-\-type\fP) \fITYPE\fP] [(\fB\-p\fP | \fB\-\-perm\fP) \fIPERMISSION\fP] [\fIPATH\fP \&...]
+    [(\fB\-t\fP | \fB\-\-type\fP) \fITYPE\fP] [(\fB\-p\fP | \fB\-\-perm\fP) \fIPERMISSION\fP] [\fB\-\-all\fP] [\fIPATH\fP \&...]
 \fBpath\fP \fBis\fP \fIGENERAL_OPTIONS\fP [(\fB\-v\fP | \fB\-\-invert\fP)] [(\fB\-t\fP | \fB\-\-type\fP) \fITYPE\fP]
     [\fB\-d\fP] [\fB\-f\fP] [\fB\-l\fP] [\fB\-r\fP] [\fB\-w\fP] [\fB\-x\fP]
     [(\fB\-p\fP | \fB\-\-perm\fP) \fIPERMISSION\fP] [\fIPATH\fP \&...]
@@ -46,7 +46,7 @@ path \- manipulate and check paths
 \fBpath\fP \fBresolve\fP \fIGENERAL_OPTIONS\fP [\fIPATH\fP \&...]
 \fBpath\fP \fBchange\-extension\fP \fIGENERAL_OPTIONS\fP \fIEXTENSION\fP [\fIPATH\fP \&...]
 \fBpath\fP \fBsort\fP \fIGENERAL_OPTIONS\fP [\fB\-r\fP | \fB\-\-reverse\fP]
-    [\fB\-u\fP | \fB\-\-unique\fP] [\fB\-\-key\fP\fB=\fP\fBbasename\fP|\fBdirname\fP|\fBpath\fP] [\fIPATH\fP \&...]
+    [\fB\-u\fP | \fB\-\-unique\fP] [\fB\-\-key\fP\fB=\fP(\fBbasename\fP | \fBdirname\fP | \fBpath\fP)] [\fIPATH\fP \&...]
 
 \fIGENERAL_OPTIONS\fP
     [\fB\-z\fP | \fB\-\-null\-in\fP] [\fB\-Z\fP | \fB\-\-null\-out\fP] [\fB\-q\fP | \fB\-\-quiet\fP]
@@ -75,23 +75,22 @@ The following subcommands are available.
 .INDENT 0.0
 .INDENT 3.5
 .sp
-.nf
-.ft C
-path basename [\-z | \-\-null\-in] [\-Z | \-\-null\-out] [\-q | \-\-quiet] [PATH ...]
-.ft P
-.fi
+.EX
+path basename [\-E | \-\-no\-extension] [\-z | \-\-null\-in] [\-Z | \-\-null\-out] [\-q | \-\-quiet] [PATH ...]
+.EE
 .UNINDENT
 .UNINDENT
 .sp
 \fBpath basename\fP returns the last path component of the given path, by removing the directory prefix and removing trailing slashes. In other words, it is the part that is not the dirname. For files you might call it the \(dqfilename\(dq.
+.sp
+If the \fB\-E\fP or \fB\-\-\-no\-extension\fP option is used and the base name contained a period, the path is returned with the extension (or the last extension) removed, i.e. the \(dqfilename\(dq without an extension (akin to calling \fBpath change\-extension \(dq\(dq (path basename $path)\fP).
 .sp
 It returns 0 if there was a basename, i.e. if the path wasn\(aqt empty or just slashes.
 .SS Examples
 .INDENT 0.0
 .INDENT 3.5
 .sp
-.nf
-.ft C
+.EX
 >_ path basename ./foo.mp4
 foo.mp4
 
@@ -108,19 +107,16 @@ cp
 fish
 grep
 rm
-.ft P
-.fi
+.EE
 .UNINDENT
 .UNINDENT
 .SH "DIRNAME" SUBCOMMAND
 .INDENT 0.0
 .INDENT 3.5
 .sp
-.nf
-.ft C
+.EX
 path dirname [\-z | \-\-null\-in] [\-Z | \-\-null\-out] [\-q | \-\-quiet] [PATH ...]
-.ft P
-.fi
+.EE
 .UNINDENT
 .UNINDENT
 .sp
@@ -131,8 +127,7 @@ It returns 0 if there was a dirname, i.e. if the path wasn\(aqt empty or just sl
 .INDENT 0.0
 .INDENT 3.5
 .sp
-.nf
-.ft C
+.EX
 >_ path dirname ./foo.mp4
 \&.
 
@@ -141,19 +136,16 @@ It returns 0 if there was a dirname, i.e. if the path wasn\(aqt empty or just sl
 
 >_ path dirname /usr/bin/
 /usr
-.ft P
-.fi
+.EE
 .UNINDENT
 .UNINDENT
 .SH "EXTENSION" SUBCOMMAND
 .INDENT 0.0
 .INDENT 3.5
 .sp
-.nf
-.ft C
+.EX
 path extension [\-z | \-\-null\-in] [\-Z | \-\-null\-out] [\-q | \-\-quiet] [PATH ...]
-.ft P
-.fi
+.EE
 .UNINDENT
 .UNINDENT
 .sp
@@ -166,8 +158,7 @@ It returns 0 if there was an extension.
 .INDENT 0.0
 .INDENT 3.5
 .sp
-.nf
-.ft C
+.EX
 >_ path extension ./foo.mp4
 \&.mp4
 
@@ -188,21 +179,18 @@ It returns 0 if there was an extension.
 > echo $path$extension
 # reconstructs the original path again.
 \&./foo.mp4
-.ft P
-.fi
+.EE
 .UNINDENT
 .UNINDENT
 .SH "FILTER" SUBCOMMAND
 .INDENT 0.0
 .INDENT 3.5
 .sp
-.nf
-.ft C
+.EX
 path filter [\-z | \-\-null\-in] [\-Z | \-\-null\-out] [\-q | \-\-quiet] \e
     [\-d] [\-f] [\-l] [\-r] [\-w] [\-x] \e
-    [\-v | \-\-invert] [(\-t | \-\-type) TYPE] [(\-p | \-\-perm) PERMISSION] [PATH ...]
-.ft P
-.fi
+    [\-v | \-\-invert] [(\-t | \-\-type) TYPE] [(\-p | \-\-perm) PERMISSION] [\-\-all] [PATH ...]
+.EE
 .UNINDENT
 .UNINDENT
 .sp
@@ -230,13 +218,16 @@ When a path starts with \fB\-\fP, \fBpath filter\fP will prepend \fB\&./\fP to a
 .sp
 It returns 0 if at least one path passed the filter.
 .sp
+With \fB\-\-all\fP, return status 0 (true) if all paths pass the filter, and status 1 (false) if any path fails. This is equivalent to \fBnot path filter \-v\fP\&. It produces no output, only a status.
+.sp
+When \fB\-\-all\fP combined with \fB\-\-invert\fP, it returns status 0 (true) if all paths fail the filter and status 1 (false) if any path passes.
+.sp
 \fBpath is\fP is shorthand for \fBpath filter \-q\fP, i.e. just checking without producing output, see \fI\%The is subcommand\fP\&.
 .SS Examples
 .INDENT 0.0
 .INDENT 3.5
 .sp
-.nf
-.ft C
+.EX
 >_ path filter /usr/bin /usr/argagagji
 # The (hopefully) nonexistent argagagji is filtered implicitly:
 /usr/bin
@@ -260,21 +251,21 @@ It returns 0 if at least one path passed the filter.
 
 >_ path filter \-fx $PATH/*
 # Prints all possible commands \- the first entry of each name is what fish would execute!
-.ft P
-.fi
+
+>_ path filter \-\-all /usr/bin /usr/argagagji
+# This returns 1 (false) because not all paths pass the filter.
+.EE
 .UNINDENT
 .UNINDENT
 .SH "IS" SUBCOMMAND
 .INDENT 0.0
 .INDENT 3.5
 .sp
-.nf
-.ft C
+.EX
 path is [\-z | \-\-null\-in] [\-Z | \-\-null\-out] [\-q | \-\-quiet] \e
     [\-d] [\-f] [\-l] [\-r] [\-w] [\-x] \e
     [\-v | \-\-invert] [(\-t | \-\-type) TYPE] [(\-p | \-\-perm) PERMISSION] [PATH ...]
-.ft P
-.fi
+.EE
 .UNINDENT
 .UNINDENT
 .sp
@@ -285,27 +276,23 @@ path is [\-z | \-\-null\-in] [\-Z | \-\-null\-out] [\-q | \-\-quiet] \e
 .INDENT 0.0
 .INDENT 3.5
 .sp
-.nf
-.ft C
+.EX
 >_ path is /usr/bin /usr/argagagji
 # /usr/bin exists, so this returns a status of 0 (true). It prints nothing.
 >_ path is /usr/argagagji
 # /usr/argagagji does not, so this returns a status of 1 (false). It also prints nothing.
 >_ path is \-fx /bin/sh
 # /bin/sh is usually an executable file, so this returns true.
-.ft P
-.fi
+.EE
 .UNINDENT
 .UNINDENT
 .SH "MTIME" SUBCOMMAND
 .INDENT 0.0
 .INDENT 3.5
 .sp
-.nf
-.ft C
+.EX
 path mtime [\-z | \-\-null\-in] [\-Z | \-\-null\-out] [\-q | \-\-quiet] [\-R | \-\-relative] [PATH ...]
-.ft P
-.fi
+.EE
 .UNINDENT
 .UNINDENT
 .sp
@@ -320,8 +307,7 @@ It returns 0 if reading mtime for any path succeeded.
 .INDENT 0.0
 .INDENT 3.5
 .sp
-.nf
-.ft C
+.EX
 >_ date +%s
 # This prints the current time as seconds since the epoch
 1657217847
@@ -335,23 +321,20 @@ It returns 0 if reading mtime for any path succeeded.
 
 # This is the same as
 >_ math (date +%s) \- (path mtime /etc/)
-.ft P
-.fi
+.EE
 .UNINDENT
 .UNINDENT
 .SH "NORMALIZE" SUBCOMMAND
 .INDENT 0.0
 .INDENT 3.5
 .sp
-.nf
-.ft C
+.EX
 path normalize [\-z | \-\-null\-in] [\-Z | \-\-null\-out] [\-q | \-\-quiet] [PATH ...]
-.ft P
-.fi
+.EE
 .UNINDENT
 .UNINDENT
 .sp
-\fBpath normalize\fP returns the normalized versions of all paths. That means it squashes duplicate \(dq/\(dq (except for two leading \(dq//\(dq), collapses \(dq../\(dq with earlier components and removes \(dq.\(dq components.
+\fBpath normalize\fP returns the normalized versions of all paths. That means it squashes duplicate \(dq/\(dq, collapses \(dq../\(dq with earlier components and removes \(dq.\(dq components.
 .sp
 Unlike \fBrealpath\fP or \fBpath resolve\fP, it does not make the paths absolute. It also does not resolve any symlinks. As such it can operate on non\-existent paths.
 .sp
@@ -364,8 +347,7 @@ It returns 0 if any normalization was done, i.e. any given path wasn\(aqt in can
 .INDENT 0.0
 .INDENT 3.5
 .sp
-.nf
-.ft C
+.EX
 >_ path normalize /usr/bin//../../etc/fish
 # The \(dq//\(dq is squashed and the \(dq..\(dq components neutralize the components before
 /etc/fish
@@ -379,19 +361,16 @@ my/sub2
 
 >_ path normalize \-\- \-/foo
 \&./\-/foo
-.ft P
-.fi
+.EE
 .UNINDENT
 .UNINDENT
 .SH "RESOLVE" SUBCOMMAND
 .INDENT 0.0
 .INDENT 3.5
 .sp
-.nf
-.ft C
+.EX
 path resolve [\-z | \-\-null\-in] [\-Z | \-\-null\-out] [\-q | \-\-quiet] [PATH ...]
-.ft P
-.fi
+.EE
 .UNINDENT
 .UNINDENT
 .sp
@@ -406,8 +385,7 @@ It returns 0 if any normalization or resolution was done, i.e. any given path wa
 .INDENT 0.0
 .INDENT 3.5
 .sp
-.nf
-.ft C
+.EX
 >_ path resolve /bin//sh
 # The \(dq//\(dq is squashed, and /bin is resolved if your system links it to /usr/bin.
 # sh here is bash (this is common on linux systems)
@@ -417,24 +395,21 @@ It returns 0 if any normalization or resolution was done, i.e. any given path wa
 # Assuming /bin exists and is a symlink to /usr/bin, but /bin/foo doesn\(aqt.
 # This resolves the /bin/ and normalizes the nonexistent rest:
 /usr/bin/foo/baz
-.ft P
-.fi
+.EE
 .UNINDENT
 .UNINDENT
 .SH "CHANGE-EXTENSION" SUBCOMMAND
 .INDENT 0.0
 .INDENT 3.5
 .sp
-.nf
-.ft C
+.EX
 path change\-extension [\-z | \-\-null\-in] [\-Z | \-\-null\-out] \e
     [\-q | \-\-quiet] EXTENSION [PATH ...]
-.ft P
-.fi
+.EE
 .UNINDENT
 .UNINDENT
 .sp
-\fBpath change\-extension\fP returns the given paths, with their extension changed to the given new extension. The extension is the part after (and including) the last \(dq.\(dq, unless that \(dq.\(dq followed a \(dq/\(dq or the basename is \(dq.\(dq or \(dq..\(dq, in which case there is no previous extension and the new one is simply added.
+\fBpath change\-extension\fP returns the given paths, with their extension changed to the given new extension. The extension is the part after (and including) the last \(dq.\(dq, unless that \(dq.\(dq followed a \(dq/\(dq or the basename is \(dq.\(dq or \(dq..\(dq, in which case there is no previous extension and the new one is added.
 .sp
 If the extension is empty, any previous extension is stripped, along with the \(dq.\(dq. This is, of course, the inverse of \fBpath extension\fP\&.
 .sp
@@ -445,8 +420,7 @@ It returns 0 if it was given any paths.
 .INDENT 0.0
 .INDENT 3.5
 .sp
-.nf
-.ft C
+.EX
 >_ path change\-extension mp4 ./foo.wmv
 \&./foo.mp4
 
@@ -455,34 +429,27 @@ It returns 0 if it was given any paths.
 
 >_ path change\-extension \(aq\(aq ../banana
 \&../banana
-# but status 1, because there was no extension.
 
 >_ path change\-extension \(aq\(aq ~/.config
 /home/alfa/.config
-# status 1
 
 >_ path change\-extension \(aq\(aq ~/.config.d
 /home/alfa/.config
-# status 0
 
 >_ path change\-extension \(aq\(aq ~/.config.
 /home/alfa/.config
-# status 0
-.ft P
-.fi
+.EE
 .UNINDENT
 .UNINDENT
 .SH "SORT" SUBCOMMAND
 .INDENT 0.0
 .INDENT 3.5
 .sp
-.nf
-.ft C
+.EX
 path sort [\-z | \-\-null\-in] [\-Z | \-\-null\-out] \e
     [\-q | \-\-quiet] [\-r | \-\-reverse] \e
     [\-\-key=basename|dirname|path] [PATH ...]
-.ft P
-.fi
+.EE
 .UNINDENT
 .UNINDENT
 .sp
@@ -501,8 +468,7 @@ It currently returns 0 if it was given any paths.
 .INDENT 0.0
 .INDENT 3.5
 .sp
-.nf
-.ft C
+.EX
 >_ path sort 10\-foo 2\-bar
 2\-bar
 10\-foo
@@ -513,8 +479,7 @@ It currently returns 0 if it was given any paths.
 
 >_ path sort \-\-unique \-\-key=basename $fish_function_path/*.fish
 # prints a list of all function files fish would use, sorted by name.
-.ft P
-.fi
+.EE
 .UNINDENT
 .UNINDENT
 .SH COMBINING PATH
@@ -533,8 +498,7 @@ Some examples of combining \fBpath\fP:
 .INDENT 0.0
 .INDENT 3.5
 .sp
-.nf
-.ft C
+.EX
 # Expand all paths in the current directory, leave only executable files, and print their resolved path
 path filter \-zZ \-xf \-\- * | path resolve \-z
 
@@ -545,11 +509,10 @@ path filter \-zZ \-xf \-\- * | path resolve \-z
 find . \-maxdepth 1 \-type f \-executable \-print0 | path resolve \-z
 
 set \-l paths (path filter \-p exec $PATH/fish \-Z | path resolve)
-.ft P
-.fi
+.EE
 .UNINDENT
 .UNINDENT
 .SH COPYRIGHT
-2023, fish-shell developers
+fish-shell developers
 .\" Generated by docutils manpage writer.
 .

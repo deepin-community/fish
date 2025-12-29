@@ -12,7 +12,7 @@ rm $filename
 set -l filename (echo foo | psub --testing --fifo)
 test -p $filename
 or echo 'psub is not a fifo' >&2
-# hack: the background write that psub peforms may block
+# hack: the background write that psub performs may block
 # until someone opens the fifo for reading. So make sure we
 # actually read it.
 cat $filename >/dev/null
@@ -49,6 +49,17 @@ else
 end
 #CHECK: psub filename ends with .cc
 
+# Fifo is allowed to have a suffix as well
+# hack: the background write that psub performs may block
+# until someone opens the fifo for reading. So make sure we
+# actually read it.
+if cat (echo foo | psub -F -s .cc | string match -e -r '\.fifo\.cc$') >/dev/null
+    echo 'psub pipe name ends with .cc'
+else
+    echo 'psub pipe name does not end with .cc'
+end
+#CHECK: psub pipe name ends with .cc
+
 set -l filename (echo foo | psub -s .fish)
 if test -e (dirname $filename)
     echo 'psub directory was not deleted'
@@ -57,5 +68,24 @@ else
 end
 #CHECK: psub directory was deleted
 
-set -l diffs (comm -3 (__fish_print_help psub | psub) (psub -hs banana | psub))
+set -l diffs (comm -3 (__fish_print_help psub 2>| psub) (psub -hs banana 2>| psub))
 test -z "$diffs"
+
+# In cases that look like process substitutions, mention psub.
+
+echo <(seq 0)
+# CHECKERR: {{.*}}/psub.fish (line {{\d+}}): Invalid redirection target:
+# CHECKERR: echo <(seq 0)
+# CHECKERR:      ^~~~~~~^
+# CHECKERR: If you wish to use process substitution, consider the psub command, see: `help psub`
+
+# To-do: should also mention psub here.
+echo <(seq 1)
+# CHECKERR: warning: An error occurred while redirecting file '1'
+# CHECKERR: warning: Path '1' does not exist
+
+echo <(seq 2)
+# CHECKERR: {{.*}}/psub.fish (line {{\d+}}): Invalid redirection target:
+# CHECKERR: echo <(seq 2)
+# CHECKERR:      ^~~~~~~^
+# CHECKERR: If you wish to use process substitution, consider the psub command, see: `help psub`

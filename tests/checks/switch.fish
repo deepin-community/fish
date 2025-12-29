@@ -1,4 +1,4 @@
-#RUN: %fish -C "set fish %fish" %s
+# RUN: fish=%fish %fish %s
 # Check that switch with an argument expanding to nothing still works.
 switch $foo
     case a
@@ -66,9 +66,9 @@ switch
         echo banana
 end
 '
-#CHECKERR: fish: 'case' builtin not inside of switch block
-#CHECKERR:      case a
-#CHECKERR:      ^~~^
+# CHECKERR: fish: Expected a string, but found end of the statement
+# CHECKERR: switch
+# CHECKERR: ^
 
 set smurf green
 
@@ -108,12 +108,14 @@ begin
             echo Matched!
     end
     # CHECKERR: fish: Unknown command: doesnotexist
-    # CHECKERR: checks/switch.fish (line {{\d+}}):
+    # CHECKERR: {{.*}}checks/switch.fish (line {{\d+}}):
     # CHECKERR: doesnotexist
     # CHECKERR: ^~~~~~~~~~~^
     # CHECKERR: in command substitution
-    # CHECKERR: {{\t}}called on line {{\d+}} of file checks/switch.fish
-    # CHECKERR: checks/switch.fish (line {{\d+}}): Unknown command
+    # CHECKERR: {{\t}}called on line {{\d+}} of file {{.*}}checks/switch.fish
+    # CHECKERR: {{.*}}checks/switch.fish (line {{\d+}}): Unknown command
     # CHECKERR: switch (doesnotexist)
     # CHECKERR:        ^~~~~~~~~~~~~^
 end
+
+exit 0

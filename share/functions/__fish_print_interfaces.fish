@@ -1,7 +1,7 @@
+# localization: skip(private)
 function __fish_print_interfaces --description "Print a list of known network interfaces"
     if test -d /sys/class/net
-        set -l interfaces /sys/class/net/*
-        string replace /sys/class/net/ '' $interfaces
+        path basename /sys/class/net/*
     else # OSX/BSD
         set -l os (uname)
         if string match -e -q BSD -- $os

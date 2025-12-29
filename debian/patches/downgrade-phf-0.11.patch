@@ -1,0 +1,23 @@
+Forwarded: not-needed
+Last-Update: 2025-11-21
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -42,4 +42,4 @@
+ ] }
+-phf = { version = "0.12", default-features = false }
+-phf_codegen = { version = "0.12" }
++phf = { version = "0.11", default-features = false }
++phf_codegen = { version = "0.11" }
+ portable-atomic = { version = "1", default-features = false, features = [
+--- a/crates/gettext-maps/build.rs
++++ b/crates/gettext-maps/build.rs
+@@ -78,3 +78,3 @@
+                 // language.
+-                catalogs.entry(language, format!("&{map_name}"));
++                catalogs.entry(language, &format!("&{map_name}"));
+
+@@ -137,3 +137,3 @@
+                         String::from_utf8(msgid.into()).unwrap(),
+-                        to_raw_str(&String::from_utf8(msgstr.into()).unwrap()),
++                        &to_raw_str(&String::from_utf8(msgstr.into()).unwrap()),
+                     );

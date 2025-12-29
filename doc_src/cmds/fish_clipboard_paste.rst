@@ -1,5 +1,3 @@
-.. _cmd-fish_clipboard_paste:
-
 fish_clipboard_paste - get text from the system's clipboard
 ==============================================================
 
@@ -21,7 +19,7 @@ If its stdout is not a terminal (see :doc:`isatty <isatty>`), it will output eve
 
 If it outputs to the commandline, it will automatically escape the output if the cursor is currently inside single-quotes so it is suitable for single-quotes (meaning it escapes ``'`` and ``\\``).
 
-It is bound to :kbd:`Control`\ +\ :kbd:`V` by default.
+It is bound to :kbd:`ctrl-v` by default.
 
 ``fish_clipboard_paste`` works by calling a system-specific backend. If it doesn't appear to work you may need to install yours.
 

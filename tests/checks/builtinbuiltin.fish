@@ -9,4 +9,9 @@ builtin -nq string
 #CHECKERR: builtin: invalid option combination, --query and --names are mutually exclusive
 echo $status
 #CHECK: 2
+
+builtin -- -q &| grep -q "Documentation for builtin"
+echo $status
+#CHECK: 0
+
 exit 0

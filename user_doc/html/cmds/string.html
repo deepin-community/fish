@@ -5,12 +5,11 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>string - manipulate strings &#8212; fish-shell 3.7.1 documentation</title>
-    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=a864bcb0" />
-    <link rel="stylesheet" type="text/css" href="../_static/pydoctheme.css?v=4e2636db" />
-    <link rel="stylesheet" type="text/css" href="/docs/shared/style.css" />
-    <script src="../_static/documentation_options.js?v=5c477e40"></script>
-    <script src="../_static/doctools.js?v=888ff710"></script>
+    <title>string - manipulate strings &#8212; fish-shell 4.2.1 documentation</title>
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=4da8bbd6" />
+    <link rel="stylesheet" type="text/css" href="../_static/pydoctheme.css?v=f89b4716" />
+    <script src="../_static/documentation_options.js?v=6fb65176"></script>
+    <script src="../_static/doctools.js?v=9bcbadda"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
@@ -20,14 +19,14 @@
      
 
   </head><body><div id="fmain">  
-    <div class="related" role="navigation" aria-label="related navigation">
+    <div class="related" role="navigation" aria-label="Related">
       <h3>Navigation</h3>
       <ul>
     <li><img src="../_static/fish.png" alt=""
              style="width: 80px; height: 80px; vertical-align: middle; margin-top: -1px"/></li>
     <li><a href="https://fishshell.com/">fish-shell</a> &#187;</li>
     
-    <a href="../index.html">fish-shell 3.7.1 documentation</a> &#187;
+    <a href="../index.html">fish-shell 4.2.1 documentation</a> &#187;
     
 
           <li class="nav-item nav-item-1"><a href="../commands.html" accesskey="U">Commands</a> &#187;</li>
@@ -35,7 +34,7 @@
     <li class="right">
         
 
-    <div class="inline-search" style="display: none" role="search">
+    <div class="inline-search" role="search">
         <form class="inline-search" action="../search.html" method="get">
           <input placeholder="Quick search" type="text" name="q" />
           <input type="submit" value="Go" />
@@ -43,7 +42,6 @@
           <input type="hidden" name="area" value="default" />
         </form>
     </div>
-    <script type="text/javascript">$('.inline-search').show(0);</script>
     </li>
     
     <div id="old-docs-notice" style="display: none">
@@ -55,7 +53,7 @@
     </div>    
 
     <div class="document">
-      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
         <div class="sphinxsidebarwrapper">
 <div>
 <h3><a href="../index.html">Documents</a></h3>
@@ -71,11 +69,13 @@
 <li class="toctree-l1"><a class="reference internal" href="../prompt.html">Writing your own prompt</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../design.html">Design</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../relnotes.html">Release notes</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../terminal-compatibility.html">Terminal Compatibility</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../contributing.html">Contributing To Fish</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../license.html">License</a></li>
 </ul>
 
 </div>
-<div id="searchbox" style="display: none" role="search">
+<search id="searchbox" style="display: none" role="search">
   <h3 id="searchlabel">Quick search</h3>
     <div class="searchformwrapper">
     <form class="search" action="../search.html" method="get">
@@ -83,7 +83,7 @@
       <input type="submit" value="Go" />
     </form>
     </div>
-</div>
+</search>
 <script>document.getElementById('searchbox').style.display = "block"</script>
 <div>
 <h4><a href="../index.html">Sections</a></h4>
@@ -113,11 +113,18 @@
 <li><a class="reference internal" href="#match-regex-examples">Match Regex Examples</a></li>
 </ul>
 </li>
-<li><a class="reference internal" href="#pad-and-shorten-subcommands">“pad” and “shorten” subcommands</a></li>
-<li><a class="reference internal" href="#see-also">See Also</a></li>
-<li><a class="reference internal" href="#id4">See Also</a></li>
-<li><a class="reference internal" href="#repeat-subcommand">“repeat” subcommand</a><ul>
+<li><a class="reference internal" href="#pad-subcommand">“pad” subcommand</a><ul>
+<li><a class="reference internal" href="#id4">Examples</a></li>
+<li><a class="reference internal" href="#see-also">See also</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#shorten-subcommand">“shorten” subcommand</a><ul>
 <li><a class="reference internal" href="#id5">Examples</a></li>
+<li><a class="reference internal" href="#id6">See also</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#repeat-subcommand">“repeat” subcommand</a><ul>
+<li><a class="reference internal" href="#id7">Examples</a></li>
 <li><a class="reference internal" href="#repeat-examples">Repeat Examples</a></li>
 </ul>
 </li>
@@ -127,16 +134,16 @@
 </ul>
 </li>
 <li><a class="reference internal" href="#split-and-split0-subcommands">“split” and “split0” subcommands</a><ul>
-<li><a class="reference internal" href="#id6">Examples</a></li>
+<li><a class="reference internal" href="#id8">Examples</a></li>
 <li><a class="reference internal" href="#nul-delimited-examples">NUL Delimited Examples</a></li>
 </ul>
 </li>
 <li><a class="reference internal" href="#sub-subcommand">“sub” subcommand</a><ul>
-<li><a class="reference internal" href="#id7">Examples</a></li>
+<li><a class="reference internal" href="#id9">Examples</a></li>
 </ul>
 </li>
 <li><a class="reference internal" href="#trim-subcommand">“trim” subcommand</a><ul>
-<li><a class="reference internal" href="#id8">Examples</a></li>
+<li><a class="reference internal" href="#id10">Examples</a></li>
 </ul>
 </li>
 <li><a class="reference internal" href="#upper-subcommand">“upper” subcommand</a></li>
@@ -154,23 +161,24 @@
           <div class="body" role="main">
             
   <section id="string-manipulate-strings">
-<span id="cmd-string"></span><h1>string - manipulate strings<a class="headerlink" href="#string-manipulate-strings" title="Link to this heading">¶</a></h1>
+<h1>string - manipulate strings<a class="headerlink" href="#string-manipulate-strings" title="Link to this heading">¶</a></h1>
 <section id="synopsis">
 <h2>Synopsis<a class="headerlink" href="#synopsis" title="Link to this heading">¶</a></h2>
 <div class="highlight-fish-synopsis notranslate"><div class="highlight"><pre><span></span><span class="nf">string</span><span class="w"> </span><span class="no">collect</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">-a</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--allow-empty</span><span class="g g-Other">]</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">-N</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--no-trim-newlines</span><span class="g g-Other">]</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">STRING</span><span class="w"> </span><span class="g g-Other">...]</span>
 <span class="nf">string</span><span class="w"> </span><span class="no">escape</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">-n</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--no-quoted</span><span class="g g-Other">]</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">--style=</span><span class="g g-Other">]</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">STRING</span><span class="w"> </span><span class="g g-Other">...]</span>
 <span class="nf">string</span><span class="w"> </span><span class="no">join</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">-q</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--quiet</span><span class="g g-Other">]</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">-n</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--no-empty</span><span class="g g-Other">]</span><span class="w"> </span><span class="no">SEP</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">STRING</span><span class="w"> </span><span class="g g-Other">...]</span>
-<span class="nf">string</span><span class="w"> </span><span class="no">join0</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">-q</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--quiet</span><span class="g g-Other">]</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">STRING</span><span class="w"> </span><span class="g g-Other">...]</span>
+<span class="nf">string</span><span class="w"> </span><span class="no">join0</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">-q</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--quiet</span><span class="g g-Other">]</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">-n</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--no-empty</span><span class="g g-Other">]</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">STRING</span><span class="w"> </span><span class="g g-Other">...]</span>
 <span class="nf">string</span><span class="w"> </span><span class="no">length</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">-q</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--quiet</span><span class="g g-Other">]</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">STRING</span><span class="w"> </span><span class="g g-Other">...]</span>
 <span class="nf">string</span><span class="w"> </span><span class="no">lower</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">-q</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--quiet</span><span class="g g-Other">]</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">STRING</span><span class="w"> </span><span class="g g-Other">...]</span>
 <span class="nf">string</span><span class="w"> </span><span class="no">match</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">-a</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--all</span><span class="g g-Other">]</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">-e</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--entire</span><span class="g g-Other">]</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">-i</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--ignore-case</span><span class="g g-Other">]</span>
 <span class="w">             </span><span class="g g-Other">[</span><span class="no">-g</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--groups-only</span><span class="g g-Other">]</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">-r</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--regex</span><span class="g g-Other">]</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">-n</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--index</span><span class="g g-Other">]</span>
 <span class="w">             </span><span class="g g-Other">[</span><span class="no">-q</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--quiet</span><span class="g g-Other">]</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">-v</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--invert</span><span class="g g-Other">]</span>
 <span class="w">             </span><span class="no">PATTERN</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">STRING</span><span class="w"> </span><span class="g g-Other">...]</span>
-<span class="nf">string</span><span class="w"> </span><span class="no">pad</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">-r</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--right</span><span class="g g-Other">]</span><span class="w"> </span><span class="g g-Other">[(</span><span class="no">-c</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--char</span><span class="g g-Other">)</span><span class="w"> </span><span class="no">CHAR</span><span class="g g-Other">]</span><span class="w"> </span><span class="g g-Other">[(</span><span class="no">-w</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--width</span><span class="g g-Other">)</span><span class="w"> </span><span class="no">INTEGER</span><span class="g g-Other">]</span>
+<span class="nf">string</span><span class="w"> </span><span class="no">pad</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">-r</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--right</span><span class="g g-Other">]</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">-C</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--center</span><span class="g g-Other">]</span><span class="w"> </span><span class="g g-Other">[(</span><span class="no">-c</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--char</span><span class="g g-Other">)</span><span class="w"> </span><span class="no">CHAR</span><span class="g g-Other">]</span><span class="w"> </span><span class="g g-Other">[(</span><span class="no">-w</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--width</span><span class="g g-Other">)</span><span class="w"> </span><span class="no">INTEGER</span><span class="g g-Other">]</span>
 <span class="w">           </span><span class="g g-Other">[</span><span class="no">STRING</span><span class="w"> </span><span class="g g-Other">...]</span>
 <span class="nf">string</span><span class="w"> </span><span class="no">repeat</span><span class="w"> </span><span class="g g-Other">[(</span><span class="no">-n</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--count</span><span class="g g-Other">)</span><span class="w"> </span><span class="no">COUNT</span><span class="g g-Other">]</span><span class="w"> </span><span class="g g-Other">[(</span><span class="no">-m</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--max</span><span class="g g-Other">)</span><span class="w"> </span><span class="no">MAX</span><span class="g g-Other">]</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">-N</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--no-newline</span><span class="g g-Other">]</span>
 <span class="w">              </span><span class="g g-Other">[</span><span class="no">-q</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--quiet</span><span class="g g-Other">]</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">STRING</span><span class="w"> </span><span class="g g-Other">...]</span>
+<span class="nf">string</span><span class="w"> </span><span class="no">repeat</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">-N</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--no-newline</span><span class="g g-Other">]</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">-q</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--quiet</span><span class="g g-Other">]</span><span class="w"> </span><span class="no">COUNT</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">STRING</span><span class="w"> </span><span class="g g-Other">...]</span>
 <span class="nf">string</span><span class="w"> </span><span class="no">replace</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">-a</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--all</span><span class="g g-Other">]</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">-f</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--filter</span><span class="g g-Other">]</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">-i</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--ignore-case</span><span class="g g-Other">]</span>
 <span class="w">               </span><span class="g g-Other">[</span><span class="no">-r</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--regex</span><span class="g g-Other">]</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">-q</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--quiet</span><span class="g g-Other">]</span><span class="w"> </span><span class="no">PATTERN</span><span class="w"> </span><span class="no">REPLACE</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">STRING</span><span class="w"> </span><span class="g g-Other">...]</span>
 <span class="nf">string</span><span class="w"> </span><span class="no">shorten</span><span class="w"> </span><span class="g g-Other">[(</span><span class="no">-c</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--char</span><span class="g g-Other">)</span><span class="w"> </span><span class="no">CHARS</span><span class="g g-Other">]</span><span class="w"> </span><span class="g g-Other">[(</span><span class="no">-m</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--max</span><span class="g g-Other">)</span><span class="w"> </span><span class="no">INTEGER</span><span class="g g-Other">]</span>
@@ -197,7 +205,7 @@
 <p>The following subcommands are available.</p>
 </section>
 <section id="collect-subcommand">
-<span id="cmd-string-collect"></span><h2>“collect” subcommand<a class="headerlink" href="#collect-subcommand" title="Link to this heading">¶</a></h2>
+<h2>“collect” subcommand<a class="headerlink" href="#collect-subcommand" title="Link to this heading">¶</a></h2>
 <div class="highlight-fish-synopsis notranslate"><div class="highlight"><pre><span></span><span class="nf">string</span><span class="w"> </span><span class="no">collect</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">-a</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--allow-empty</span><span class="g g-Other">]</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">-N</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--no-trim-newlines</span><span class="g g-Other">]</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">STRING</span><span class="w"> </span><span class="g g-Other">...]</span>
 </pre></div>
 </div>
@@ -236,7 +244,8 @@
 <span class="nf">string</span><span class="w"> </span><span class="no">unescape</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">--style=</span><span class="g g-Other">]</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">STRING</span><span class="w"> </span><span class="g g-Other">...]</span>
 </pre></div>
 </div>
-<p><code class="docutils literal notranslate"><span class="pre">string</span> <span class="pre">escape</span></code> escapes each <em>STRING</em> in one of three ways. The first is <strong>--style=script</strong>. This is the default. It alters the string such that it can be passed back to <code class="docutils literal notranslate"><span class="pre">eval</span></code> to produce the original argument again. By default, all special characters are escaped, and quotes are used to simplify the output when possible. If <strong>-n</strong> or <strong>--no-quoted</strong> is given, the simplifying quoted format is not used. Exit status: 0 if at least one string was escaped, or 1 otherwise.</p>
+<p><code class="docutils literal notranslate"><span class="pre">string</span> <span class="pre">escape</span></code> escapes each <em>STRING</em> in one of several ways.</p>
+<p><strong>--style=script</strong> (default) alters the string such that it can be passed back to <code class="docutils literal notranslate"><span class="pre">eval</span></code> to produce the original argument again. By default, all special characters are escaped, and quotes are used to simplify the output when possible. If <strong>-n</strong> or <strong>--no-quoted</strong> is given, the simplifying quoted format is not used. Exit status: 0 if at least one string was escaped, or 1 otherwise.</p>
 <p><strong>--style=var</strong> ensures the string can be used as a variable name by hex encoding any non-alphanumeric characters. The string is first converted to UTF-8 before being encoded.</p>
 <p><strong>--style=url</strong> ensures the string can be used as a URL by hex encoding any character which is not legal in a URL. The string is first converted to UTF-8 before being encoded.</p>
 <p><strong>--style=regex</strong> escapes an input string for literal matching within a regex expression. The string is first converted to UTF-8 before being encoded.</p>
@@ -254,13 +263,29 @@
 </section>
 <section id="join-and-join0-subcommands">
 <h2>“join” and “join0” subcommands<a class="headerlink" href="#join-and-join0-subcommands" title="Link to this heading">¶</a></h2>
-<div class="highlight-fish-synopsis notranslate"><div class="highlight"><pre><span></span><span class="nf">string</span><span class="w"> </span><span class="no">join</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">-q</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--quiet</span><span class="g g-Other">]</span><span class="w"> </span><span class="no">SEP</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">STRING</span><span class="w"> </span><span class="g g-Other">...]</span>
-<span class="nf">string</span><span class="w"> </span><span class="no">join0</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">-q</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--quiet</span><span class="g g-Other">]</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">STRING</span><span class="w"> </span><span class="g g-Other">...]</span>
+<div class="highlight-fish-synopsis notranslate"><div class="highlight"><pre><span></span><span class="nf">string</span><span class="w"> </span><span class="no">join</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">-q</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--quiet</span><span class="g g-Other">]</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">-n</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--no-empty</span><span class="g g-Other">]</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">--</span><span class="g g-Other">]</span><span class="w"> </span><span class="no">SEP</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">STRING</span><span class="w"> </span><span class="g g-Other">...]</span>
+<span class="nf">string</span><span class="w"> </span><span class="no">join0</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">-q</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--quiet</span><span class="g g-Other">]</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">-n</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--no-empty</span><span class="g g-Other">]</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">--</span><span class="g g-Other">]</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">STRING</span><span class="w"> </span><span class="g g-Other">...]</span>
 </pre></div>
 </div>
-<p><code class="docutils literal notranslate"><span class="pre">string</span> <span class="pre">join</span></code> joins its <em>STRING</em> arguments into a single string separated by <em>SEP</em>, which can be an empty string. Exit status: 0 if at least one join was performed, or 1 otherwise. If <code class="docutils literal notranslate"><span class="pre">-n</span></code> or <code class="docutils literal notranslate"><span class="pre">--no-empty</span></code> is specified, empty strings are excluded from consideration (e.g. <code class="docutils literal notranslate"><span class="pre">string</span> <span class="pre">join</span> <span class="pre">-n</span> <span class="pre">+</span> <span class="pre">a</span> <span class="pre">b</span> <span class="pre">&quot;&quot;</span> <span class="pre">c</span></code> would expand to <code class="docutils literal notranslate"><span class="pre">a+b+c</span></code> not <code class="docutils literal notranslate"><span class="pre">a+b++c</span></code>).</p>
-<p><code class="docutils literal notranslate"><span class="pre">string</span> <span class="pre">join0</span></code> joins its <em>STRING</em> arguments into a single string separated by the zero byte (NUL), and adds a trailing NUL. This is most useful in conjunction with tools that accept NUL-delimited input, such as <code class="docutils literal notranslate"><span class="pre">sort</span> <span class="pre">-z</span></code>. Exit status: 0 if at least one join was performed, or 1 otherwise.</p>
-<p>Because Unix uses NUL as the string terminator, passing the output of <code class="docutils literal notranslate"><span class="pre">string</span> <span class="pre">join0</span></code> as an <em>argument</em> to a command (via a <a class="reference internal" href="../language.html#expand-command-substitution"><span class="std std-ref">command substitution</span></a>) won’t actually work. Fish will pass the correct bytes along, but the command won’t be able to tell where the argument ends. This is a limitation of Unix’ argument passing.</p>
+<p>Joins its <em>STRING</em> arguments into a single string separated by <em>SEP</em> (for <code class="docutils literal notranslate"><span class="pre">string</span> <span class="pre">join</span></code>) or by the
+zero byte (NUL) (for <code class="docutils literal notranslate"><span class="pre">string</span> <span class="pre">join0</span></code>).
+Exit status: 0 if at least one join was performed, or 1 otherwise.</p>
+<dl class="simple">
+<dt><strong>-n</strong>, <strong>--no-empty</strong></dt><dd><p>Exclude empty strings from consideration (e.g. <code class="docutils literal notranslate"><span class="pre">string</span> <span class="pre">join</span> <span class="pre">-n</span> <span class="pre">+</span> <span class="pre">a</span> <span class="pre">b</span> <span class="pre">&quot;&quot;</span> <span class="pre">c</span></code> would expand to <code class="docutils literal notranslate"><span class="pre">a+b+c</span></code> not <code class="docutils literal notranslate"><span class="pre">a+b++c</span></code>).</p>
+</dd>
+<dt><strong>-q</strong>, <strong>--quiet</strong></dt><dd><p>Do not print the strings, only set the exit status as described above.</p>
+</dd>
+</dl>
+<p><strong>WARNING</strong>:
+Insert a  <code class="docutils literal notranslate"><span class="pre">--</span></code> before positional arguments to prevent them from being interpreted as flags.
+Otherwise, any strings starting with <code class="docutils literal notranslate"><span class="pre">-</span></code> will be treated as flag arguments, meaning they will most likely result in the command failing.
+This is also true if you specify a variable which expands to such a string instead of a literal string.
+If you don’t need to append flag arguments at the end of the command,
+just always use <code class="docutils literal notranslate"><span class="pre">--</span></code> to avoid unwelcome surprises.</p>
+<p><code class="docutils literal notranslate"><span class="pre">string</span> <span class="pre">join0</span></code> adds a trailing NUL. This is most useful in conjunction with tools that accept NUL-delimited input, such as <code class="docutils literal notranslate"><span class="pre">sort</span> <span class="pre">-z</span></code>.</p>
+<p>Because Unix uses NUL as the string terminator, passing the output of <code class="docutils literal notranslate"><span class="pre">string</span> <span class="pre">join0</span></code> as an <em>argument</em> to a command (via a <a class="reference internal" href="../language.html#expand-command-substitution"><span class="std std-ref">command substitution</span></a>) won’t actually work.
+Fish will pass the correct bytes along, but the command won’t be able to tell where the argument ends.
+This is a limitation of Unix’ argument passing.</p>
 <section id="id2">
 <h3>Examples<a class="headerlink" href="#id2" title="Link to this heading">¶</a></h3>
 <div class="highlight-fish-docs-samples notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;_ </span><span class="nf">seq</span><span class="w"> </span><span class="no">3</span><span class="w"> </span><span class="p">|</span><span class="w"> </span><span class="nf">string</span><span class="w"> </span><span class="no">join</span><span class="w"> </span><span class="no">...</span>
@@ -272,6 +297,16 @@
 <span class="go"># Just put the strings together without a separator</span>
 <span class="gp">&gt;_ </span><span class="nf">string</span><span class="w"> </span><span class="no">join</span><span class="w"> </span><span class="s1">&#39;&#39;</span><span class="w"> </span><span class="no">a</span><span class="w"> </span><span class="no">b</span><span class="w"> </span><span class="no">c</span>
 <span class="go">abc</span>
+
+<span class="gp">&gt;_ </span><span class="nf">set</span><span class="w"> </span><span class="no">-l</span><span class="w"> </span><span class="no">markdown_list</span><span class="w"> </span><span class="s1">&#39;- first&#39;</span><span class="w"> </span><span class="s1">&#39;- second&#39;</span><span class="w"> </span><span class="s1">&#39;- third&#39;</span>
+<span class="go"># Strings with leading hyphens (also in variable expansions) are interpreted as flag arguments by default.</span>
+<span class="gp">&gt;_ </span><span class="nf">string</span><span class="w"> </span><span class="no">join</span><span class="w"> </span><span class="se">\n</span><span class="w"> </span><span class="o">$markdown_list</span>
+<span class="go">string join: - first: unknown option</span>
+<span class="go"># Use &#39;--&#39; to prevent this.</span>
+<span class="gp">&gt;_ </span><span class="nf">string</span><span class="w"> </span><span class="no">join</span><span class="w"> </span><span class="no">--</span><span class="w"> </span><span class="se">\n</span><span class="w"> </span><span class="o">$markdown_list</span>
+<span class="go">- first</span>
+<span class="go">- second</span>
+<span class="go">- third</span>
 </pre></div>
 </div>
 </section>
@@ -325,28 +360,29 @@
 <h2>“match” subcommand<a class="headerlink" href="#match-subcommand" title="Link to this heading">¶</a></h2>
 <div class="highlight-fish-synopsis notranslate"><div class="highlight"><pre><span></span><span class="nf">string</span><span class="w"> </span><span class="no">match</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">-a</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--all</span><span class="g g-Other">]</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">-e</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--entire</span><span class="g g-Other">]</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">-i</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--ignore-case</span><span class="g g-Other">]</span>
 <span class="w">             </span><span class="g g-Other">[</span><span class="no">-g</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--groups-only</span><span class="g g-Other">]</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">-r</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--regex</span><span class="g g-Other">]</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">-n</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--index</span><span class="g g-Other">]</span>
-<span class="w">             </span><span class="g g-Other">[</span><span class="no">-q</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--quiet</span><span class="g g-Other">]</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">-v</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--invert</span><span class="g g-Other">]</span>
+<span class="w">             </span><span class="g g-Other">[</span><span class="no">-q</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--quiet</span><span class="g g-Other">]</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">-v</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--invert</span><span class="g g-Other">]</span><span class="w"> </span><span class="g g-Other">[(</span><span class="no">-m</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--max-matches</span><span class="g g-Other">)</span><span class="w"> </span><span class="no">MAX</span><span class="g g-Other">]</span>
 <span class="w">             </span><span class="no">PATTERN</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">STRING</span><span class="w"> </span><span class="g g-Other">...]</span>
 </pre></div>
 </div>
 <p><code class="docutils literal notranslate"><span class="pre">string</span> <span class="pre">match</span></code> tests each <em>STRING</em> against <em>PATTERN</em> and prints matching substrings. Only the first match for each <em>STRING</em> is reported unless <strong>-a</strong> or <strong>--all</strong> is given, in which case all matches are reported.</p>
-<p>If you specify the <strong>-e</strong> or <strong>--entire</strong> then each matching string is printed including any prefix or suffix not matched by the pattern (equivalent to <code class="docutils literal notranslate"><span class="pre">grep</span></code> without the <strong>-o</strong> flag). You can, obviously, achieve the same result by prepending and appending <strong>*</strong> or <strong>.*</strong> depending on whether or not you have specified the <strong>--regex</strong> flag. The <strong>--entire</strong> flag is simply a way to avoid having to complicate the pattern in that fashion and make the intent of the <code class="docutils literal notranslate"><span class="pre">string</span> <span class="pre">match</span></code> clearer. Without <strong>--entire</strong> and <strong>--regex</strong>, a <em>PATTERN</em> will need to match the entire <em>STRING</em> before it will be reported.</p>
+<p>If you specify the <strong>-e</strong> or <strong>--entire</strong> then each matching string is printed including any prefix or suffix not matched by the pattern (equivalent to <code class="docutils literal notranslate"><span class="pre">grep</span></code> without the <strong>-o</strong> flag). You can, obviously, achieve the same result by prepending and appending <strong>*</strong> or <strong>.*</strong> depending on whether or not you have specified the <strong>--regex</strong> flag. The <strong>--entire</strong> flag is a way to avoid having to complicate the pattern in that fashion and make the intent of the <code class="docutils literal notranslate"><span class="pre">string</span> <span class="pre">match</span></code> clearer. Without <strong>--entire</strong> and <strong>--regex</strong>, a <em>PATTERN</em> will need to match the entire <em>STRING</em> before it will be reported.</p>
 <p>Matching can be made case-insensitive with <strong>--ignore-case</strong> or <strong>-i</strong>.</p>
-<p>If <strong>--groups-only</strong> or <strong>-g</strong> is given, only the capturing groups will be reported - meaning the full match will be skipped. This is incompatible with <strong>--entire</strong> and <strong>--invert</strong>, and requires <strong>--regex</strong>. It is useful as a simple cutting tool instead of <code class="docutils literal notranslate"><span class="pre">string</span> <span class="pre">replace</span></code>, so you can simply choose “this part” of a string.</p>
+<p>If <strong>--groups-only</strong> or <strong>-g</strong> is given, only the capturing groups will be reported - meaning the full match will be skipped. This is incompatible with <strong>--entire</strong> and <strong>--invert</strong>, and requires <strong>--regex</strong>. It is useful as a simple cutting tool instead of <code class="docutils literal notranslate"><span class="pre">string</span> <span class="pre">replace</span></code>, so you can choose “this part” of a string.</p>
 <p>If <strong>--index</strong> or <strong>-n</strong> is given, each match is reported as a 1-based start position and a length. By default, PATTERN is interpreted as a glob pattern matched against each entire <em>STRING</em> argument. A glob pattern is only considered a valid match if it matches the entire <em>STRING</em>.</p>
 <p>If <strong>--regex</strong> or <strong>-r</strong> is given, <em>PATTERN</em> is interpreted as a Perl-compatible regular expression, which does not have to match the entire <em>STRING</em>. For a regular expression containing capturing groups, multiple items will be reported for each match, one for the entire match and one for each capturing group. With this, only the matching part of the <em>STRING</em> will be reported, unless <strong>--entire</strong> is given.</p>
 <p>When matching via regular expressions, <code class="docutils literal notranslate"><span class="pre">string</span> <span class="pre">match</span></code> automatically sets variables for all named capturing groups (<code class="docutils literal notranslate"><span class="pre">(?&lt;name&gt;expression)</span></code>). It will create a variable with the name of the group, in the default scope, for each named capturing group, and set it to the value of the capturing group in the first matched argument. If a named capture group matched an empty string, the variable will be set to the empty string (like <code class="docutils literal notranslate"><span class="pre">set</span> <span class="pre">var</span> <span class="pre">&quot;&quot;</span></code>). If it did not match, the variable will be set to nothing (like <code class="docutils literal notranslate"><span class="pre">set</span> <span class="pre">var</span></code>).  When <strong>--regex</strong> is used with <strong>--all</strong>, this behavior changes. Each named variable will contain a list of matches, with the first match contained in the first element, the second match in the second, and so on. If the group was empty or did not match, the corresponding element will be an empty string.</p>
 <p>If <strong>--invert</strong> or <strong>-v</strong> is used the selected lines will be only those which do not match the given glob pattern or regular expression.</p>
+<p>If <strong>--max-matches MAX</strong> or <strong>-m MAX</strong> is used, <code class="docutils literal notranslate"><span class="pre">string</span></code> will stop checking for matches after MAX lines of input have matched. This can be used as an “early exit” optimization when processing long inputs but expecting a limited and fixed number of outputs that might be found considerably before the input stream has been exhausted. If combined with <strong>--invert</strong> or <strong>-v</strong>, considers only inverted matches.</p>
 <p>Exit status: 0 if at least one match was found, or 1 otherwise.</p>
 <section id="match-glob-examples">
 <h3>Match Glob Examples<a class="headerlink" href="#match-glob-examples" title="Link to this heading">¶</a></h3>
-<div class="highlight-fish-docs-samples notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;_ </span><span class="nf">string</span><span class="w"> </span><span class="no">match</span><span class="w"> </span><span class="s1">&#39;?&#39;</span><span class="w"> </span><span class="no">a</span>
+<div class="highlight-fish-docs-samples notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;_ </span><span class="nf">string</span><span class="w"> </span><span class="no">match</span><span class="w"> </span><span class="s1">&#39;a&#39;</span><span class="w"> </span><span class="no">a</span>
 <span class="go">a</span>
 
 <span class="gp">&gt;_ </span><span class="nf">string</span><span class="w"> </span><span class="no">match</span><span class="w"> </span><span class="s1">&#39;a*b&#39;</span><span class="w"> </span><span class="no">axxb</span>
 <span class="go">axxb</span>
 
-<span class="gp">&gt;_ </span><span class="nf">string</span><span class="w"> </span><span class="no">match</span><span class="w"> </span><span class="no">-i</span><span class="w"> </span><span class="s1">&#39;a??B&#39;</span><span class="w"> </span><span class="no">Axxb</span>
+<span class="gp">&gt;_ </span><span class="nf">string</span><span class="w"> </span><span class="no">match</span><span class="w"> </span><span class="no">-i</span><span class="w"> </span><span class="s1">&#39;a*B&#39;</span><span class="w"> </span><span class="no">Axxb</span>
 <span class="go">Axxb</span>
 
 <span class="gp">&gt;_ </span><span class="nf">string</span><span class="w"> </span><span class="no">match</span><span class="w"> </span><span class="no">--</span><span class="w"> </span><span class="s1">&#39;-*&#39;</span><span class="w"> </span><span class="no">-h</span><span class="w"> </span><span class="no">foo</span><span class="w"> </span><span class="no">--version</span><span class="w"> </span><span class="no">bar</span>
@@ -355,7 +391,7 @@
 <span class="go">-h</span>
 <span class="go">--version</span>
 
-<span class="gp">&gt;_ </span><span class="nf">echo</span><span class="w"> </span><span class="s1">&#39;ok?&#39;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span><span class="nf">string</span><span class="w"> </span><span class="no">match</span><span class="w"> </span><span class="s1">&#39;*\?&#39;</span>
+<span class="gp">&gt;_ </span><span class="nf">echo</span><span class="w"> </span><span class="s1">&#39;ok?&#39;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span><span class="nf">string</span><span class="w"> </span><span class="no">match</span><span class="w"> </span><span class="s1">&#39;*?&#39;</span>
 <span class="go">ok?</span>
 
 <span class="go"># Note that only the second STRING will match here.</span>
@@ -367,7 +403,7 @@
 <span class="go">foo</span>
 <span class="go">foo2</span>
 
-<span class="gp">&gt;_ </span><span class="nf">string</span><span class="w"> </span><span class="no">match</span><span class="w"> </span><span class="s1">&#39;foo?&#39;</span><span class="w"> </span><span class="s1">&#39;foo1&#39;</span><span class="w"> </span><span class="s1">&#39;foo&#39;</span><span class="w"> </span><span class="s1">&#39;foo2&#39;</span>
+<span class="gp">&gt;_ </span><span class="nf">string</span><span class="w"> </span><span class="no">match</span><span class="w"> </span><span class="s1">&#39;foo*&#39;</span><span class="w"> </span><span class="s1">&#39;foo1&#39;</span><span class="w"> </span><span class="s1">&#39;foo&#39;</span><span class="w"> </span><span class="s1">&#39;foo2&#39;</span>
 <span class="go">foo1</span>
 <span class="go">foo2</span>
 </pre></div>
@@ -432,17 +468,20 @@
 </div>
 </section>
 </section>
-<section id="pad-and-shorten-subcommands">
-<h2>“pad” and “shorten” subcommands<a class="headerlink" href="#pad-and-shorten-subcommands" title="Link to this heading">¶</a></h2>
-<div class="highlight-fish-synopsis notranslate"><div class="highlight"><pre><span></span><span class="nf">string</span><span class="w"> </span><span class="no">pad</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">-r</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--right</span><span class="g g-Other">]</span><span class="w"> </span><span class="g g-Other">[(</span><span class="no">-c</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--char</span><span class="g g-Other">)</span><span class="w"> </span><span class="no">CHAR</span><span class="g g-Other">]</span><span class="w"> </span><span class="g g-Other">[(</span><span class="no">-w</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--width</span><span class="g g-Other">)</span><span class="w"> </span><span class="no">INTEGER</span><span class="g g-Other">]</span>
+<section id="pad-subcommand">
+<h2>“pad” subcommand<a class="headerlink" href="#pad-subcommand" title="Link to this heading">¶</a></h2>
+<div class="highlight-fish-synopsis notranslate"><div class="highlight"><pre><span></span><span class="nf">string</span><span class="w"> </span><span class="no">pad</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">-r</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--right</span><span class="g g-Other">]</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">-C</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--center</span><span class="g g-Other">]</span><span class="w"> </span><span class="g g-Other">[(</span><span class="no">-c</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--char</span><span class="g g-Other">)</span><span class="w"> </span><span class="no">CHAR</span><span class="g g-Other">]</span><span class="w"> </span><span class="g g-Other">[(</span><span class="no">-w</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--width</span><span class="g g-Other">)</span><span class="w"> </span><span class="no">INTEGER</span><span class="g g-Other">]</span>
 <span class="w">           </span><span class="g g-Other">[</span><span class="no">STRING</span><span class="w"> </span><span class="g g-Other">...]</span>
 </pre></div>
 </div>
 <p><code class="docutils literal notranslate"><span class="pre">string</span> <span class="pre">pad</span></code> extends each <em>STRING</em> to the given visible width by adding <em>CHAR</em> to the left. That means the width of all visible characters added together, excluding escape sequences and accounting for <span class="target" id="index-0"></span><a class="reference internal" href="../language.html#envvar-fish_emoji_width"><code class="xref std std-envvar docutils literal notranslate"><span class="pre">fish_emoji_width</span></code></a> and <span class="target" id="index-1"></span><a class="reference internal" href="../language.html#envvar-fish_ambiguous_width"><code class="xref std std-envvar docutils literal notranslate"><span class="pre">fish_ambiguous_width</span></code></a>. It is the amount of columns in a terminal the <em>STRING</em> occupies.</p>
 <p>The escape sequences reflect what fish knows about, and how it computes its output. Your terminal might support more escapes, or not support escape sequences that fish knows about.</p>
+<p>If <strong>-C</strong> or <strong>--center</strong> is given, add the padding to before and after the string. If it is impossible to perfectly center the result (because the required amount of padding is an odd number), extra padding will be added to the left, unless <strong>--right</strong> is also given.</p>
 <p>If <strong>-r</strong> or <strong>--right</strong> is given, add the padding after a string.</p>
 <p>If <strong>-c</strong> or <strong>--char</strong> is given, pad with <em>CHAR</em> instead of whitespace.</p>
 <p>The output is padded to the maximum width of all input strings. If <strong>-w</strong> or <strong>--width</strong> is given, use at least that.</p>
+<section id="id4">
+<h3>Examples<a class="headerlink" href="#id4" title="Link to this heading">¶</a></h3>
 <div class="highlight-fish-docs-samples notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;_ </span><span class="nf">string</span><span class="w"> </span><span class="no">pad</span><span class="w"> </span><span class="no">-w</span><span class="w"> </span><span class="no">10</span><span class="w"> </span><span class="no">abc</span><span class="w"> </span><span class="no">abcdef</span>
 <span class="go">       abc</span>
 <span class="go">    abcdef</span>
@@ -457,11 +496,15 @@
 </div>
 </section>
 <section id="see-also">
-<h2>See Also<a class="headerlink" href="#see-also" title="Link to this heading">¶</a></h2>
+<h3>See also<a class="headerlink" href="#see-also" title="Link to this heading">¶</a></h3>
 <ul class="simple">
 <li><p>The <a class="reference internal" href="printf.html"><span class="doc">printf</span></a> command can do simple padding, for example <code class="docutils literal notranslate"><span class="pre">printf</span> <span class="pre">%10s\n</span></code> works like <code class="docutils literal notranslate"><span class="pre">string</span> <span class="pre">pad</span> <span class="pre">-w10</span></code>.</p></li>
 <li><p><a class="reference internal" href="string-length.html"><span class="doc">string length</span></a> with the <code class="docutils literal notranslate"><span class="pre">--visible</span></code> option can be used to show what fish thinks the width is.</p></li>
 </ul>
+</section>
+</section>
+<section id="shorten-subcommand">
+<h2>“shorten” subcommand<a class="headerlink" href="#shorten-subcommand" title="Link to this heading">¶</a></h2>
 <div class="highlight-fish-synopsis notranslate"><div class="highlight"><pre><span></span><span class="nf">string</span><span class="w"> </span><span class="no">shorten</span><span class="w"> </span><span class="g g-Other">[(</span><span class="no">-c</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--char</span><span class="g g-Other">)</span><span class="w"> </span><span class="no">CHARS</span><span class="g g-Other">]</span><span class="w"> </span><span class="g g-Other">[(</span><span class="no">-m</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--max</span><span class="g g-Other">)</span><span class="w"> </span><span class="no">INTEGER</span><span class="g g-Other">]</span>
 <span class="w">               </span><span class="g g-Other">[</span><span class="no">-N</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--no-newline</span><span class="g g-Other">]</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">-l</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--left</span><span class="g g-Other">]</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">-q</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--quiet</span><span class="g g-Other">]</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">STRING</span><span class="w"> </span><span class="g g-Other">...]</span>
 </pre></div>
@@ -474,7 +517,9 @@
 <p>If <strong>-l</strong> or <strong>--left</strong> is given, remove text from the left on instead, so this prints the longest <em>suffix</em> of the string that fits. With <strong>--no-newline</strong>, this will take from the last line instead of the first.</p>
 <p>If <strong>-q</strong> or <strong>--quiet</strong> is given, <code class="docutils literal notranslate"><span class="pre">string</span> <span class="pre">shorten</span></code> only runs for the return value - if anything would be shortened, it returns 0, else 1.</p>
 <p>The default ellipsis is <code class="docutils literal notranslate"><span class="pre">…</span></code>. If fish thinks your system is incapable because of your locale, it will use <code class="docutils literal notranslate"><span class="pre">...</span></code> instead.</p>
-<p>The return value is 0 if any shortening occured, 1 otherwise.</p>
+<p>The return value is 0 if any shortening occurred, 1 otherwise.</p>
+<section id="id5">
+<h3>Examples<a class="headerlink" href="#id5" title="Link to this heading">¶</a></h3>
 <div class="highlight-fish-docs-samples notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;_ </span><span class="nf">string</span><span class="w"> </span><span class="no">shorten</span><span class="w"> </span><span class="no">foo</span><span class="w"> </span><span class="no">foobar</span>
 <span class="go"># No width was given, we infer, and &quot;foo&quot; is the shortest.</span>
 <span class="go">foo</span>
@@ -513,23 +558,25 @@
 </pre></div>
 </div>
 </section>
-<section id="id4">
-<h2>See Also<a class="headerlink" href="#id4" title="Link to this heading">¶</a></h2>
+<section id="id6">
+<h3>See also<a class="headerlink" href="#id6" title="Link to this heading">¶</a></h3>
 <ul class="simple">
-<li><p><a class="reference internal" href="#cmd-string"><span class="std std-ref">string</span></a>’s <code class="docutils literal notranslate"><span class="pre">pad</span></code> subcommand does the inverse of this command, adding padding to a specific width instead.</p></li>
+<li><p><a class="reference internal" href="string-pad.html"><span class="doc">string pad</span></a> does the inverse of this command, adding padding to a specific width instead.</p></li>
 <li><p>The <a class="reference internal" href="printf.html"><span class="doc">printf</span></a> command can do simple padding, for example <code class="docutils literal notranslate"><span class="pre">printf</span> <span class="pre">%10s\n</span></code> works like <code class="docutils literal notranslate"><span class="pre">string</span> <span class="pre">pad</span> <span class="pre">-w10</span></code>.</p></li>
 <li><p><a class="reference internal" href="string-length.html"><span class="doc">string length</span></a> with the <code class="docutils literal notranslate"><span class="pre">--visible</span></code> option can be used to show what fish thinks the width is.</p></li>
 </ul>
+</section>
 </section>
 <section id="repeat-subcommand">
 <h2>“repeat” subcommand<a class="headerlink" href="#repeat-subcommand" title="Link to this heading">¶</a></h2>
 <div class="highlight-fish-synopsis notranslate"><div class="highlight"><pre><span></span><span class="nf">string</span><span class="w"> </span><span class="no">repeat</span><span class="w"> </span><span class="g g-Other">[(</span><span class="no">-n</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--count</span><span class="g g-Other">)</span><span class="w"> </span><span class="no">COUNT</span><span class="g g-Other">]</span><span class="w"> </span><span class="g g-Other">[(</span><span class="no">-m</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--max</span><span class="g g-Other">)</span><span class="w"> </span><span class="no">MAX</span><span class="g g-Other">]</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">-N</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--no-newline</span><span class="g g-Other">]</span>
 <span class="w">              </span><span class="g g-Other">[</span><span class="no">-q</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--quiet</span><span class="g g-Other">]</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">STRING</span><span class="w"> </span><span class="g g-Other">...]</span>
+<span class="nf">string</span><span class="w"> </span><span class="no">repeat</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">-N</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--no-newline</span><span class="g g-Other">]</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">-q</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--quiet</span><span class="g g-Other">]</span><span class="w"> </span><span class="no">COUNT</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">STRING</span><span class="w"> </span><span class="g g-Other">...]</span>
 </pre></div>
 </div>
-<p><code class="docutils literal notranslate"><span class="pre">string</span> <span class="pre">repeat</span></code> repeats the <em>STRING</em> <strong>-n</strong> or <strong>--count</strong> times. The <strong>-m</strong> or <strong>--max</strong> option will limit the number of outputted characters (excluding the newline). This option can be used by itself or in conjunction with <strong>--count</strong>. If both <strong>--count</strong> and <strong>--max</strong> are present, max char will be outputed unless the final repeated string size is less than max, in that case, the string will repeat until count has been reached. Both <strong>--count</strong> and <strong>--max</strong> will accept a number greater than or equal to zero, in the case of zero, nothing will be outputed. If <strong>-N</strong> or <strong>--no-newline</strong> is given, the output won’t contain a newline character at the end. Exit status: 0 if yielded string is not empty, 1 otherwise.</p>
-<section id="id5">
-<h3>Examples<a class="headerlink" href="#id5" title="Link to this heading">¶</a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">string</span> <span class="pre">repeat</span></code> repeats the <em>STRING</em> <strong>-n</strong> or <strong>--count</strong> times. The <strong>-m</strong> or <strong>--max</strong> option will limit the number of outputted characters (excluding the newline). This option can be used by itself or in conjunction with <strong>--count</strong>. If both <strong>--count</strong> and <strong>--max</strong> are present, max char will be outputted unless the final repeated string size is less than max, in that case, the string will repeat until count has been reached. Both <strong>--count</strong> and <strong>--max</strong> will accept a number greater than or equal to zero, in the case of zero, nothing will be outputted. The first argument is interpreted as <em>COUNT</em> if <strong>--count</strong> or <strong>--max</strong> are not explicitly specified. If <strong>-N</strong> or <strong>--no-newline</strong> is given, the output won’t contain a newline character at the end. Exit status: 0 if yielded string is not empty, 1 otherwise.</p>
+<section id="id7">
+<h3>Examples<a class="headerlink" href="#id7" title="Link to this heading">¶</a></h3>
 </section>
 <section id="repeat-examples">
 <h3>Repeat Examples<a class="headerlink" href="#repeat-examples" title="Link to this heading">¶</a></h3>
@@ -544,6 +591,12 @@
 
 <span class="gp">&gt;_ </span><span class="nf">string</span><span class="w"> </span><span class="no">repeat</span><span class="w"> </span><span class="no">-m</span><span class="w"> </span><span class="no">5</span><span class="w"> </span><span class="s1">&#39;foo&#39;</span>
 <span class="go">foofo</span>
+
+<span class="gp">&gt;_ </span><span class="nf">string</span><span class="w"> </span><span class="no">repeat</span><span class="w"> </span><span class="no">2</span><span class="w"> </span><span class="s1">&#39;foo&#39;</span>
+<span class="go">foofoo</span>
+
+<span class="gp">&gt;_ </span><span class="nf">string</span><span class="w"> </span><span class="no">repeat</span><span class="w"> </span><span class="no">2</span><span class="w"> </span><span class="no">-n</span><span class="w"> </span><span class="no">3</span>
+<span class="go">222</span>
 </pre></div>
 </div>
 </section>
@@ -551,12 +604,14 @@
 <section id="replace-subcommand">
 <h2>“replace” subcommand<a class="headerlink" href="#replace-subcommand" title="Link to this heading">¶</a></h2>
 <div class="highlight-fish-synopsis notranslate"><div class="highlight"><pre><span></span><span class="nf">string</span><span class="w"> </span><span class="no">replace</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">-a</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--all</span><span class="g g-Other">]</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">-f</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--filter</span><span class="g g-Other">]</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">-i</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--ignore-case</span><span class="g g-Other">]</span>
-<span class="w">               </span><span class="g g-Other">[</span><span class="no">-r</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--regex</span><span class="g g-Other">]</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">-q</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--quiet</span><span class="g g-Other">]</span><span class="w"> </span><span class="no">PATTERN</span><span class="w"> </span><span class="no">REPLACEMENT</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">STRING</span><span class="w"> </span><span class="g g-Other">...]</span>
+<span class="w">               </span><span class="g g-Other">[</span><span class="no">-r</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--regex</span><span class="g g-Other">]</span><span class="w"> </span><span class="g g-Other">[(</span><span class="no">-m</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--max-matches</span><span class="g g-Other">)</span><span class="w"> </span><span class="no">MAX</span><span class="g g-Other">]</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">-q</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--quiet</span><span class="g g-Other">]</span>
+<span class="w">               </span><span class="no">PATTERN</span><span class="w"> </span><span class="no">REPLACEMENT</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">STRING</span><span class="w"> </span><span class="g g-Other">...]</span>
 </pre></div>
 </div>
 <p><code class="docutils literal notranslate"><span class="pre">string</span> <span class="pre">replace</span></code> is similar to <code class="docutils literal notranslate"><span class="pre">string</span> <span class="pre">match</span></code> but replaces non-overlapping matching substrings with a replacement string and prints the result. By default, <em>PATTERN</em> is treated as a literal substring to be matched.</p>
 <p>If <strong>-r</strong> or <strong>--regex</strong> is given, <em>PATTERN</em> is interpreted as a Perl-compatible regular expression, and <em>REPLACEMENT</em> can contain C-style escape sequences like <strong>t</strong> as well as references to capturing groups by number or name as <em>$n</em> or <em>${n}</em>.</p>
 <p>If you specify the <strong>-f</strong> or <strong>--filter</strong> flag then each input string is printed only if a replacement was done. This is useful where you would otherwise use this idiom: <code class="docutils literal notranslate"><span class="pre">a_cmd</span> <span class="pre">|</span> <span class="pre">string</span> <span class="pre">match</span> <span class="pre">pattern</span> <span class="pre">|</span> <span class="pre">string</span> <span class="pre">replace</span> <span class="pre">pattern</span> <span class="pre">new_pattern</span></code>. You can instead just write <code class="docutils literal notranslate"><span class="pre">a_cmd</span> <span class="pre">|</span> <span class="pre">string</span> <span class="pre">replace</span> <span class="pre">--filter</span> <span class="pre">pattern</span> <span class="pre">new_pattern</span></code>.</p>
+<p>If <strong>--max-matches MAX</strong> or <strong>-m MAX</strong> is used, <code class="docutils literal notranslate"><span class="pre">string</span> <span class="pre">replace</span></code> will stop all processing after MAX lines of input have matched the specified pattern. In the event of <code class="docutils literal notranslate"><span class="pre">--filter</span></code> or <code class="docutils literal notranslate"><span class="pre">-f</span></code>, this means the output will be MAX lines in length. This can be used as an “early exit” optimization when processing long inputs but expecting a limited and fixed number of outputs that might be found considerably before the input stream has been exhausted.</p>
 <p>Exit status: 0 if at least one replacement was performed, or 1 otherwise.</p>
 <section id="replace-literal-examples">
 <h3>Replace Literal Examples<a class="headerlink" href="#replace-literal-examples" title="Link to this heading">¶</a></h3>
@@ -589,20 +644,21 @@
 </section>
 </section>
 <section id="split-and-split0-subcommands">
-<span id="cmd-string-split0"></span><span id="cmd-string-split"></span><h2>“split” and “split0” subcommands<a class="headerlink" href="#split-and-split0-subcommands" title="Link to this heading">¶</a></h2>
-<div class="highlight-fish-synopsis notranslate"><div class="highlight"><pre><span></span><span class="nf">string</span><span class="w"> </span><span class="no">split</span><span class="w"> </span><span class="g g-Other">[(</span><span class="no">-f</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--fields</span><span class="g g-Other">)</span><span class="w"> </span><span class="no">FIELDS</span><span class="g g-Other">]</span><span class="w"> </span><span class="g g-Other">[(</span><span class="no">-m</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--max</span><span class="g g-Other">)</span><span class="w"> </span><span class="no">MAX</span><span class="g g-Other">]</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">-n</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--no-empty</span><span class="g g-Other">]</span>
+<h2>“split” and “split0” subcommands<a class="headerlink" href="#split-and-split0-subcommands" title="Link to this heading">¶</a></h2>
+<div class="highlight-fish-synopsis notranslate"><div class="highlight"><pre><span></span><span class="nf">string</span><span class="w"> </span><span class="no">split</span><span class="w"> </span><span class="g g-Other">[(</span><span class="no">-f</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--fields</span><span class="g g-Other">)</span><span class="w"> </span><span class="no">FIELDS</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">-a</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--allow-empty</span><span class="g g-Other">]]</span><span class="w"> </span><span class="g g-Other">[(</span><span class="no">-m</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--max</span><span class="g g-Other">)</span><span class="w"> </span><span class="no">MAX</span><span class="g g-Other">]</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">-n</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--no-empty</span><span class="g g-Other">]</span>
 <span class="w">             </span><span class="g g-Other">[</span><span class="no">-q</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--quiet</span><span class="g g-Other">]</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">-r</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--right</span><span class="g g-Other">]</span><span class="w"> </span><span class="no">SEP</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">STRING</span><span class="w"> </span><span class="g g-Other">...]</span>
-<span class="nf">string</span><span class="w"> </span><span class="no">split0</span><span class="w"> </span><span class="g g-Other">[(</span><span class="no">-f</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--fields</span><span class="g g-Other">)</span><span class="w"> </span><span class="no">FIELDS</span><span class="g g-Other">]</span><span class="w"> </span><span class="g g-Other">[(</span><span class="no">-m</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--max</span><span class="g g-Other">)</span><span class="w"> </span><span class="no">MAX</span><span class="g g-Other">]</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">-n</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--no-empty</span><span class="g g-Other">]</span>
+<span class="nf">string</span><span class="w"> </span><span class="no">split0</span><span class="w"> </span><span class="g g-Other">[(</span><span class="no">-f</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--fields</span><span class="g g-Other">)</span><span class="w"> </span><span class="no">FIELDS</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">-a</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--allow-empty</span><span class="g g-Other">]]</span><span class="w"> </span><span class="g g-Other">[(</span><span class="no">-m</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--max</span><span class="g g-Other">)</span><span class="w"> </span><span class="no">MAX</span><span class="g g-Other">]</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">-n</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--no-empty</span><span class="g g-Other">]</span>
 <span class="w">              </span><span class="g g-Other">[</span><span class="no">-q</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--quiet</span><span class="g g-Other">]</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">-r</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--right</span><span class="g g-Other">]</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">STRING</span><span class="w"> </span><span class="g g-Other">...]</span>
 </pre></div>
 </div>
-<p><code class="docutils literal notranslate"><span class="pre">string</span> <span class="pre">split</span></code> splits each <em>STRING</em> on the separator <em>SEP</em>, which can be an empty string. If <strong>-m</strong> or <strong>--max</strong> is specified, at most MAX splits are done on each <em>STRING</em>. If <strong>-r</strong> or <strong>--right</strong> is given, splitting is performed right-to-left. This is useful in combination with <strong>-m</strong> or <strong>--max</strong>. With <strong>-n</strong> or <strong>--no-empty</strong>, empty results are excluded from consideration (e.g. <code class="docutils literal notranslate"><span class="pre">hello\n\nworld</span></code> would expand to two strings and not three). Exit status: 0 if at least one split was performed, or 1 otherwise.</p>
+<p><code class="docutils literal notranslate"><span class="pre">string</span> <span class="pre">split</span></code> splits each <em>STRING</em> on the separator <em>SEP</em>, which can be an empty string. If <strong>-m</strong> or <strong>--max</strong> is specified, at most MAX splits are done on each <em>STRING</em>. If <strong>-r</strong> or <strong>--right</strong> is given, splitting is performed right-to-left. This is only useful in combination with <strong>-m</strong> or <strong>--max</strong>. With <strong>-n</strong> or <strong>--no-empty</strong>, empty results are excluded from consideration (e.g. <code class="docutils literal notranslate"><span class="pre">hello\n\nworld</span></code> would expand to two strings and not three). Exit status: 0 if at least one split was performed, or 1 otherwise.</p>
 <p>Use <strong>-f</strong> or <strong>--fields</strong> to print out specific fields. FIELDS is a comma-separated string of field numbers and/or spans. Each field is one-indexed, and will be printed on separate lines. If a given field does not exist, then the command exits with status 1 and does not print anything, unless <strong>--allow-empty</strong> is used.</p>
 <p>See also the <strong>--delimiter</strong> option of the <a class="reference internal" href="read.html"><span class="doc">read</span></a> command.</p>
 <p><code class="docutils literal notranslate"><span class="pre">string</span> <span class="pre">split0</span></code> splits each <em>STRING</em> on the zero byte (NUL). Options are the same as <code class="docutils literal notranslate"><span class="pre">string</span> <span class="pre">split</span></code> except that no separator is given.</p>
 <p><code class="docutils literal notranslate"><span class="pre">split0</span></code> has the important property that its output is not further split when used in a command substitution, allowing for the command substitution to produce elements containing newlines. This is most useful when used with Unix tools that produce zero bytes, such as <code class="docutils literal notranslate"><span class="pre">find</span> <span class="pre">-print0</span></code> or <code class="docutils literal notranslate"><span class="pre">sort</span> <span class="pre">-z</span></code>. See split0 examples below.</p>
-<section id="id6">
-<h3>Examples<a class="headerlink" href="#id6" title="Link to this heading">¶</a></h3>
+<p>Be aware that commandline arguments cannot include NULs, so you likely want to pass to <code class="docutils literal notranslate"><span class="pre">string</span> <span class="pre">split0</span></code> via a pipe, not a command substitution.</p>
+<section id="id8">
+<h3>Examples<a class="headerlink" href="#id8" title="Link to this heading">¶</a></h3>
 <div class="highlight-fish-docs-samples notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;_ </span><span class="nf">string</span><span class="w"> </span><span class="no">split</span><span class="w"> </span><span class="no">.</span><span class="w"> </span><span class="no">example.com</span>
 <span class="go">example</span>
 <span class="go">com</span>
@@ -626,6 +682,7 @@
 <section id="nul-delimited-examples">
 <h3>NUL Delimited Examples<a class="headerlink" href="#nul-delimited-examples" title="Link to this heading">¶</a></h3>
 <div class="highlight-fish-docs-samples notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;_ </span><span class="c"># Count files in a directory, without being confused by newlines.</span>
+<span class="gp">&gt;_ </span><span class="c"># Note: Don&#39;t use `string split0 (find . -print0)`, because arguments cannot include NUL.</span>
 <span class="gp">&gt;_ </span><span class="nf">count</span><span class="w"> </span><span class="o">(</span><span class="nf">find</span><span class="w"> </span><span class="no">.</span><span class="w"> </span><span class="no">-print0</span><span class="w"> </span><span class="p">|</span><span class="w"> </span><span class="nf">string</span><span class="w"> </span><span class="no">split0</span><span class="o">)</span>
 <span class="go">42</span>
 
@@ -645,8 +702,8 @@
 </pre></div>
 </div>
 <p><code class="docutils literal notranslate"><span class="pre">string</span> <span class="pre">sub</span></code> prints a substring of each string argument. The start/end of the substring can be specified with <strong>-s</strong>/<strong>-e</strong> or <strong>--start</strong>/<strong>--end</strong> followed by a 1-based index value. Positive index values are relative to the start of the string and negative index values are relative to the end of the string. The default start value is 1. The length of the substring can be specified with <strong>-l</strong> or <strong>--length</strong>. If the length or end is not specified, the substring continues to the end of each STRING. Exit status: 0 if at least one substring operation was performed, 1 otherwise. <strong>--length</strong> is mutually exclusive with <strong>--end</strong>.</p>
-<section id="id7">
-<h3>Examples<a class="headerlink" href="#id7" title="Link to this heading">¶</a></h3>
+<section id="id9">
+<h3>Examples<a class="headerlink" href="#id9" title="Link to this heading">¶</a></h3>
 <div class="highlight-fish-docs-samples notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;_ </span><span class="nf">string</span><span class="w"> </span><span class="no">sub</span><span class="w"> </span><span class="no">--length</span><span class="w"> </span><span class="no">2</span><span class="w"> </span><span class="no">abcde</span>
 <span class="go">ab</span>
 
@@ -677,9 +734,11 @@
 <span class="w">            </span><span class="g g-Other">[</span><span class="no">-q</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--quiet</span><span class="g g-Other">]</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">STRING</span><span class="w"> </span><span class="g g-Other">...]</span>
 </pre></div>
 </div>
-<p><code class="docutils literal notranslate"><span class="pre">string</span> <span class="pre">trim</span></code> removes leading and trailing whitespace from each <em>STRING</em>. If <strong>-l</strong> or <strong>--left</strong> is given, only leading whitespace is removed. If <strong>-r</strong> or <strong>--right</strong> is given, only trailing whitespace is trimmed. The <strong>-c</strong> or <strong>--chars</strong> switch causes the characters in <em>CHARS</em> to be removed instead of whitespace. Exit status: 0 if at least one character was trimmed, or 1 otherwise.</p>
-<section id="id8">
-<h3>Examples<a class="headerlink" href="#id8" title="Link to this heading">¶</a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">string</span> <span class="pre">trim</span></code> removes leading and trailing whitespace from each <em>STRING</em>. If <strong>-l</strong> or <strong>--left</strong> is given, only leading whitespace is removed. If <strong>-r</strong> or <strong>--right</strong> is given, only trailing whitespace is trimmed.</p>
+<p>The <strong>-c</strong> or <strong>--chars</strong> switch causes the set of characters in <em>CHARS</em> to be removed instead of whitespace. This is a set of characters, not a string - if you pass <code class="docutils literal notranslate"><span class="pre">-c</span> <span class="pre">foo</span></code>, it will remove any “f” or “o”, not just “foo” as a whole.</p>
+<p>Exit status: 0 if at least one character was trimmed, or 1 otherwise.</p>
+<section id="id10">
+<h3>Examples<a class="headerlink" href="#id10" title="Link to this heading">¶</a></h3>
 <div class="highlight-fish-docs-samples notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;_ </span><span class="nf">string</span><span class="w"> </span><span class="no">trim</span><span class="w"> </span><span class="s1">&#39; abc  &#39;</span>
 <span class="go">abc</span>
 
@@ -768,14 +827,14 @@
       </div> 
       <div class="clearer"></div>
     </div>  
-    <div class="related" role="navigation" aria-label="related navigation">
+    <div class="related" role="navigation" aria-label="Related">
       <h3>Navigation</h3>
       <ul>
     <li><img src="../_static/fish.png" alt=""
              style="width: 80px; height: 80px; vertical-align: middle; margin-top: -1px"/></li>
     <li><a href="https://fishshell.com/">fish-shell</a> &#187;</li>
     
-    <a href="../index.html">fish-shell 3.7.1 documentation</a> &#187;
+    <a href="../index.html">fish-shell 4.2.1 documentation</a> &#187;
     
 
           <li class="nav-item nav-item-1"><a href="../commands.html" >Commands</a> &#187;</li>
@@ -783,7 +842,7 @@
     <li class="right">
         
 
-    <div class="inline-search" style="display: none" role="search">
+    <div class="inline-search" role="search">
         <form class="inline-search" action="../search.html" method="get">
           <input placeholder="Quick search" type="text" name="q" />
           <input type="submit" value="Go" />
@@ -791,7 +850,6 @@
           <input type="hidden" name="area" value="default" />
         </form>
     </div>
-    <script type="text/javascript">$('.inline-search').show(0);</script>
     </li>
     
     <div id="old-docs-notice" style="display: none">
@@ -802,17 +860,17 @@
       </ul>
     </div>  
     <div class="footer">
-    &copy; Copyright 2023, fish-shell developers.
+    &copy; Copyright fish-shell developers.
     <br />
     <a href="https://github.com/fish-shell/fish-shell/issues">Found a bug</a>?
     <br />
 
-    Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 7.2.6.
+    Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 8.2.3.
     </div>
 </div>
 
 <script type="text/javascript">
- FISH_DOCS_VERSION = "3.7";
+ FISH_DOCS_VERSION = "4.2";
 
  function copy_to_clipboard(it) {
      // Find the pre tag we're interested in.
@@ -866,7 +924,6 @@
       }
   })();
 </script>
-<script defer type="text/javascript" src="/docs/shared/script.js"></script>
 
   </body>
 </html>

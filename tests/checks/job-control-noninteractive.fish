@@ -1,4 +1,5 @@
 #RUN: env fth=%fish_test_helper fish=%fish %fish %s
+#REQUIRES: command -v %fish_test_helper
 
 # Ensure job control works in non-interactive environments.
 
@@ -18,3 +19,6 @@ or echo "pgroups were the same, job control did not work"
 $fish -c 'status job-control full ; $fth report_foreground' &
 wait
 #CHECKERR: background
+
+$fish -c 'sleep .2 & bg %1'
+#CHECKERR: bg: Can't put job 1, 'sleep .2 &' to background because it is not under job control

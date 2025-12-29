@@ -1,5 +1,3 @@
-.. _cmd-complete:
-
 complete - edit command-specific tab-completions
 ================================================
 
@@ -16,7 +14,7 @@ Description
 
 ``complete`` defines, removes or lists completions for a command.
 
-For an introduction to writing your own completions, see :ref:`Writing your own completions <completion-own>` in
+For an introduction to writing your own completions, see :doc:`Writing your own completions <../completions>` in
 the fish manual.
 
 The following options are available:
@@ -53,12 +51,19 @@ The following options are available:
 
 **-r** or **--require-parameter**
     This completion must have an option argument, i.e. may not be followed by another option.
+    This means that the next argument is the argument to the option.
+    If this is *not* given, the option argument must be attached like ``-xFoo`` or ``--color=auto``.
 
 **-x** or **--exclusive**
     Short for **-r** and **-f**.
 
+**-d** or **--description** *DESCRIPTION*
+    Add a description for this completion, to be shown in the completion pager.
+
 **-w** or **--wraps** *WRAPPED_COMMAND*
-    Causes the specified command to inherit completions from *WRAPPED_COMMAND* (see below for details).
+    Causes the specified command to inherit completions from *WRAPPED_COMMAND*.
+    This is used for "this command completes like that other command" kinds of relationships.
+    See below for details.
 
 **-n** or **--condition** *CONDITION*
     This completion should only be used if the *CONDITION* (a shell command) returns 0. This makes it possible to specify completions that should only be used in some cases. If multiple conditions are specified, fish will try them in the order they are specified until one fails or all succeeded.

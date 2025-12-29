@@ -170,7 +170,7 @@ end
 
 # Decide if git is safe to run.
 # On Darwin, git is pre-installed as a stub, which will pop a dialog if you run it.
-if string match -q Darwin -- (uname) && string match -q /usr/bin/git -- (command -s git) && type -q xcode-select && type -q xcrun
+if string match -q Darwin -- (__fish_uname) && string match -q /usr/bin/git -- (command -s git) && type -q xcode-select && type -q xcrun
     if not xcode-select --print-path &>/dev/null
         # Only the stub git is installed.
         # Do not try to run it.
@@ -180,10 +180,9 @@ if string match -q Darwin -- (uname) && string match -q /usr/bin/git -- (command
     else
         # git is installed, but on the first run it may be very slow as xcrun needs to populate the cache.
         # Kick it off in the background to populate the cache.
-        command git --version &>/dev/null &
-        disown $last_pid &>/dev/null
+        /bin/sh -c '( /usr/bin/git --version; touch /tmp/__fish_git_ready ) >/dev/null 2>&1 &'
         function __fish_git_prompt_ready
-            path is (xcrun --show-cache-path 2>/dev/null) || return 1
+            path is /tmp/__fish_git_ready || return 1
             # git is ready, erase the function.
             functions -e __fish_git_prompt_ready
             return 0
@@ -201,16 +200,17 @@ function fish_git_prompt --description "Prompt function for Git"
     if functions -q __fish_git_prompt_ready && not __fish_git_prompt_ready
         return 1
     end
-    set -l repo_info (command git rev-parse --git-dir --is-inside-git-dir --is-bare-repository --is-inside-work-tree HEAD 2>/dev/null)
+    set -l repo_info (command git rev-parse --git-dir --git-common-dir --is-inside-git-dir --is-bare-repository --is-inside-work-tree HEAD 2>/dev/null)
     test -n "$repo_info"
     or return
 
     set -l git_dir $repo_info[1]
-    set -l inside_gitdir $repo_info[2]
-    set -l bare_repo $repo_info[3]
-    set -l inside_worktree $repo_info[4]
-    set -q repo_info[5]
-    and set -l sha $repo_info[5]
+    set -l git_common_dir $repo_info[2]
+    set -l inside_gitdir $repo_info[3]
+    set -l bare_repo $repo_info[4]
+    set -l inside_worktree $repo_info[5]
+    set -q repo_info[6]
+    and set -l sha $repo_info[6]
 
     set -l rbc (__fish_git_prompt_operation_branch_bare $repo_info)
     set -l r $rbc[1] # current operation
@@ -281,7 +281,7 @@ function fish_git_prompt --description "Prompt function for Git"
                 contains -- "$__fish_git_prompt_show_informative_status" yes true 1
                 and test "$dirty" != false
             end
-            set informative_status (untracked=$untracked __fish_git_prompt_informative_status $git_dir)
+            set informative_status (untracked=$untracked __fish_git_prompt_informative_status $git_common_dir)
             if test -n "$informative_status"
                 set informative_status "$space$informative_status"
             end
@@ -299,9 +299,9 @@ function fish_git_prompt --description "Prompt function for Git"
                 # Ignored files are omitted by default
                 set -l stat (command git -c core.fsmonitor= status --porcelain -z $opt | string split0)
 
-                set dirtystate (string match -qr '^.[ACDMR]' -- $stat; and echo 1)
+                set dirtystate (string match -qr '^.[ACDMRTU]' -- $stat; and echo 1)
                 if test -n "$sha"
-                    set stagedstate (string match -qr '^[ACDMR].' -- $stat; and echo 1)
+                    set stagedstate (string match -qr '^[ACDMRTU].' -- $stat; and echo 1)
                 else
                     set invalidstate 1
                 end
@@ -311,12 +311,12 @@ function fish_git_prompt --description "Prompt function for Git"
             end
 
             if contains -- "$__fish_git_prompt_showstashstate" yes true 1
-                and test -r $git_dir/logs/refs/stash
+                and test -r $git_common_dir/logs/refs/stash
                 # If we have informative status but don't want to actually
                 # *compute* the informative status, we might still count the stash.
                 if contains -- "$__fish_git_prompt_show_informative_status" yes true 1
-                    set stashstate (count < $git_dir/logs/refs/stash)
-                else
+                    set stashstate (count < $git_common_dir/logs/refs/stash)
+                else if test -s $git_common_dir/logs/refs/stash
                     set stashstate 1
                 end
             end
@@ -388,7 +388,9 @@ function fish_git_prompt --description "Prompt function for Git"
     end
 
     # Formatting
-    if test -n "$f"
+    # If we have state, a bare repo or upstream difference, add a separator.
+    # merging is already separate.
+    if test -n "$f$c$p"
         set f "$space$f"
     end
     set -l format $argv[1]
@@ -420,16 +422,13 @@ function __fish_git_prompt_informative_status
     # The v2 format is better, but we don't actually care in this case.
     set -l stats (string sub -l 2 (git -c core.fsmonitor= status --porcelain -z $untr | string split0))
     set -l invalidstate (string match -r '^UU' $stats | count)
-    set -l stagedstate (string match -r '^[ACDMR].' $stats | count)
-    set -l dirtystate (string match -r '^.[ACDMR]' $stats | count)
+    set -l stagedstate (string match -r '^[ACDMRT].' $stats | count)
+    set -l dirtystate (string match -r '^.[ACDMRT]' $stats | count)
     set -l untrackedfiles (string match -r '^\?\?' $stats | count)
 
     set -l info
 
-    # If `math` fails for some reason, assume the state is clean - it's the simpler path
-    set -l state (math $dirtystate + $invalidstate + $stagedstate + $untrackedfiles + $stashstate 2>/dev/null)
-    if test -z "$state"
-        or test "$state" = 0
+    if test "$dirtystate$invalidstate$stagedstate$untrackedfiles$stashstate" = 00000
         if test -n "$___fish_git_prompt_char_cleanstate"
             set info $___fish_git_prompt_color_cleanstate$___fish_git_prompt_char_cleanstate$___fish_git_prompt_color_cleanstate_done
         end
@@ -463,10 +462,10 @@ end
 function __fish_git_prompt_operation_branch_bare --description "fish_git_prompt helper, returns the current Git operation and branch"
     # This function is passed the full repo_info array
     set -l git_dir $argv[1]
-    set -l inside_gitdir $argv[2]
-    set -l bare_repo $argv[3]
-    set -q argv[5]
-    and set -l sha $argv[5]
+    set -l inside_gitdir $argv[3]
+    set -l bare_repo $argv[4]
+    set -q argv[6]
+    and set -l sha $argv[6]
 
     set -l branch
     set -l operation
@@ -587,7 +586,7 @@ function __fish_git_prompt_validate_chars --description "fish_git_prompt helper,
     __fish_git_prompt_set_char __fish_git_prompt_char_untrackedfiles '%' '…'
     __fish_git_prompt_set_char __fish_git_prompt_char_upstream_ahead '>' '↑'
     __fish_git_prompt_set_char __fish_git_prompt_char_upstream_behind '<' '↓'
-    __fish_git_prompt_set_char __fish_git_prompt_char_upstream_diverged '<>'
+    __fish_git_prompt_set_char __fish_git_prompt_char_upstream_diverged '<>' '↓↑'
     __fish_git_prompt_set_char __fish_git_prompt_char_upstream_equal '='
     __fish_git_prompt_set_char __fish_git_prompt_char_upstream_prefix ''
 
@@ -622,7 +621,6 @@ function __fish_git_prompt_set_color
         end
     end
 end
-
 
 function __fish_git_prompt_validate_colors --description "fish_git_prompt helper, checks color variables"
 

@@ -1,5 +1,3 @@
-.. _cmd-status:
-
 status - query fish runtime information
 =======================================
 
@@ -11,6 +9,7 @@ Synopsis
     status
     status is-login
     status is-interactive
+    status is-interactive-read
     status is-block
     status is-breakpoint
     status is-command-substitution
@@ -29,6 +28,12 @@ Synopsis
     status job-control CONTROL_TYPE
     status features
     status test-feature FEATURE
+    status build-info
+    status get-file FILE
+    status list-files [PATH]
+    status help-sections
+    status terminal
+    status test-terminal-feature FEATURE
 
 Description
 -----------
@@ -48,6 +53,9 @@ The following operations (subcommands) are available:
 
 **is-interactive**, **-i** or **--is-interactive**
     Returns 0 if fish is interactive - that is, connected to a keyboard.
+
+**is-interactive-read** or **--is-interactive-read**
+    Returns 0 if fish is running an interactive :doc:`read <read>` builtin which is connected to a keyboard.
 
 **is-login**, **-l** or **--is-login**
     Returns 0 if fish is a login shell - that is, if fish should perform login tasks such as setting up :envvar:`PATH`.
@@ -92,14 +100,56 @@ The following operations (subcommands) are available:
     Sets the job control type to *CONTROL_TYPE*, which can be **none**, **full**, or **interactive**.
 
 **features**
-    Lists all available feature flags.
+    Lists all available :ref:`feature flags <featureflags>`.
 
 **test-feature** *FEATURE*
     Returns 0 when FEATURE is enabled, 1 if it is disabled, and 2 if it is not recognized.
 
+**build-info**
+    This prints information on how fish was build - which architecture, which build system or profile was used, etc.
+    This is mainly useful for debugging.
+
+.. _status-get-file:
+
+**get-file** *FILE*
+    NOTE: this subcommand is mainly intended for fish's internal use; let us know if you want to use it elsewhere.
+
+    This prints a file embedded in the fish binary at compile time. This includes the default set of functions and completions,
+    as well as the man pages and themes. Which files are included depends on build settings.
+    Returns 0 if the file was included, 1 otherwise.
+
+**list-files** *FILE*
+    NOTE: this subcommand is mainly intended for fish's internal use; let us know if you want to use it elsewhere.
+
+    This lists the files embedded in the fish binary at compile time. Only files where the path starts with the optional *FILE* argument are shown.
+    Returns 0 if something was printed, 1 otherwise.
+
+**help-sections**
+    NOTE: this subcommand is intended for fish's internal use.
+
+    List section arguments for the :doc:`help <help>` command.
+    If you have the latest version of fish, these URL fragments are valid on `<https://fishshell.com/docs/current/>`__.
+    Always returns 0.
+
+.. _status-terminal:
+
+**terminal**
+    Prints the name and version of the terminal fish is running inside (for example as reported via :ref:`XTVERSION <term-compat-xtversion>`).
+    This is not available during early startup but only starting from when the first interactive prompt is shown, possibly via builtin :doc:`read <read>`,
+    so before the first ``fish_prompt`` or ``fish_read`` :ref:`event <event>`.
+
+.. _status-test-terminal-features:
+
+**test-terminal-feature** *FEATURE*
+    Returns 0 when the terminal was :ref:`detected <term-compat-xtgettcap>` to support the given feature.
+    Like :ref:`status terminal <status-terminal>`, this only works once the first interactive prompt is shown.
+
+    Currently the only available *FEATURE* is :ref:`scroll-content-up <term-compat-indn>`.
+    An error will be printed when passed an unrecognized feature.
+
 Notes
 -----
 
-For backwards compatibility most subcommands can also be specified as a long or short option. For example, rather than ``status is-login`` you can type ``status --is-login``. The flag forms are deprecated and may be removed in a future release (but not before fish 4.0).
+For backwards compatibility most subcommands can also be specified as a long or short option. For example, rather than ``status is-login`` you can type ``status --is-login``. The flag forms are deprecated and may be removed in a future release.
 
 You can only specify one subcommand per invocation even if you use the flag form of the subcommand.

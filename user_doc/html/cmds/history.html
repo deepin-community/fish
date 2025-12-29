@@ -5,12 +5,11 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>history - show and manipulate command history &#8212; fish-shell 3.7.1 documentation</title>
-    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=a864bcb0" />
-    <link rel="stylesheet" type="text/css" href="../_static/pydoctheme.css?v=4e2636db" />
-    <link rel="stylesheet" type="text/css" href="/docs/shared/style.css" />
-    <script src="../_static/documentation_options.js?v=5c477e40"></script>
-    <script src="../_static/doctools.js?v=888ff710"></script>
+    <title>history - show and manipulate command history &#8212; fish-shell 4.2.1 documentation</title>
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=4da8bbd6" />
+    <link rel="stylesheet" type="text/css" href="../_static/pydoctheme.css?v=f89b4716" />
+    <script src="../_static/documentation_options.js?v=6fb65176"></script>
+    <script src="../_static/doctools.js?v=9bcbadda"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
@@ -20,14 +19,14 @@
      
 
   </head><body><div id="fmain">  
-    <div class="related" role="navigation" aria-label="related navigation">
+    <div class="related" role="navigation" aria-label="Related">
       <h3>Navigation</h3>
       <ul>
     <li><img src="../_static/fish.png" alt=""
              style="width: 80px; height: 80px; vertical-align: middle; margin-top: -1px"/></li>
     <li><a href="https://fishshell.com/">fish-shell</a> &#187;</li>
     
-    <a href="../index.html">fish-shell 3.7.1 documentation</a> &#187;
+    <a href="../index.html">fish-shell 4.2.1 documentation</a> &#187;
     
 
           <li class="nav-item nav-item-1"><a href="../commands.html" accesskey="U">Commands</a> &#187;</li>
@@ -35,7 +34,7 @@
     <li class="right">
         
 
-    <div class="inline-search" style="display: none" role="search">
+    <div class="inline-search" role="search">
         <form class="inline-search" action="../search.html" method="get">
           <input placeholder="Quick search" type="text" name="q" />
           <input type="submit" value="Go" />
@@ -43,7 +42,6 @@
           <input type="hidden" name="area" value="default" />
         </form>
     </div>
-    <script type="text/javascript">$('.inline-search').show(0);</script>
     </li>
     
     <div id="old-docs-notice" style="display: none">
@@ -55,7 +53,7 @@
     </div>    
 
     <div class="document">
-      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
         <div class="sphinxsidebarwrapper">
 <div>
 <h3><a href="../index.html">Documents</a></h3>
@@ -71,11 +69,13 @@
 <li class="toctree-l1"><a class="reference internal" href="../prompt.html">Writing your own prompt</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../design.html">Design</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../relnotes.html">Release notes</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../terminal-compatibility.html">Terminal Compatibility</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../contributing.html">Contributing To Fish</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../license.html">License</a></li>
 </ul>
 
 </div>
-<div id="searchbox" style="display: none" role="search">
+<search id="searchbox" style="display: none" role="search">
   <h3 id="searchlabel">Quick search</h3>
     <div class="searchformwrapper">
     <form class="search" action="../search.html" method="get">
@@ -83,7 +83,7 @@
       <input type="submit" value="Go" />
     </form>
     </div>
-</div>
+</search>
 <script>document.getElementById('searchbox').style.display = "block"</script>
 <div>
 <h4><a href="../index.html">Sections</a></h4>
@@ -106,7 +106,7 @@
           <div class="body" role="main">
             
   <section id="history-show-and-manipulate-command-history">
-<span id="cmd-history"></span><h1>history - show and manipulate command history<a class="headerlink" href="#history-show-and-manipulate-command-history" title="Link to this heading">¶</a></h1>
+<h1>history - show and manipulate command history<a class="headerlink" href="#history-show-and-manipulate-command-history" title="Link to this heading">¶</a></h1>
 <section id="synopsis">
 <h2>Synopsis<a class="headerlink" href="#synopsis" title="Link to this heading">¶</a></h2>
 <div class="highlight-fish-synopsis notranslate"><div class="highlight"><pre><span></span><span class="nf">history</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">search</span><span class="g g-Other">]</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">--show-time</span><span class="g g-Other">]</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">--case-sensitive</span><span class="g g-Other">]</span>
@@ -118,6 +118,7 @@
 <span class="nf">history</span><span class="w"> </span><span class="no">save</span>
 <span class="nf">history</span><span class="w"> </span><span class="no">clear</span>
 <span class="nf">history</span><span class="w"> </span><span class="no">clear-session</span>
+<span class="nf">history</span><span class="w"> </span><span class="no">append</span><span class="w"> </span><span class="no">COMMAND</span><span class="w"> </span><span class="g g-Other">...</span>
 </pre></div>
 </div>
 </section>
@@ -126,9 +127,9 @@
 <p><code class="docutils literal notranslate"><span class="pre">history</span></code> is used to search, delete, and otherwise manipulate the <a class="reference internal" href="../interactive.html#history-search"><span class="std std-ref">history of interactive commands</span></a>.</p>
 <p>The following operations (sub-commands) are available:</p>
 <dl class="simple">
-<dt><strong>search</strong></dt><dd><p>Returns history items matching the search string. If no search string is provided it returns all history items. This is the default operation if no other operation is specified. You only have to explicitly say <code class="docutils literal notranslate"><span class="pre">history</span> <span class="pre">search</span></code> if you wish to search for one of the subcommands. The <code class="docutils literal notranslate"><span class="pre">--contains</span></code> search option will be used if you don’t specify a different search option. Entries are ordered newest to oldest unless you use the <code class="docutils literal notranslate"><span class="pre">--reverse</span></code> flag. If stdout is attached to a tty the output will be piped through your pager by the history function. The history builtin simply writes the results to stdout.</p>
+<dt><strong>search</strong></dt><dd><p>Returns history items matching the search string. If no search string is provided it returns all history items. This is the default operation if no other operation is specified. You only have to explicitly say <code class="docutils literal notranslate"><span class="pre">history</span> <span class="pre">search</span></code> if you wish to search for one of the subcommands. The <code class="docutils literal notranslate"><span class="pre">--contains</span></code> search option will be used if you don’t specify a different search option. Entries are ordered newest to oldest unless you use the <code class="docutils literal notranslate"><span class="pre">--reverse</span></code> flag. If stdout is attached to a tty the output will be piped through your pager by the history function. The history builtin writes the results to stdout.</p>
 </dd>
-<dt><strong>delete</strong></dt><dd><p>Deletes history items. The <code class="docutils literal notranslate"><span class="pre">--contains</span></code> search option will be used if you don’t specify a different search option. If you don’t specify <code class="docutils literal notranslate"><span class="pre">--exact</span></code> a prompt will be displayed before any items are deleted asking you which entries are to be deleted. You can enter the word “all” to delete all matching entries. You can enter a single ID (the number in square brackets) to delete just that single entry. You can enter more than one ID, or an ID range separated by a space to delete multiple entries. Just press [enter] to not delete anything. Note that the interactive delete behavior is a feature of the history function. The history builtin only supports <code class="docutils literal notranslate"><span class="pre">--exact</span> <span class="pre">--case-sensitive</span></code> deletion.</p>
+<dt><strong>delete</strong></dt><dd><p>Deletes history items. The <code class="docutils literal notranslate"><span class="pre">--contains</span></code> search option will be used if you don’t specify a different search option. If you don’t specify <code class="docutils literal notranslate"><span class="pre">--exact</span></code> a prompt will be displayed before any items are deleted asking you which entries are to be deleted. You can enter the word “all” to delete all matching entries. You can enter a single ID (the number in square brackets) to delete just that single entry. You can enter more than one ID, or an ID range separated by a space to delete multiple entries. Press [enter] to not delete anything. Note that the interactive delete behavior is a feature of the history function. The history builtin only supports <code class="docutils literal notranslate"><span class="pre">--exact</span> <span class="pre">--case-sensitive</span></code> deletion.</p>
 </dd>
 <dt><strong>merge</strong></dt><dd><p>Immediately incorporates history changes from other sessions. Ordinarily <code class="docutils literal notranslate"><span class="pre">fish</span></code> ignores history changes from sessions started after the current one. This command applies those changes immediately.</p>
 </dd>
@@ -138,11 +139,13 @@
 </dd>
 <dt><strong>clear-session</strong></dt><dd><p>Clears the history file from all activity of the current session. Note: If <code class="docutils literal notranslate"><span class="pre">history</span> <span class="pre">merge</span></code> or <code class="docutils literal notranslate"><span class="pre">builtin</span> <span class="pre">history</span> <span class="pre">merge</span></code> is run in a session, only the history after this will be erased.</p>
 </dd>
+<dt><strong>append</strong></dt><dd><p>Appends commands to the history without needing to execute them.</p>
+</dd>
 </dl>
 <p>The following options are available:</p>
 <p>These flags can appear before or immediately after one of the sub-commands listed above.</p>
 <dl class="simple">
-<dt><strong>-C</strong> or <strong>--case-sensitive</strong></dt><dd><p>Does a case-sensitive search. The default is case-insensitive. Note that prior to fish 2.4.0 the default was case-sensitive.</p>
+<dt><strong>-C</strong> or <strong>--case-sensitive</strong></dt><dd><p>Does a case-sensitive search. The default is case-insensitive.</p>
 </dd>
 <dt><strong>-c</strong> or <strong>--contains</strong></dt><dd><p>Searches items in the history that contain the specified text string. This is the default for the <strong>--search</strong> flag. This is not currently supported by the <strong>delete</strong> subcommand.</p>
 </dd>
@@ -150,6 +153,8 @@
 </dd>
 <dt><strong>-p</strong> or <strong>--prefix</strong></dt><dd><p>Searches items in the history that begin with the specified text string. This is not currently supported by the <strong>delete</strong> subcommand.</p>
 </dd>
+</dl>
+<dl class="simple" id="history-show-time">
 <dt><strong>-t</strong> or <strong>--show-time</strong></dt><dd><p>Prepends each history entry with the date and time the entry was recorded. By default it uses the strftime format <code class="docutils literal notranslate"><span class="pre">#</span> <span class="pre">%c%n</span></code>. You can specify another format; e.g., <code class="docutils literal notranslate"><span class="pre">--show-time=&quot;%Y-%m-%d</span> <span class="pre">%H:%M:%S</span> <span class="pre">&quot;</span></code> or <code class="docutils literal notranslate"><span class="pre">--show-time=&quot;%a%I%p&quot;</span></code>. The short option, <strong>-t</strong>, doesn’t accept a strftime format string; it only uses the default format. Any strftime format is allowed, including <code class="docutils literal notranslate"><span class="pre">%s</span></code> to get the raw UNIX seconds since the epoch.</p>
 </dd>
 <dt><strong>-z</strong> or <strong>--null</strong></dt><dd><p>Causes history entries written by the search operations to be terminated by a NUL character rather than a newline. This allows the output to be processed by <code class="docutils literal notranslate"><span class="pre">read</span> <span class="pre">-z</span></code> to correctly handle multiline history entries.</p>
@@ -197,14 +202,14 @@
       </div> 
       <div class="clearer"></div>
     </div>  
-    <div class="related" role="navigation" aria-label="related navigation">
+    <div class="related" role="navigation" aria-label="Related">
       <h3>Navigation</h3>
       <ul>
     <li><img src="../_static/fish.png" alt=""
              style="width: 80px; height: 80px; vertical-align: middle; margin-top: -1px"/></li>
     <li><a href="https://fishshell.com/">fish-shell</a> &#187;</li>
     
-    <a href="../index.html">fish-shell 3.7.1 documentation</a> &#187;
+    <a href="../index.html">fish-shell 4.2.1 documentation</a> &#187;
     
 
           <li class="nav-item nav-item-1"><a href="../commands.html" >Commands</a> &#187;</li>
@@ -212,7 +217,7 @@
     <li class="right">
         
 
-    <div class="inline-search" style="display: none" role="search">
+    <div class="inline-search" role="search">
         <form class="inline-search" action="../search.html" method="get">
           <input placeholder="Quick search" type="text" name="q" />
           <input type="submit" value="Go" />
@@ -220,7 +225,6 @@
           <input type="hidden" name="area" value="default" />
         </form>
     </div>
-    <script type="text/javascript">$('.inline-search').show(0);</script>
     </li>
     
     <div id="old-docs-notice" style="display: none">
@@ -231,17 +235,17 @@
       </ul>
     </div>  
     <div class="footer">
-    &copy; Copyright 2023, fish-shell developers.
+    &copy; Copyright fish-shell developers.
     <br />
     <a href="https://github.com/fish-shell/fish-shell/issues">Found a bug</a>?
     <br />
 
-    Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 7.2.6.
+    Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 8.2.3.
     </div>
 </div>
 
 <script type="text/javascript">
- FISH_DOCS_VERSION = "3.7";
+ FISH_DOCS_VERSION = "4.2";
 
  function copy_to_clipboard(it) {
      // Find the pre tag we're interested in.
@@ -295,7 +299,6 @@
       }
   })();
 </script>
-<script defer type="text/javascript" src="/docs/shared/script.js"></script>
 
   </body>
 </html>

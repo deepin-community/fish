@@ -1,5 +1,3 @@
-.. _cmd-string:
-
 string - manipulate strings
 ===========================
 
@@ -11,22 +9,23 @@ Synopsis
     string collect [-a | --allow-empty] [-N | --no-trim-newlines] [STRING ...]
     string escape [-n | --no-quoted] [--style=] [STRING ...]
     string join [-q | --quiet] [-n | --no-empty] SEP [STRING ...]
-    string join0 [-q | --quiet] [STRING ...]
+    string join0 [-q | --quiet] [-n | --no-empty] [STRING ...]
     string length [-q | --quiet] [STRING ...]
     string lower [-q | --quiet] [STRING ...]
     string match [-a | --all] [-e | --entire] [-i | --ignore-case]
                  [-g | --groups-only] [-r | --regex] [-n | --index]
                  [-q | --quiet] [-v | --invert]
                  PATTERN [STRING ...]
-    string pad [-r | --right] [(-c | --char) CHAR] [(-w | --width) INTEGER]
+    string pad [-r | --right] [-C | --center] [(-c | --char) CHAR] [(-w | --width) INTEGER]
                [STRING ...]
     string repeat [(-n | --count) COUNT] [(-m | --max) MAX] [-N | --no-newline]
                   [-q | --quiet] [STRING ...]
+    string repeat [-N | --no-newline] [-q | --quiet] COUNT [STRING ...]
     string replace [-a | --all] [-f | --filter] [-i | --ignore-case]
                    [-r | --regex] [-q | --quiet] PATTERN REPLACE [STRING ...]
     string shorten [(-c | --char) CHARS] [(-m | --max) INTEGER]
                    [-N | --no-newline] [-l | --left] [-q | --quiet] [STRING ...]
-    string split [(-f | --fields) FIELDS] [(-m | --max) MAX] [-n | --no-empty] 
+    string split [(-f | --fields) FIELDS] [(-m | --max) MAX] [-n | --no-empty]
                  [-q | --quiet] [-r | --right] SEP [STRING ...]
     string split0 [(-f | --fields) FIELDS] [(-m | --max) MAX] [-n | --no-empty]
                   [-q | --quiet] [-r | --right] [STRING ...]
@@ -49,8 +48,6 @@ Arguments beginning with ``-`` are normally interpreted as switches; ``--`` caus
 Most subcommands accept a **-q** or **--quiet** switch, which suppresses the usual output but exits with the documented status. In this case these commands will quit early, without reading all of the available input.
 
 The following subcommands are available.
-
-.. _cmd-string-collect:
 
 "collect" subcommand
 --------------------
@@ -154,8 +151,8 @@ Examples
    :start-after: BEGIN EXAMPLES
    :end-before: END EXAMPLES
 
-"pad" and "shorten" subcommands
----------------------------------
+"pad" subcommand
+----------------
 
 .. include:: string-pad.rst
    :start-after: BEGIN SYNOPSIS
@@ -165,9 +162,21 @@ Examples
    :start-after: BEGIN DESCRIPTION
    :end-before: END DESCRIPTION
 
+Examples
+^^^^^^^^
+
 .. include:: string-pad.rst
    :start-after: BEGIN EXAMPLES
    :end-before: END EXAMPLES
+
+See also
+^^^^^^^^
+
+.. include:: string-pad.rst
+   :start-after: BEGIN SEEALSO
+
+"shorten" subcommand
+--------------------
 
 .. include:: string-shorten.rst
    :start-after: BEGIN SYNOPSIS
@@ -177,9 +186,18 @@ Examples
    :start-after: BEGIN DESCRIPTION
    :end-before: END DESCRIPTION
 
+Examples
+^^^^^^^^
+
 .. include:: string-shorten.rst
    :start-after: BEGIN EXAMPLES
    :end-before: END EXAMPLES
+
+See also
+^^^^^^^^
+
+.. include:: string-shorten.rst
+   :start-after: BEGIN SEEALSO
 
 "repeat" subcommand
 -------------------
@@ -213,9 +231,6 @@ Examples
 .. include:: string-replace.rst
    :start-after: BEGIN EXAMPLES
    :end-before: END EXAMPLES
-
-.. _cmd-string-split:
-.. _cmd-string-split0:
 
 "split" and "split0" subcommands
 --------------------------------

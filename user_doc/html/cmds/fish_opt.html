@@ -5,12 +5,11 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>fish_opt - create an option specification for the argparse command &#8212; fish-shell 3.7.1 documentation</title>
-    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=a864bcb0" />
-    <link rel="stylesheet" type="text/css" href="../_static/pydoctheme.css?v=4e2636db" />
-    <link rel="stylesheet" type="text/css" href="/docs/shared/style.css" />
-    <script src="../_static/documentation_options.js?v=5c477e40"></script>
-    <script src="../_static/doctools.js?v=888ff710"></script>
+    <title>fish_opt - create an option specification for the argparse command &#8212; fish-shell 4.2.1 documentation</title>
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=4da8bbd6" />
+    <link rel="stylesheet" type="text/css" href="../_static/pydoctheme.css?v=f89b4716" />
+    <script src="../_static/documentation_options.js?v=6fb65176"></script>
+    <script src="../_static/doctools.js?v=9bcbadda"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
@@ -20,14 +19,14 @@
      
 
   </head><body><div id="fmain">  
-    <div class="related" role="navigation" aria-label="related navigation">
+    <div class="related" role="navigation" aria-label="Related">
       <h3>Navigation</h3>
       <ul>
     <li><img src="../_static/fish.png" alt=""
              style="width: 80px; height: 80px; vertical-align: middle; margin-top: -1px"/></li>
     <li><a href="https://fishshell.com/">fish-shell</a> &#187;</li>
     
-    <a href="../index.html">fish-shell 3.7.1 documentation</a> &#187;
+    <a href="../index.html">fish-shell 4.2.1 documentation</a> &#187;
     
 
           <li class="nav-item nav-item-1"><a href="../commands.html" accesskey="U">Commands</a> &#187;</li>
@@ -35,7 +34,7 @@
     <li class="right">
         
 
-    <div class="inline-search" style="display: none" role="search">
+    <div class="inline-search" role="search">
         <form class="inline-search" action="../search.html" method="get">
           <input placeholder="Quick search" type="text" name="q" />
           <input type="submit" value="Go" />
@@ -43,7 +42,6 @@
           <input type="hidden" name="area" value="default" />
         </form>
     </div>
-    <script type="text/javascript">$('.inline-search').show(0);</script>
     </li>
     
     <div id="old-docs-notice" style="display: none">
@@ -55,7 +53,7 @@
     </div>    
 
     <div class="document">
-      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
         <div class="sphinxsidebarwrapper">
 <div>
 <h3><a href="../index.html">Documents</a></h3>
@@ -71,11 +69,13 @@
 <li class="toctree-l1"><a class="reference internal" href="../prompt.html">Writing your own prompt</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../design.html">Design</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../relnotes.html">Release notes</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../terminal-compatibility.html">Terminal Compatibility</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../contributing.html">Contributing To Fish</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../license.html">License</a></li>
 </ul>
 
 </div>
-<div id="searchbox" style="display: none" role="search">
+<search id="searchbox" style="display: none" role="search">
   <h3 id="searchlabel">Quick search</h3>
     <div class="searchformwrapper">
     <form class="search" action="../search.html" method="get">
@@ -83,7 +83,7 @@
       <input type="submit" value="Go" />
     </form>
     </div>
-</div>
+</search>
 <script>document.getElementById('searchbox').style.display = "block"</script>
 <div>
 <h4><a href="../index.html">Sections</a></h4>
@@ -104,10 +104,10 @@
           <div class="body" role="main">
             
   <section id="fish-opt-create-an-option-specification-for-the-argparse-command">
-<span id="cmd-fish-opt"></span><h1>fish_opt - create an option specification for the argparse command<a class="headerlink" href="#fish-opt-create-an-option-specification-for-the-argparse-command" title="Link to this heading">¶</a></h1>
+<h1>fish_opt - create an option specification for the argparse command<a class="headerlink" href="#fish-opt-create-an-option-specification-for-the-argparse-command" title="Link to this heading">¶</a></h1>
 <section id="synopsis">
 <h2>Synopsis<a class="headerlink" href="#synopsis" title="Link to this heading">¶</a></h2>
-<div class="highlight-fish-synopsis notranslate"><div class="highlight"><pre><span></span><span class="nf">fish_opt</span><span class="w"> </span><span class="g g-Other">[(</span><span class="no">-slor</span><span class="w"> </span><span class="g g-Other">|</span><span class="w"> </span><span class="no">--multiple-vals=</span><span class="g g-Other">)</span><span class="w"> </span><span class="no">OPTNAME</span><span class="g g-Other">]</span>
+<div class="highlight-fish-synopsis notranslate"><div class="highlight"><pre><span></span><span class="nf">fish_opt</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">-s</span><span class="w"> </span><span class="no">ALPHANUM</span><span class="g g-Other">]</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">-l</span><span class="w"> </span><span class="no">LONG-NAME</span><span class="g g-Other">]</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">-ormd</span><span class="g g-Other">]</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">--long-only</span><span class="g g-Other">]</span><span class="w"> </span><span class="g g-Other">[</span><span class="no">-v</span><span class="w"> </span><span class="no">COMMAND</span><span class="w"> </span><span class="no">OPTIONS</span><span class="w"> </span><span class="g g-Other">...</span><span class="no"> ]</span>
 <span class="nf">fish_opt</span><span class="w"> </span><span class="no">--help</span>
 </pre></div>
 </div>
@@ -117,17 +117,22 @@
 <p>This command provides a way to produce option specifications suitable for use with the <a class="reference internal" href="argparse.html"><span class="doc">argparse</span></a> command. You can, of course, write the option specifications by hand without using this command. But you might prefer to use this for the clarity it provides.</p>
 <p>The following <code class="docutils literal notranslate"><span class="pre">argparse</span></code> options are available:</p>
 <dl class="simple">
-<dt><strong>-s</strong> or <strong>--short</strong></dt><dd><p>Takes a single letter that is used as the short flag in the option being defined. This option is mandatory.</p>
+<dt><strong>-s</strong> or <strong>--short</strong> <em>ALPHANUM</em></dt><dd><p>Takes a single letter or number that is used as the short flag in the option being defined. Either this option or the <strong>--long</strong> option must be provided.</p>
 </dd>
-<dt><strong>-l</strong> or <strong>--long</strong></dt><dd><p>Takes a string that is used as the long flag in the option being defined. This option is optional and has no default. If no long flag is defined then only the short flag will be allowed when parsing arguments using the option specification.</p>
+<dt><strong>-l</strong> or <strong>--long</strong> <em>LONG-NAME</em></dt><dd><p>Takes a string that is used as the long flag in the option being defined. This option is optional and has no default. If no long flag is defined then only the short flag will be allowed when parsing arguments using the option specification.</p>
 </dd>
-<dt><strong>--long-only</strong></dt><dd><p>The option being defined will only allow the long flag name to be used. The short flag name must still be defined (i.e., <strong>--short</strong> must be specified) but it cannot be used when parsing arguments using this option specification.</p>
+<dt><strong>--long-only</strong></dt><dd><p>Deprecated. The option being defined will only allow the long flag name to be used, even if the short flag is defined (i.e., <strong>--short</strong> is specified).</p>
 </dd>
-<dt><strong>-o</strong> or <strong>--optional-val</strong></dt><dd><p>Tthe option being defined can take a value, but it is optional rather than required. If the option is seen more than once when parsing arguments, only the last value seen is saved. This means the resulting flag variable created by <code class="docutils literal notranslate"><span class="pre">argparse</span></code> will zero elements if no value was given with the option else it will have exactly one element.</p>
+<dt><strong>-o</strong> or <strong>--optional-val</strong></dt><dd><p>The option being defined can take a value, but it is optional rather than required. If the option is seen more than once when parsing arguments, only the last value seen is saved. This means the resulting flag variable created by <code class="docutils literal notranslate"><span class="pre">argparse</span></code> will zero elements if no value was given with the option else it will have exactly one element.</p>
 </dd>
 <dt><strong>-r</strong> or <strong>--required-val</strong></dt><dd><p>The option being defined requires a value. If the option is seen more than once when parsing arguments, only the last value seen is saved. This means the resulting flag variable created by <code class="docutils literal notranslate"><span class="pre">argparse</span></code> will have exactly one element.</p>
 </dd>
-<dt><strong>--multiple-vals</strong></dt><dd><p>The option being defined requires a value each time it is seen. Each instance is stored. This means the resulting flag variable created by <code class="docutils literal notranslate"><span class="pre">argparse</span></code> will have one element for each instance of this option in the arguments.</p>
+<dt><strong>-m</strong> or <strong>--multiple-vals</strong></dt><dd><p>The value of each instance of the option is accumulated. If <strong>--optional-val</strong> is provided, the value is optional, and an empty string is stored if no value is provided. Otherwise, the <strong>--requiured-val</strong> option is implied and each instance of the option requires a value. This means the resulting flag variable created by <code class="docutils literal notranslate"><span class="pre">argparse</span></code> will have one element for each instance of this option in the arguments, even for instances that did not provide a value.</p>
+</dd>
+<dt><strong>-d</strong> or <strong>--delete</strong></dt><dd><p>The option and any values will be deleted from the <code class="docutils literal notranslate"><span class="pre">$argv_opts</span></code> variables set by <code class="docutils literal notranslate"><span class="pre">argparse</span></code>
+(as with other options, it will also be deleted from <code class="docutils literal notranslate"><span class="pre">$argv</span></code>).</p>
+</dd>
+<dt><strong>-v</strong> or <strong>--validate</strong> <em>COMMAND</em> <em>OPTION…</em></dt><dd><p>This option must be the last one, and requires one of <code class="docutils literal notranslate"><span class="pre">-o</span></code>, <code class="docutils literal notranslate"><span class="pre">-r</span></code>, or <code class="docutils literal notranslate"><span class="pre">-m</span></code>. All the remaining arguments are interpreted a fish script to run to validate the value of the argument, see <code class="docutils literal notranslate"><span class="pre">argparse</span></code> documentation for more details. Note that the interpretation of <em>COMMAND</em> <em>OPTION…</em> is similar to <code class="docutils literal notranslate"><span class="pre">eval</span></code>, so you may need to quote or escape special characters <em>twice</em> if you want them to be interpreted literally when the validate script is run.</p>
 </dd>
 <dt><strong>-h</strong> or <strong>--help</strong></dt><dd><p>Displays help about using this command.</p>
 </dd>
@@ -142,14 +147,20 @@
 </div>
 <p>Same as above but with a second flag that requires a value:</p>
 <div class="highlight-fish-docs-samples notranslate"><div class="highlight"><pre><span></span><span class="nf">set</span><span class="w"> </span><span class="no">-l</span><span class="w"> </span><span class="no">options</span><span class="w"> </span><span class="o">(</span><span class="nf">fish_opt</span><span class="w"> </span><span class="no">-s</span><span class="w"> </span><span class="no">h</span><span class="w"> </span><span class="no">-l</span><span class="w"> </span><span class="no">help</span><span class="o">)</span>
-<span class="nf">set</span><span class="w"> </span><span class="no">options</span><span class="w"> </span><span class="o">$options</span><span class="w"> </span><span class="o">(</span><span class="nf">fish_opt</span><span class="w"> </span><span class="no">-s</span><span class="w"> </span><span class="no">m</span><span class="w"> </span><span class="no">-l</span><span class="w"> </span><span class="no">max</span><span class="w"> </span><span class="no">--required-val</span><span class="o">)</span>
+<span class="nf">set</span><span class="w"> </span><span class="no">options</span><span class="w"> </span><span class="o">$options</span><span class="w"> </span><span class="o">(</span><span class="nf">fish_opt</span><span class="w"> </span><span class="no">-s</span><span class="w"> </span><span class="no">m</span><span class="w"> </span><span class="no">-l</span><span class="w"> </span><span class="no">max</span><span class="w"> </span><span class="no">-r</span><span class="o">)</span>
 <span class="nf">argparse</span><span class="w"> </span><span class="o">$options</span><span class="w"> </span><span class="no">--</span><span class="w"> </span><span class="o">$argv</span>
 </pre></div>
 </div>
-<p>Same as above but with a third flag that can be given multiple times saving the value of each instance seen and only the long flag name (<code class="docutils literal notranslate"><span class="pre">--token</span></code>) can be used:</p>
+<p>Same as above but the value of the second flag cannot be the empty string:</p>
+<div class="highlight-fish-docs-samples notranslate"><div class="highlight"><pre><span></span><span class="nf">set</span><span class="w"> </span><span class="no">-l</span><span class="w"> </span><span class="no">options</span><span class="w"> </span><span class="o">(</span><span class="nf">fish_opt</span><span class="w"> </span><span class="no">-s</span><span class="w"> </span><span class="no">h</span><span class="w"> </span><span class="no">-l</span><span class="w"> </span><span class="no">help</span><span class="o">)</span>
+<span class="nf">set</span><span class="w"> </span><span class="no">options</span><span class="w"> </span><span class="o">$options</span><span class="w"> </span><span class="o">(</span><span class="nf">fish_opt</span><span class="w"> </span><span class="no">-s</span><span class="w"> </span><span class="no">m</span><span class="w"> </span><span class="no">-l</span><span class="w"> </span><span class="no">max</span><span class="w"> </span><span class="no">-rv</span><span class="w"> </span><span class="no">test</span><span class="w"> </span><span class="se">\$</span><span class="no">_flag_valu</span><span class="w"> </span><span class="no">!=</span><span class="w"> </span><span class="s2">&quot;&#39;&#39;&quot;</span><span class="o">)</span>
+<span class="nf">argparse</span><span class="w"> </span><span class="o">$options</span><span class="w"> </span><span class="no">--</span><span class="w"> </span><span class="o">$argv</span>
+</pre></div>
+</div>
+<p>Same as above but with a third flag that can be given multiple times saving the value of each instance seen and only a long flag name (<code class="docutils literal notranslate"><span class="pre">--token</span></code>) is defined:</p>
 <div class="highlight-fish-docs-samples notranslate"><div class="highlight"><pre><span></span><span class="nf">set</span><span class="w"> </span><span class="no">-l</span><span class="w"> </span><span class="no">options</span><span class="w"> </span><span class="o">(</span><span class="nf">fish_opt</span><span class="w"> </span><span class="no">--short=h</span><span class="w"> </span><span class="no">--long=help</span><span class="o">)</span>
-<span class="nf">set</span><span class="w"> </span><span class="no">options</span><span class="w"> </span><span class="o">$options</span><span class="w"> </span><span class="o">(</span><span class="nf">fish_opt</span><span class="w"> </span><span class="no">--short=m</span><span class="w"> </span><span class="no">--long=max</span><span class="w"> </span><span class="no">--required-val</span><span class="o">)</span>
-<span class="nf">set</span><span class="w"> </span><span class="no">options</span><span class="w"> </span><span class="o">$options</span><span class="w"> </span><span class="o">(</span><span class="nf">fish_opt</span><span class="w"> </span><span class="no">--short=t</span><span class="w"> </span><span class="no">--long=token</span><span class="w"> </span><span class="no">--multiple-vals</span><span class="w"> </span><span class="no">--long-only</span><span class="o">)</span>
+<span class="nf">set</span><span class="w"> </span><span class="no">options</span><span class="w"> </span><span class="o">$options</span><span class="w"> </span><span class="o">(</span><span class="nf">fish_opt</span><span class="w"> </span><span class="no">--short=m</span><span class="w"> </span><span class="no">--long=max</span><span class="w"> </span><span class="no">--required-val</span><span class="w"> </span><span class="no">--validate</span><span class="w"> </span><span class="no">test</span><span class="w"> </span><span class="se">\$</span><span class="no">_flag_valu</span><span class="w"> </span><span class="no">!=</span><span class="w"> </span><span class="s2">&quot;&#39;&#39;&quot;</span><span class="o">)</span>
+<span class="nf">set</span><span class="w"> </span><span class="no">options</span><span class="w"> </span><span class="o">$options</span><span class="w"> </span><span class="o">(</span><span class="nf">fish_opt</span><span class="w"> </span><span class="no">--long=token</span><span class="w"> </span><span class="no">--multiple-vals</span><span class="o">)</span>
 <span class="nf">argparse</span><span class="w"> </span><span class="o">$options</span><span class="w"> </span><span class="no">--</span><span class="w"> </span><span class="o">$argv</span>
 </pre></div>
 </div>
@@ -163,14 +174,14 @@
       </div> 
       <div class="clearer"></div>
     </div>  
-    <div class="related" role="navigation" aria-label="related navigation">
+    <div class="related" role="navigation" aria-label="Related">
       <h3>Navigation</h3>
       <ul>
     <li><img src="../_static/fish.png" alt=""
              style="width: 80px; height: 80px; vertical-align: middle; margin-top: -1px"/></li>
     <li><a href="https://fishshell.com/">fish-shell</a> &#187;</li>
     
-    <a href="../index.html">fish-shell 3.7.1 documentation</a> &#187;
+    <a href="../index.html">fish-shell 4.2.1 documentation</a> &#187;
     
 
           <li class="nav-item nav-item-1"><a href="../commands.html" >Commands</a> &#187;</li>
@@ -178,7 +189,7 @@
     <li class="right">
         
 
-    <div class="inline-search" style="display: none" role="search">
+    <div class="inline-search" role="search">
         <form class="inline-search" action="../search.html" method="get">
           <input placeholder="Quick search" type="text" name="q" />
           <input type="submit" value="Go" />
@@ -186,7 +197,6 @@
           <input type="hidden" name="area" value="default" />
         </form>
     </div>
-    <script type="text/javascript">$('.inline-search').show(0);</script>
     </li>
     
     <div id="old-docs-notice" style="display: none">
@@ -197,17 +207,17 @@
       </ul>
     </div>  
     <div class="footer">
-    &copy; Copyright 2023, fish-shell developers.
+    &copy; Copyright fish-shell developers.
     <br />
     <a href="https://github.com/fish-shell/fish-shell/issues">Found a bug</a>?
     <br />
 
-    Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 7.2.6.
+    Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 8.2.3.
     </div>
 </div>
 
 <script type="text/javascript">
- FISH_DOCS_VERSION = "3.7";
+ FISH_DOCS_VERSION = "4.2";
 
  function copy_to_clipboard(it) {
      // Find the pre tag we're interested in.
@@ -261,7 +271,6 @@
       }
   })();
 </script>
-<script defer type="text/javascript" src="/docs/shared/script.js"></script>
 
   </body>
 </html>

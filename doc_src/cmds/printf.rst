@@ -1,5 +1,3 @@
-.. _cmd-printf:
-
 printf - display text according to a format string
 ==================================================
 
@@ -16,8 +14,7 @@ Description
 .. only:: builder_man
 
           NOTE: This page documents the fish builtin ``printf``.
-          To see the documentation on the ``printf`` command you might have,
-          use ``command man printf``.
+          To see the documentation on any non-fish versions, use ``command man printf``.
 
 ``printf`` uses the format string *FORMAT* to print the *ARGUMENT* arguments. This means that it takes format specifiers in the format string and replaces each with an argument.
 

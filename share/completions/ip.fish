@@ -9,16 +9,12 @@ set -l ip_addr a ad add addr addre addres address
 set -l ip_link l li lin link
 set -l ip_neigh n ne nei neig neigh neighb neighbo neighbor neighbour
 set -l ip_route r ro rou rout route
-set -l ip_all_commands $ip_commands $ip_addr $ip_link $ip_neigh $ip_route
+set -l ip_rule ru rul rule
+set -l ip_all_commands $ip_commands $ip_addr $ip_link $ip_neigh $ip_route $ip_rule
 
 function __fish_ip_commandwords
     set -l skip 0
-    set -l cmd (commandline -opc)
-    # HACK: Handle and/or/not specially because they have hardcoded completion behavior
-    # that doesn't remove them from the commandline
-    if contains -- $cmd[1] and or not
-        set -e cmd[1]
-    end
+    set -l cmd (commandline -xpc | string escape)
     # Remove the first word because it's "ip" or an alias for it
     set -e cmd[1]
     set -l have_command 0
@@ -202,6 +198,10 @@ function __fish_ip_netns_list
     end
 end
 
+function __fish_ip_routing_tables
+    command ip -d route show table all 2>/dev/null | string replace -fr '.*\stable\s(\S+).*' '$1'
+end
+
 function __fish_ip_types
     printf '%s\t%s\n' \
         bridge "Ethernet Bridge device" \
@@ -241,7 +241,8 @@ function __fish_ip_types
 end
 
 function __fish_ip_neigh_states
-    printf '%s\t%s\n' permanent "entry is valid forever" \
+    printf '%s\t%s\n' \
+        permanent "entry is valid forever" \
         noarp "entry is valid without validation" \
         reachable "entry is valid until timeout" \
         stale "entry is valid but suspicious" \
@@ -259,10 +260,12 @@ function __fish_complete_ip
         case address
             # We're still _on_ the second word, which is the subcommand
             if not set -q cmd[3]
-                printf '%s\t%s\n' add "Add new protocol address" \
+                printf '%s\t%s\n' \
+                    add "Add new protocol address" \
                     delete "Delete protocol address" \
                     show "Look at protocol addresses" \
-                    flush "Flush protocol addresses"
+                    flush "Flush protocol addresses" \
+                    help "Display help"
             else
                 switch $cmd[2]
                     # Change and replace are undocumented (apart from mentions in the BNF)
@@ -338,7 +341,8 @@ function __fish_complete_ip
             end
         case link
             if not set -q cmd[3]
-                printf '%s\t%s\n' add "Add virtual link" \
+                printf '%s\t%s\n' \
+                    add "Add virtual link" \
                     delete "Delete virtual link" \
                     set "Change device attributes" \
                     show "Display device attributes" \
@@ -429,18 +433,20 @@ function __fish_complete_ip
                         end
                     case show
                     case help
+                        __fish_ip_types
                 end
             end
         case neighbour
             if not set -q cmd[3]
-                printf '%s\t%s\n' help "Show help" \
+                printf '%s\t%s\n' \
                     add "Add new neighbour entry" \
                     delete "Delete neighbour entry" \
                     change "Change neighbour entry" \
                     replace "Add or change neighbour entry" \
                     show "List neighbour entries" \
                     flush "Flush neighbour entries" \
-                    get "Lookup neighbour entry"
+                    get "Lookup neighbour entry" \
+                    help "Display help"
             else
                 switch $cmd[2]
                     case add del delete change replace
@@ -493,7 +499,8 @@ function __fish_complete_ip
             end
         case route
             if not set -q cmd[3]
-                printf '%s\t%s\n' add "Add new route" \
+                printf '%s\t%s\n' \
+                    add "Add new route" \
                     change "Change route" \
                     append "Append route" \
                     replace "Change or add new route" \
@@ -503,13 +510,36 @@ function __fish_complete_ip
                     get "Get a single route" \
                     save "Save routing table to stdout" \
                     showdump "Show saved routing table from stdin" \
-                    restore "Restore routing table from stdin"
+                    restore "Restore routing table from stdin" \
+                    help "Display help"
             else
                 # TODO: switch on $cmd[2] and complete subcommand specific arguments
-                # for now just complete device names when dev was the last token
+                # for now just complete most useful arguments for the last token
                 switch $cmd[-2]
-                    case dev
+                    case dev iif oif
                         __fish_ip_device
+                    case table
+                        __fish_ip_routing_tables
+                end
+            end
+        case rule
+            if not set -q cmd[3]
+                printf '%s\t%s\n' \
+                    add "Add new rule" \
+                    delete "Delete rule" \
+                    flush "Flush rules" \
+                    show "List rules" \
+                    save "Save rules to stdout" \
+                    restore "Restore rules from stdin" \
+                    help "Display help"
+            else
+                # TODO: switch on $cmd[2] and complete subcommand specific arguments
+                # for now just complete most useful arguments for the last token
+                switch $cmd[-2]
+                    case iif oif
+                        __fish_ip_device
+                    case table
+                        __fish_ip_routing_tables
                 end
             end
         case netns
@@ -518,8 +548,8 @@ function __fish_complete_ip
                     attach "Attach process to network namespace" \
                     delete "Delete network namespace" \
                     set "Change network namespace attributes" \
-                    identify "Display network namespace for a process id" \
-                    pids "Display process ids of processes running in network namespace" \
+                    identify "Display network namespace for a process ID" \
+                    pids "Display process IDs of processes running in network namespace" \
                     monitor "Report as network namespace names are added and deleted" \
                     exec "Execute command in network namespace" \
                     help "Display help" \
@@ -554,6 +584,27 @@ function __fish_complete_ip
                         if not set -q cmd[4]
                             __fish_complete_pids
                         end
+                end
+            end
+        case tuntap
+            if not set -q cmd[3]
+                printf '%s\t%s\n' \
+                    add "Add a new tun or tap device" \
+                    del "Delete a tun or tap device" \
+                    show "Show tun and tap devices" \
+                    help "Display help"
+            else
+                switch $cmd[-2]
+                    case dev
+                        __fish_ip_device
+                    case mode
+                        printf '%s\n' tun tap
+                    case user
+                        __fish_complete_users
+                    case group
+                        __fish_complete_groups
+                    case '*'
+                        printf '%s\n' dev mode user group one_queue pi vnet_hdr multi_queue name
                 end
             end
     end

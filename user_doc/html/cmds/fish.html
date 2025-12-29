@@ -5,12 +5,11 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>fish - the friendly interactive shell &#8212; fish-shell 3.7.1 documentation</title>
-    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=a864bcb0" />
-    <link rel="stylesheet" type="text/css" href="../_static/pydoctheme.css?v=4e2636db" />
-    <link rel="stylesheet" type="text/css" href="/docs/shared/style.css" />
-    <script src="../_static/documentation_options.js?v=5c477e40"></script>
-    <script src="../_static/doctools.js?v=888ff710"></script>
+    <title>fish - the friendly interactive shell &#8212; fish-shell 4.2.1 documentation</title>
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=4da8bbd6" />
+    <link rel="stylesheet" type="text/css" href="../_static/pydoctheme.css?v=f89b4716" />
+    <script src="../_static/documentation_options.js?v=6fb65176"></script>
+    <script src="../_static/doctools.js?v=9bcbadda"></script>
     <script src="../_static/sphinx_highlight.js?v=dc90522c"></script>
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
@@ -20,14 +19,14 @@
      
 
   </head><body><div id="fmain">  
-    <div class="related" role="navigation" aria-label="related navigation">
+    <div class="related" role="navigation" aria-label="Related">
       <h3>Navigation</h3>
       <ul>
     <li><img src="../_static/fish.png" alt=""
              style="width: 80px; height: 80px; vertical-align: middle; margin-top: -1px"/></li>
     <li><a href="https://fishshell.com/">fish-shell</a> &#187;</li>
     
-    <a href="../index.html">fish-shell 3.7.1 documentation</a> &#187;
+    <a href="../index.html">fish-shell 4.2.1 documentation</a> &#187;
     
 
           <li class="nav-item nav-item-1"><a href="../commands.html" accesskey="U">Commands</a> &#187;</li>
@@ -35,7 +34,7 @@
     <li class="right">
         
 
-    <div class="inline-search" style="display: none" role="search">
+    <div class="inline-search" role="search">
         <form class="inline-search" action="../search.html" method="get">
           <input placeholder="Quick search" type="text" name="q" />
           <input type="submit" value="Go" />
@@ -43,7 +42,6 @@
           <input type="hidden" name="area" value="default" />
         </form>
     </div>
-    <script type="text/javascript">$('.inline-search').show(0);</script>
     </li>
     
     <div id="old-docs-notice" style="display: none">
@@ -55,7 +53,7 @@
     </div>    
 
     <div class="document">
-      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
         <div class="sphinxsidebarwrapper">
 <div>
 <h3><a href="../index.html">Documents</a></h3>
@@ -71,11 +69,13 @@
 <li class="toctree-l1"><a class="reference internal" href="../prompt.html">Writing your own prompt</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../design.html">Design</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../relnotes.html">Release notes</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../terminal-compatibility.html">Terminal Compatibility</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../contributing.html">Contributing To Fish</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../license.html">License</a></li>
 </ul>
 
 </div>
-<div id="searchbox" style="display: none" role="search">
+<search id="searchbox" style="display: none" role="search">
   <h3 id="searchlabel">Quick search</h3>
     <div class="searchformwrapper">
     <form class="search" action="../search.html" method="get">
@@ -83,7 +83,7 @@
       <input type="submit" value="Go" />
     </form>
     </div>
-</div>
+</search>
 <script>document.getElementById('searchbox').style.display = "block"</script>
 <div>
 <h4><a href="../index.html">Sections</a></h4>
@@ -92,6 +92,7 @@
 <li><a class="reference internal" href="#synopsis">Synopsis</a></li>
 <li><a class="reference internal" href="#description">Description</a></li>
 <li><a class="reference internal" href="#debugging">Debugging</a></li>
+<li><a class="reference internal" href="#examples">Examples</a></li>
 </ul>
 </li>
 </ul>
@@ -103,7 +104,7 @@
         <div class="bodywrapper">
           <div class="body" role="main">
             
-  <span class="target" id="cmd-fish"></span><section id="fish-the-friendly-interactive-shell">
+  <section id="fish-the-friendly-interactive-shell">
 <h1>fish - the friendly interactive shell<a class="headerlink" href="#fish-the-friendly-interactive-shell" title="Link to this heading">¶</a></h1>
 <section id="synopsis">
 <h2>Synopsis<a class="headerlink" href="#synopsis" title="Link to this heading">¶</a></h2>
@@ -117,18 +118,19 @@
 <p><strong class="command">fish</strong> is a command-line shell written mainly with interactive use in mind.
 This page briefly describes the options for invoking <strong class="command">fish</strong>.
 The <a class="reference internal" href="../index.html#intro"><span class="std std-ref">full manual</span></a> is available in HTML by using the <strong class="command">help</strong> command from inside fish, and in the <cite>fish-doc(1)</cite> man page.
-The <a class="reference internal" href="../tutorial.html#tutorial"><span class="std std-ref">tutorial</span></a> is available as HTML via <code class="docutils literal notranslate"><span class="pre">help</span> <span class="pre">tutorial</span></code> or in <cite>man fish-tutorial</cite>.</p>
+The <a class="reference internal" href="../tutorial.html"><span class="doc">tutorial</span></a> is available as HTML via <code class="docutils literal notranslate"><span class="pre">help</span> <span class="pre">tutorial</span></code> or in <cite>man fish-tutorial</cite>.</p>
 <p>The following options are available:</p>
 <dl class="simple">
-<dt><strong>-c</strong> or <strong>--command=COMMAND</strong></dt><dd><p>Evaluate the specified commands instead of reading from the commandline, passing additional positional arguments through <code class="docutils literal notranslate"><span class="pre">$argv</span></code>.</p>
+<dt><strong>-c</strong> or <strong>--command=COMMAND</strong></dt><dd><p>Evaluate the specified commands instead of reading from the commandline.
+Any additional positional arguments are used as <code class="docutils literal notranslate"><span class="pre">$argv</span></code>.</p>
 </dd>
 <dt><strong>-C</strong> or <strong>--init-command=COMMANDS</strong></dt><dd><p>Evaluate specified commands after reading the configuration but before executing command specified by <strong>-c</strong> or reading interactive input.</p>
 </dd>
 <dt><strong>-d</strong> or <strong>--debug=DEBUG_CATEGORIES</strong></dt><dd><p>Enables debug output and specify a pattern for matching debug categories.
 See <a class="reference internal" href="#debugging-fish"><span class="std std-ref">Debugging</span></a> below for details.</p>
 </dd>
-<dt><strong>-o</strong> or <strong>--debug-output=DEBUG_FILE</strong></dt><dd><p>Specifies a file path to receive the debug output, including categories and  <span class="target" id="index-0"></span><a class="reference internal" href="../language.html#envvar-fish_trace"><code class="xref std std-envvar docutils literal notranslate"><span class="pre">fish_trace</span></code></a>.
-The default is stderr.</p>
+<dt><strong>-o</strong> or <strong>--debug-output=DEBUG_FILE</strong></dt><dd><p>Specifies a file path to receive the debug output, including categories and <span class="target" id="index-0"></span><a class="reference internal" href="../language.html#envvar-fish_trace"><code class="xref std std-envvar docutils literal notranslate"><span class="pre">fish_trace</span></code></a>.
+The default is standard error.</p>
 </dd>
 <dt><strong>-i</strong> or <strong>--interactive</strong></dt><dd><p>The shell is interactive.</p>
 </dd>
@@ -177,6 +179,36 @@ The following command turns on debugging for <em>complete</em>, <em>history</em>
 The categories enabled via <strong>--debug</strong> are <em>added</em> to the ones enabled by $FISH_DEBUG, so they can be disabled by prefixing them with <strong>-</strong> (<strong>reader-*,-ast*</strong> enables reader debugging and disables ast debugging).</p>
 <p>The file given in <strong>--debug-output</strong> takes precedence over the file in <span class="target" id="index-4"></span><a class="reference internal" href="../language.html#envvar-FISH_DEBUG_OUTPUT"><code class="xref std std-envvar docutils literal notranslate"><span class="pre">FISH_DEBUG_OUTPUT</span></code></a>.</p>
 </section>
+<section id="examples">
+<h2>Examples<a class="headerlink" href="#examples" title="Link to this heading">¶</a></h2>
+<p>To just start fish:</p>
+<div class="highlight-fish-docs-samples notranslate"><div class="highlight"><pre><span></span><span class="nf">fish</span>
+</pre></div>
+</div>
+<p>To run a file with fish:</p>
+<div class="highlight-fish-docs-samples notranslate"><div class="highlight"><pre><span></span><span class="nf">fish</span><span class="w"> </span><span class="no">/path/to/script.fish</span>
+</pre></div>
+</div>
+<p>To run some commands with fish:</p>
+<div class="highlight-fish-docs-samples notranslate"><div class="highlight"><pre><span></span><span class="nf">fish</span><span class="w"> </span><span class="no">-c</span><span class="w"> </span><span class="s1">&#39;echo Hi there!&#39;</span>
+</pre></div>
+</div>
+<p>You can also pass arguments to those commands:</p>
+<div class="highlight-fish-docs-samples notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt; </span><span class="nf">fish</span><span class="w"> </span><span class="no">-c</span><span class="w"> </span><span class="s1">&#39;printf %s\n $argv&#39;</span><span class="w"> </span><span class="s2">&quot;first line&quot;</span><span class="w"> </span><span class="s2">&quot;second line&quot;</span>
+<span class="go">first line</span>
+<span class="go">second line</span>
+</pre></div>
+</div>
+<p>To run a script, except read this other file first:</p>
+<div class="highlight-fish-docs-samples notranslate"><div class="highlight"><pre><span></span><span class="nf">fish</span><span class="w"> </span><span class="no">--init-cmd</span><span class="w"> </span><span class="s2">&quot;source otherfile&quot;</span><span class="w"> </span><span class="no">script.fish</span>
+</pre></div>
+</div>
+<p>To <a class="reference internal" href="../language.html#profiling"><span class="std std-ref">profile</span></a> fish’s startup and find what takes the most time in your configuration:</p>
+<div class="highlight-fish-docs-samples notranslate"><div class="highlight"><pre><span></span><span class="nf">fish</span><span class="w"> </span><span class="no">--profile-startup</span><span class="w"> </span><span class="no">/tmp/start.prof</span><span class="w"> </span><span class="no">-ic</span><span class="w"> </span><span class="no">exit</span>
+<span class="nf">sort</span><span class="w"> </span><span class="no">-nk2</span><span class="w"> </span><span class="no">/tmp/start.prof</span>
+</pre></div>
+</div>
+</section>
 </section>
 
 
@@ -186,14 +218,14 @@ The categories enabled via <strong>--debug</strong> are <em>added</em> to the on
       </div> 
       <div class="clearer"></div>
     </div>  
-    <div class="related" role="navigation" aria-label="related navigation">
+    <div class="related" role="navigation" aria-label="Related">
       <h3>Navigation</h3>
       <ul>
     <li><img src="../_static/fish.png" alt=""
              style="width: 80px; height: 80px; vertical-align: middle; margin-top: -1px"/></li>
     <li><a href="https://fishshell.com/">fish-shell</a> &#187;</li>
     
-    <a href="../index.html">fish-shell 3.7.1 documentation</a> &#187;
+    <a href="../index.html">fish-shell 4.2.1 documentation</a> &#187;
     
 
           <li class="nav-item nav-item-1"><a href="../commands.html" >Commands</a> &#187;</li>
@@ -201,7 +233,7 @@ The categories enabled via <strong>--debug</strong> are <em>added</em> to the on
     <li class="right">
         
 
-    <div class="inline-search" style="display: none" role="search">
+    <div class="inline-search" role="search">
         <form class="inline-search" action="../search.html" method="get">
           <input placeholder="Quick search" type="text" name="q" />
           <input type="submit" value="Go" />
@@ -209,7 +241,6 @@ The categories enabled via <strong>--debug</strong> are <em>added</em> to the on
           <input type="hidden" name="area" value="default" />
         </form>
     </div>
-    <script type="text/javascript">$('.inline-search').show(0);</script>
     </li>
     
     <div id="old-docs-notice" style="display: none">
@@ -220,17 +251,17 @@ The categories enabled via <strong>--debug</strong> are <em>added</em> to the on
       </ul>
     </div>  
     <div class="footer">
-    &copy; Copyright 2023, fish-shell developers.
+    &copy; Copyright fish-shell developers.
     <br />
     <a href="https://github.com/fish-shell/fish-shell/issues">Found a bug</a>?
     <br />
 
-    Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 7.2.6.
+    Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 8.2.3.
     </div>
 </div>
 
 <script type="text/javascript">
- FISH_DOCS_VERSION = "3.7";
+ FISH_DOCS_VERSION = "4.2";
 
  function copy_to_clipboard(it) {
      // Find the pre tag we're interested in.
@@ -284,7 +315,6 @@ The categories enabled via <strong>--debug</strong> are <em>added</em> to the on
       }
   })();
 </script>
-<script defer type="text/javascript" src="/docs/shared/script.js"></script>
 
   </body>
 </html>

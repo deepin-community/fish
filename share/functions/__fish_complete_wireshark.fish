@@ -1,3 +1,5 @@
+# localization: tier3
+#
 # Helper functions for wireshark/tshark/dumpcap completion
 
 function __fish_wireshark_choices
@@ -39,7 +41,6 @@ function __fish_tshark_decode_as
         command tshark -d . 2>| string replace -rf -- "^\t(\S+) \(?([^\)]*)\)?\$" '$1==\t$2'
     end
 end
-
 
 function __fish_complete_wireshark
     set -l shark $argv

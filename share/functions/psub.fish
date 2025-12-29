@@ -1,5 +1,6 @@
+# localization: tier1
 function psub --description "Read from stdin into a file and output the filename. Remove the file when the command that called psub exits."
-    set -l options -x 'f,F' -x 'F,s' h/help f/file F/fifo 's/suffix=' T-testing
+    set -l options -x 'f,F' h/help f/file F/fifo 's/suffix=' T-testing
     argparse -n psub --max-args=0 $options -- $argv
     or return
 
@@ -17,15 +18,11 @@ function psub --description "Read from stdin into a file and output the filename
         return 1
     end
 
-    set -l tmpdir /tmp
-    set -q TMPDIR
-    and set tmpdir $TMPDIR
-
     if set -q _flag_fifo
         # Write output to pipe. This needs to be done in the background so
         # that the command substitution exits without needing to wait for
         # all the commands to exit.
-        set dirname (mktemp -d $tmpdir/.psub.XXXXXXXXXX)
+        set dirname (__fish_mktemp_relative -d .psub)
         or return 1
         set filename $dirname/psub.fifo"$_flag_suffix"
         command mkfifo $filename
@@ -34,11 +31,11 @@ function psub --description "Read from stdin into a file and output the filename
         # after the fork.
         command tee $filename >/dev/null &
     else if test -z "$_flag_suffix"
-        set filename (mktemp $tmpdir/.psub.XXXXXXXXXX)
+        set filename (__fish_mktemp_relative .psub)
         or return 1
         command cat >$filename
     else
-        set dirname (mktemp -d $tmpdir/.psub.XXXXXXXXXX)
+        set dirname (__fish_mktemp_relative -d .psub)
         or return 1
         set filename "$dirname/psub$_flag_suffix"
         command cat >$filename

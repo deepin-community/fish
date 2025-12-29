@@ -1,7 +1,7 @@
 # Completions for the Elixir build tool mix
 
 function __fish_mix_needs_command
-    set -l cmd (commandline -opc)
+    set -l cmd (commandline -xpc)
     if test (count $cmd) -eq 1
         return 0
     end
@@ -9,7 +9,7 @@ function __fish_mix_needs_command
 end
 
 function __fish_mix_using_command
-    set -l cmd (commandline -opc)
+    set -l cmd (commandline -xpc)
     if test (count $cmd) -gt 1
         if test $argv[1] = $cmd[2]
             return 0
@@ -17,7 +17,6 @@ function __fish_mix_using_command
     end
     return 1
 end
-
 
 complete -f -c mix -n __fish_mix_needs_command -a app.start -d "Starts all registered apps"
 complete -f -c mix -n __fish_mix_needs_command -a archive -d "Lists all archives"
@@ -160,7 +159,7 @@ complete -f -c mix -n '__fish_mix_using_command phx.gen.schema' -l binary-id -d 
 complete -f -c mix -n '__fish_mix_using_command phx.gen.schema' -l no-binary-id -d "Use normal ids despite the default configuration"
 complete -f -c mix -n '__fish_mix_using_command phx.gen.schema' -l prefix -d "Specifies a prefix"
 complete -f -c mix -n '__fish_mix_using_command phx.gen.schema' -l migration -d "Force generation of the migration"
-complete -f -c mix -n '__fish_mix_using_command phx.new' -l umbrella -d "Generate an umbrella project, with one application for your domain, and a second application for the web interface."
+complete -f -c mix -n '__fish_mix_using_command phx.new' -l umbrella -d "Generate an umbrella project (one app for your domain, a second app for web interface)"
 complete -f -c mix -n '__fish_mix_using_command phx.new' -l app -d "The name of the OTP application"
 complete -f -c mix -n '__fish_mix_using_command phx.new' -l module -d "The name of the base module in the generated skeleton"
 complete -x -c mix -n '__fish_mix_using_command phx.new' -l database -a "postgres mysql mssql sqlite3" -d "Specify the database adapter for Ecto"

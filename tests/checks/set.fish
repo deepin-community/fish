@@ -1,4 +1,3 @@
-# Explicitly overriding HOME/XDG_CONFIG_HOME is only required if not invoking via `make test`
 # RUN: env FISH=%fish %fish %s
 # Environment variable tests
 
@@ -346,27 +345,29 @@ or echo testu undef in top level shell
 $FISH -c 'set -q testu; or echo testu undef in sub shell'
 # CHECK: testu undef in sub shell
 
-# test SHLVL
-# use a subshell to ensure a clean slate
-env SHLVL= $FISH -ic 'echo SHLVL: $SHLVL; $FISH -ic \'echo SHLVL: $SHLVL\''
-# CHECK: SHLVL: 1
-# CHECK: SHLVL: 2
+begin
+    # test SHLVL
+    # use a subshell to ensure a clean slate
+    env SHLVL= $FISH -ic 'echo SHLVL: $SHLVL; $FISH -ic \'echo SHLVL: $SHLVL\''
+    # CHECK: SHLVL: 1
+    # CHECK: SHLVL: 2
 
-# exec should decrement SHLVL - outer fish increments by 1, decrements for exec,
-# inner fish increments again so the value stays the same.
-env SHLVL=1 $FISH -ic 'echo SHLVL: $SHLVL; exec $FISH -ic \'echo SHLVL: $SHLVL\''
-# CHECK: SHLVL: 2
-# CHECK: SHLVL: 2
+    # exec should decrement SHLVL - outer fish increments by 1, decrements for exec,
+    # inner fish increments again so the value stays the same.
+    env SHLVL=1 $FISH -ic 'echo SHLVL: $SHLVL; exec $FISH -ic \'echo SHLVL: $SHLVL\''
+    # CHECK: SHLVL: 2
+    # CHECK: SHLVL: 2
 
-# garbage SHLVLs should be treated as garbage
-env SHLVL=3foo $FISH -ic 'echo SHLVL: $SHLVL'
-# CHECK: SHLVL: 1
+    # garbage SHLVLs should be treated as garbage
+    env SHLVL=3foo $FISH -ic 'echo SHLVL: $SHLVL'
+    # CHECK: SHLVL: 1
 
-# whitespace is allowed though (for bash compatibility)
-env SHLVL="3  " $FISH -ic 'echo SHLVL: $SHLVL'
-env SHLVL="  3" $FISH -ic 'echo SHLVL: $SHLVL'
-# CHECK: SHLVL: 4
-# CHECK: SHLVL: 4
+    # whitespace is allowed though (for bash compatibility)
+    env SHLVL="3  " $FISH -ic 'echo SHLVL: $SHLVL'
+    env SHLVL="  3" $FISH -ic 'echo SHLVL: $SHLVL'
+    # CHECK: SHLVL: 4
+    # CHECK: SHLVL: 4
+end
 
 # Non-interactive fish doesn't touch $SHLVL
 env SHLVL=2 $FISH -c 'echo SHLVL: $SHLVL'
@@ -526,7 +527,7 @@ $FISH -c 'set -S EDITOR' | string match -r -e 'global|universal'
 # When the variable has been changed outside of fish we accept it.
 # CHECK: $EDITOR: set in global scope, exported, with 1 elements
 # CHECK: $EDITOR: set in universal scope, exported, with 2 elements
-sh -c "EDITOR='vim -g' $FISH -c "'\'set -S EDITOR\'' | string match -r -e 'global|universal'
+sh -c 'EDITOR=vim "$@" -c "set -S EDITOR"' uselessargument $FISH | string match -r -e 'global|universal'
 
 # Verify behavior of `set --show` given an invalid var name
 set --show 'argle bargle'
@@ -938,3 +939,84 @@ begin
 end
 echo $secret
 # CHECK: global 4 23 42
+
+set -e
+# CHECKERR: set: --erase: option requires an argument
+# CHECKERR: {{.*}}set.fish (line {{\d+}}):
+# CHECKERR: set -e
+# CHECKERR: ^
+# CHECKERR: (Type 'help set' for related documentation)
+
+while set -e undefined
+end
+
+set -e undefined[x..]
+# CHECKERR: set: Invalid index starting at 'x..]'
+# CHECKERR: {{.*}}checks/set.fish (line {{\d+}}):
+# CHECKERR: set -e undefined[x..]
+# CHECKERR: ^
+# CHECKERR: (Type 'help set' for related documentation)
+
+set -e undefined[..y]
+# CHECKERR: set: Invalid index starting at 'y]'
+# CHECKERR: {{.*}}checks/set.fish (line {{\d+}}):
+# CHECKERR: set -e undefined[..y]
+# CHECKERR: ^
+# CHECKERR: (Type 'help set' for related documentation)
+
+set -e undefined[1..]
+set -e undefined[..]
+set -e undefined[..1]
+
+set -l negative_oob 1 2 3
+set -q negative_oob[-10..1]
+
+# --no-event
+
+function onevent --on-variable nonevent
+    echo ONEVENT $argv $nonevent
+end
+
+set -g nonevent bar
+set -e nonevent
+
+# CHECK: ONEVENT VARIABLE SET nonevent bar
+# CHECK: ONEVENT VARIABLE ERASE nonevent
+
+set -g --no-event nonevent 2
+set -e --no-event nonevent
+set -S nonevent
+
+set -g --no-event nonevent 3
+set -e nonevent
+# CHECK: ONEVENT VARIABLE ERASE nonevent
+
+set -g nonevent 4
+# CHECK: ONEVENT VARIABLE SET nonevent 4
+set -e --no-event nonevent
+
+set -l nonevent 4
+set -e nonevent
+# CHECK: ONEVENT VARIABLE SET nonevent
+# CHECK: ONEVENT VARIABLE ERASE nonevent
+
+mkdir -p empty
+env XDG_CONFIG_HOME= HOME=$PWD/empty LC_ALL=en_US.UTF-8 $FISH -c 'set -Ux LC_ALL en_US.UTF-8'
+env XDG_CONFIG_HOME= HOME=$PWD/empty LC_ALL=en_US.UTF-8 $FISH -c 'set -S LC_ALL'
+# CHECK: $LC_ALL: set in universal scope, exported, with 1 elements
+# CHECK: $LC_ALL[1]: |en_US.UTF-8|
+# CHECK: $LC_ALL: originally inherited as |en_US.UTF-8|
+
+# This used to crash
+set line[0] ""
+# CHECKERR: set: array index out of bounds
+# CHECKERR: {{.*}}set.fish (line {{\d+}}):
+# CHECKERR: set line[0] ""
+# CHECKERR: ^
+# CHECKERR: (Type 'help set' for related documentation)
+
+
+echo Still here
+# CHECK: Still here
+
+exit 0

@@ -27,34 +27,51 @@ level margin: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .\" new: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .in \\n[rst2man-indent\\n[rst2man-indent-level]]u
 ..
-.TH "FISH-COMPLETIONS" "1" "Mar 19, 2024" "3.7" "fish-shell"
+.TH "FISH-COMPLETIONS" "1" "Nov 13, 2025" "4.2" "fish-shell"
 .sp
-To specify a completion, use the \fBcomplete\fP command. \fBcomplete\fP takes as a parameter the name of the command to specify a completion for. For example, to add a completion for the program \fBmyprog\fP, one would start the completion command with \fBcomplete \-c myprog ...\fP
+To specify a completion, use the \fBcomplete\fP command. \fBcomplete\fP takes as a parameter the name of the command to specify a completion for. For example, to add a completion for the program \fBmyprog\fP, start the completion command with \fBcomplete \-c myprog ...\fP
 .sp
-To provide a list of possible completions for myprog, use the \fB\-a\fP switch. If \fBmyprog\fP accepts the arguments start and stop, this can be specified as \fBcomplete \-c myprog \-a \(aqstart stop\(aq\fP\&. The argument to the \fB\-a\fP switch is always a single string. At completion time, it will be tokenized on spaces and tabs, and variable expansion, command substitution and other forms of parameter expansion will take place.
+For a complete description of the various switches accepted by the \fBcomplete\fP command, see the documentation for the \fI\%complete\fP builtin, or write \fBcomplete \-\-help\fP inside the \fBfish\fP shell.
 .sp
-\fBfish\fP has a special syntax to support specifying switches accepted by a command. The switches \fB\-s\fP, \fB\-l\fP and \fB\-o\fP are used to specify a short switch (single character, such as \fB\-l\fP), a gnu style long switch (such as \fB\-\-color\fP) and an old\-style long switch (like \fB\-shuffle\fP), respectively. If the command \(aqmyprog\(aq has an option \(aq\-o\(aq which can also be written as \fB\-\-output\fP, and which can take an additional value of either \(aqyes\(aq or \(aqno\(aq, this can be specified by writing:
+To provide a list of possible completions for myprog, use the \fB\-a\fP switch. If \fBmyprog\fP accepts the arguments start and stop, this can be specified as \fBcomplete \-c myprog \-a \(aqstart stop\(aq\fP\&. The argument to the \fB\-a\fP switch is always a single string. At completion time, it will be tokenized on spaces and tabs, and variable expansion, command substitution and other forms of parameter expansion will take place:
 .INDENT 0.0
 .INDENT 3.5
 .sp
-.nf
-.ft C
+.EX
+# If myprog can list the valid outputs with the list\-outputs subcommand:
+complete \-c myprog \-l output \-a \(aq(myprog list\-outputs)\(aq
+.EE
+.UNINDENT
+.UNINDENT
+.sp
+\fBfish\fP has a special syntax to support specifying switches accepted by a command. The switches \fB\-s\fP, \fB\-l\fP and \fB\-o\fP are used to specify a short switch (single character, such as \fB\-l\fP), a gnu style long switch (such as \fB\-\-color\fP) and an old\-style long switch (with one \fB\-\fP, like \fB\-shuffle\fP), respectively. If the command \(aqmyprog\(aq has an option that can be written as \fB\-o\fP or \fB\-\-output\fP, that is:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.EX
+complete \-c myprog \-s o \-l output
+.EE
+.UNINDENT
+.UNINDENT
+.sp
+If this option takes an optional argument, you would also add \fB\-\-argument\fP or \fB\-a\fP, and give that the possible arguments:
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.EX
 complete \-c myprog \-s o \-l output \-a \(dqyes no\(dq
-.ft P
-.fi
+.EE
 .UNINDENT
 .UNINDENT
 .sp
-In the complete call above, the \fB\-a\fP arguments apply when the option \-o/\-\-output has been given, so this offers them for:
+This offers the arguments \(dqyes\(dq and \(dqno\(dq for:
 .INDENT 0.0
 .INDENT 3.5
 .sp
-.nf
-.ft C
+.EX
 > myprog \-o<TAB>
 > myprog \-\-output=<TAB>
-.ft P
-.fi
+.EE
 .UNINDENT
 .UNINDENT
 .sp
@@ -62,11 +79,9 @@ By default, option arguments are \fIoptional\fP, so the candidates are only offe
 .INDENT 0.0
 .INDENT 3.5
 .sp
-.nf
-.ft C
+.EX
 > myprog \-o <TAB>
-.ft P
-.fi
+.EE
 .UNINDENT
 .UNINDENT
 .sp
@@ -74,11 +89,9 @@ Usually options \fIrequire\fP a parameter, so you would give \fB\-\-require\-par
 .INDENT 0.0
 .INDENT 3.5
 .sp
-.nf
-.ft C
+.EX
 complete \-c myprog \-s o \-l output \-ra \(dqyes no\(dq
-.ft P
-.fi
+.EE
 .UNINDENT
 .UNINDENT
 .sp
@@ -86,28 +99,22 @@ which offers yes/no in these cases:
 .INDENT 0.0
 .INDENT 3.5
 .sp
-.nf
-.ft C
+.EX
 > myprog \-o<TAB>
 > myprog \-\-output=<TAB>
 > myprog \-o <TAB>
 > myprog \-\-output <TAB>
-.ft P
-.fi
+.EE
 .UNINDENT
 .UNINDENT
 .sp
-In the latter two cases, files will also be offered because file completion is enabled by default.
-.sp
-You would either inhibit file completion for a single option:
+Fish will also offer files by default, in addition to the arguments you specified. You would either inhibit file completion for a single option:
 .INDENT 0.0
 .INDENT 3.5
 .sp
-.nf
-.ft C
+.EX
 complete \-c myprog \-s o \-l output \-\-no\-files \-ra \(dqyes no\(dq
-.ft P
-.fi
+.EE
 .UNINDENT
 .UNINDENT
 .sp
@@ -115,11 +122,9 @@ or with a specific condition:
 .INDENT 0.0
 .INDENT 3.5
 .sp
-.nf
-.ft C
+.EX
 complete \-c myprog \-f \-\-condition \(aq__fish_seen_subcommand_from somesubcommand\(aq
-.ft P
-.fi
+.EE
 .UNINDENT
 .UNINDENT
 .sp
@@ -127,11 +132,9 @@ or you can disable file completions globally for the command:
 .INDENT 0.0
 .INDENT 3.5
 .sp
-.nf
-.ft C
+.EX
 complete \-c myprog \-f
-.ft P
-.fi
+.EE
 .UNINDENT
 .UNINDENT
 .sp
@@ -139,14 +142,12 @@ If you have disabled them globally, you can enable them just for a specific cond
 .INDENT 0.0
 .INDENT 3.5
 .sp
-.nf
-.ft C
+.EX
 # Disable files by default
 complete \-c myprog \-f
 # but reenable them for \-\-config\-file
 complete \-c myprog \-l config\-file \-\-force\-files \-r
-.ft P
-.fi
+.EE
 .UNINDENT
 .UNINDENT
 .sp
@@ -154,8 +155,7 @@ As a more comprehensive example, here\(aqs a commented excerpt of the completion
 .INDENT 0.0
 .INDENT 3.5
 .sp
-.nf
-.ft C
+.EX
 # All subcommands that timedatectl knows \- this is useful for later.
 set \-l commands status set\-time set\-timezone list\-timezones set\-local\-rtc set\-ntp
 
@@ -177,8 +177,8 @@ complete \-c timedatectl \-f
 #
 # The \(ga\-n\(ga/\(ga\-\-condition\(ga option takes script as a string, which it executes.
 # If it returns true, the completion is offered.
-# Here the condition is the \(ga__fish_seen_subcommands_from\(ga helper function.
-# If returns true if any of the given commands is used on the commandline,
+# Here the condition is the \(ga__fish_seen_subcommand_from\(ga helper function.
+# It returns true if any of the given commands is used on the commandline,
 # as determined by a simple heuristic.
 # For more complex uses, you can write your own function.
 # See e.g. the git completions for an example.
@@ -208,8 +208,7 @@ complete \-c timedatectl \-n \(dq__fish_seen_subcommand_from set\-local\-rtc\(dq
 complete \-c timedatectl \-s h \-l help \-d \(aqPrint a short help text and exit\(aq
 complete \-c timedatectl \-l version \-d \(aqPrint a short version string and exit\(aq
 complete \-c timedatectl \-l no\-pager \-d \(aqDo not pipe output into a pager\(aq
-.ft P
-.fi
+.EE
 .UNINDENT
 .UNINDENT
 .sp
@@ -238,8 +237,6 @@ Functions beginning with the string \fB__fish_print_\fP print a newline separate
 \fB__fish_print_hostnames\fP prints a list of all known hostnames. This function searches the fstab for nfs servers, ssh for known hosts and checks the \fB/etc/hosts\fP file.
 .IP \(bu 2
 \fB__fish_print_interfaces\fP prints a list of all known network interfaces.
-.IP \(bu 2
-\fB__fish_print_packages\fP prints a list of all installed packages. This function currently handles Debian, rpm and Gentoo packages.
 .UNINDENT
 .SH WHERE TO PUT COMPLETIONS
 .sp
@@ -258,7 +255,7 @@ A directory for third\-party software vendors to ship their own completions for 
 .IP \(bu 2
 The completions shipped with fish, usually installed in \fB/usr/share/fish/completions\fP; and
 .IP \(bu 2
-Completions automatically generated from the operating system\(aqs manual, usually stored in \fB~/.local/share/fish/generated_completions\fP\&.
+Completions automatically generated from the operating system\(aqs manual, usually stored in \fB~/.cache/fish/generated_completions\fP (controlled by \fBXDG_CACHE_HOME\fP environment variable).
 .UNINDENT
 .sp
 These paths are controlled by parameters set at build, install, or run time, and may vary from the defaults listed above.
@@ -271,6 +268,6 @@ If you are developing another program and would like to ship completions with yo
 .SH AUTHOR
 fish-shell developers
 .SH COPYRIGHT
-2023, fish-shell developers
+fish-shell developers
 .\" Generated by docutils manpage writer.
 .

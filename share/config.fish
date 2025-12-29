@@ -14,7 +14,6 @@ function __fish_default_command_not_found_handler
     printf (_ "fish: Unknown command: %s\n") (string escape -- $argv[1]) >&2
 end
 
-
 if not status --is-interactive
     # Hook up the default as the command_not_found handler
     # if we are not interactive to avoid custom handlers.
@@ -23,20 +22,30 @@ if not status --is-interactive
     end
 end
 
+# N.B. can't load __fish_is_standalone.fish this early in non-embedded builds, so reimplement it.
+# We still want it as a separate file for --no-config.
+set -l is_standalone (
+    if status get-file config.fish &>/dev/null
+        echo true
+    else
+        echo false
+    end
+)
+
 #
 # Set default search paths for completions and shellscript functions
 # unless they already exist
 #
-
-# __fish_data_dir, __fish_sysconf_dir, __fish_help_dir, __fish_bin_dir
-# are expected to have been set up by read_init from fish.cpp
 
 # Grab extra directories (as specified by the build process, usually for
 # third-party packages to ship completions &c.
 set -l __extra_completionsdir
 set -l __extra_functionsdir
 set -l __extra_confdir
-if test -f $__fish_data_dir/__fish_build_paths.fish
+# N.B. can't load __fish_data_with_file this early in non-embedded builds, so reimplement it.
+if $is_standalone
+    status get-file __fish_build_paths.fish | source
+else if path is -f -- $__fish_data_dir/__fish_build_paths.fish
     source $__fish_data_dir/__fish_build_paths.fish
 end
 
@@ -46,7 +55,7 @@ set -l xdg_data_dirs
 if set -q XDG_DATA_DIRS
     set --path xdg_data_dirs $XDG_DATA_DIRS
     set xdg_data_dirs (string replace -r '([^/])/$' '$1' -- $xdg_data_dirs)/fish
-else
+else if not $is_standalone
     set xdg_data_dirs $__fish_data_dir
 end
 
@@ -75,14 +84,21 @@ end
 # default functions/completions are included in the respective path.
 
 if not set -q fish_function_path
-    set fish_function_path $__fish_config_dir/functions $__fish_sysconf_dir/functions $__fish_vendor_functionsdirs $__fish_data_dir/functions
-else if not contains -- $__fish_data_dir/functions $fish_function_path
+    set fish_function_path $__fish_config_dir/functions $__fish_sysconf_dir/functions $__fish_vendor_functionsdirs
+    if not $is_standalone
+        set -a fish_function_path $__fish_data_dir/functions
+    end
+else if not $is_standalone; and not contains -- $__fish_data_dir/functions $fish_function_path
     set -a fish_function_path $__fish_data_dir/functions
 end
 
 if not set -q fish_complete_path
-    set fish_complete_path $__fish_config_dir/completions $__fish_sysconf_dir/completions $__fish_vendor_completionsdirs $__fish_data_dir/completions $__fish_user_data_dir/generated_completions
-else if not contains -- $__fish_data_dir/completions $fish_complete_path
+    set fish_complete_path $__fish_config_dir/completions $__fish_sysconf_dir/completions $__fish_vendor_completionsdirs
+    if not $is_standalone
+        set -a fish_complete_path $__fish_data_dir/completions
+    end
+    set -a fish_complete_path $__fish_cache_dir/generated_completions
+else if not $is_standalone; and not contains -- $__fish_data_dir/completions $fish_complete_path
     set -a fish_complete_path $__fish_data_dir/completions
 end
 
@@ -150,7 +166,8 @@ end
 # Set the locale if it isn't explicitly set. Allowing the lack of locale env vars to imply the
 # C/POSIX locale causes too many problems. Do this before reading the snippets because they might be
 # in UTF-8 (with non-ASCII characters).
-__fish_set_locale
+not set -q LANG # (fast path - no need to load the file if we have $LANG)
+and __fish_set_locale
 
 #
 # Some things should only be done for login terminals
@@ -158,34 +175,6 @@ __fish_set_locale
 #
 if status --is-login
     if command -sq /usr/libexec/path_helper
-        # Adapt construct_path from the macOS /usr/libexec/path_helper
-        # executable for fish; see
-        # https://opensource.apple.com/source/shell_cmds/shell_cmds-203/path_helper/path_helper.c.auto.html .
-        function __fish_macos_set_env -d "set an environment variable like path_helper does (macOS only)"
-            set -l result
-
-            # Populate path according to config files
-            for path_file in $argv[2] $argv[3]/*
-                if test -f $path_file
-                    while read -l entry
-                        if not contains -- $entry $result
-                            test -n "$entry"
-                            and set -a result $entry
-                        end
-                    end <$path_file
-                end
-            end
-
-            # Merge in any existing path elements
-            for existing_entry in $$argv[1]
-                if not contains -- $existing_entry $result
-                    set -a result $existing_entry
-                end
-            end
-
-            set -xg $argv[1] $result
-        end
-
         __fish_macos_set_env PATH /etc/paths '/etc/paths.d'
         if test -n "$MANPATH"
             __fish_macos_set_env MANPATH /etc/manpaths '/etc/manpaths.d'
@@ -223,15 +212,22 @@ end
 
 for jobbltn in bg wait disown
     function $jobbltn -V jobbltn
-        builtin $jobbltn (__fish_expand_pid_args $argv)
+        set -l args (__fish_expand_pid_args $argv)
+        and builtin $jobbltn $args
     end
 end
 function fg
-    builtin fg (__fish_expand_pid_args $argv)[-1]
+    set -l args (__fish_expand_pid_args $argv)
+    and builtin fg $args[-1]
 end
 
-function kill
-    command kill (__fish_expand_pid_args $argv)
+if command -q kill
+    # Only define this if something to wrap exists
+    # this allows a nice "command not found" error to be triggered.
+    function kill
+        set -l args (__fish_expand_pid_args $argv)
+        and command kill $args
+    end
 end
 
 # As last part of initialization, source the conf directories.

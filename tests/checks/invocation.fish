@@ -1,4 +1,4 @@
-#RUN: %fish -C 'set -l fish %fish' %s
+#RUN: fish=%fish %fish %s
 
 $fish -c "echo 1.2.3.4."
 # CHECK: 1.2.3.4.
@@ -62,7 +62,7 @@ $fish --profile $tmp/normal.prof --profile-startup $tmp/startup.prof -ic exit
 
 # This should be the full file - just the one command we gave explicitly!
 cat $tmp/normal.prof
-# CHECK: Time{{\s+}}Sum{{\s+}}Command
+# CHECK: Time (μs){{\s+}}Sum (μs){{\s+}}Command
 # CHECK: {{\d+\s+\d+\s+>}} exit
 
 string match -rq "builtin source " < $tmp/startup.prof
@@ -78,6 +78,12 @@ and echo matched
 string match -rq "echo thisshouldneverbeintheconfig" < $tmp/full.prof
 and echo matched
 # CHECK: matched
+
+# See that profiling without startup actually gives us just the command
+$fish --no-config --profile $tmp/nostartup.prof -c 'echo foo'
+# CHECK: foo
+count < $tmp/nostartup.prof
+# CHECK: 2
 
 $fish --no-config -c 'echo notprinted; echo foo | exec true; echo banana'
 # CHECKERR: fish: The 'exec' command can not be used in a pipeline
@@ -105,3 +111,8 @@ $fish --no-config -c 'echo notprinted | and true'
 # CHECKERR: echo notprinted | and true
 # CHECKERR:                   ^~^
 
+$fish --no-config --features
+# CHECKERR: fish: --features: option requires an argument
+
+# Regression test for a hang.
+echo "set -L" | $fish > /dev/null

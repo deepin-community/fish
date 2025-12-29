@@ -1,3 +1,4 @@
+# localization: tier1
 function down-or-search -d "search forward or move down 1 line"
     # If we are already in search mode, continue
     if commandline --search-mode
@@ -10,7 +11,6 @@ function down-or-search -d "search forward or move down 1 line"
         commandline -f down-line
         return
     end
-
 
     # We are not already in search mode.
     # If we are on the bottom line, start search mode,

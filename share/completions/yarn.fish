@@ -1,6 +1,6 @@
 # Yarn 1.22.4
 
-source $__fish_data_dir/functions/__fish_npm_helper.fish
+__fish_npm_helper
 set -l yarn_add "yarn global add"
 
 # Typically there is no need to check if (commandline -ct) begins with `--`
@@ -22,7 +22,7 @@ complete -f -c yarn -n '__fish_seen_subcommand_from add' -l tilde -s T
 complete -f -c yarn -n __fish_use_subcommand -a bin -d 'Show location of Yarn `bin` folder'
 
 complete -f -c yarn -n __fish_use_subcommand -a cache -d 'Manage Yarn cache'
-complete -f -c yarn -n '__fish_seen_subcommand_from cache' -a 'clean'
+complete -f -c yarn -n '__fish_seen_subcommand_from cache' -a clean
 
 complete -f -c yarn -n __fish_use_subcommand -a config -d 'Manage Yarn configuration'
 complete -f -c yarn -n '__fish_seen_subcommand_from config' -a 'set get delete list'

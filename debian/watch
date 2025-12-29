@@ -1,4 +1,4 @@
 version=4
-opts="pgpsigurlmangle=s%$%.asc%,dversionmangle=s/\+ds$//,repacksuffix=+ds" \
+opts="pgpsigurlmangle=s%$%.asc%,uversionmangle=s/(\d)(\w)(\d)/$1~$2$3/,dversionmangle=s/\+ds$//,repacksuffix=+ds" \
    https://fishshell.com/ \
-   (?:.*?)/fish-(\d[\d.]*)@ARCHIVE_EXT@ debian
+   (?:.*?)/fish-(\d[\d.]*(?:\w\d+)?)@ARCHIVE_EXT@ debian

@@ -1,5 +1,3 @@
-.. _fish_for_bash_users:
-
 Fish for bash users
 ===================
 
@@ -60,7 +58,8 @@ And here is fish::
 
   > set foo "bar baz"
   > printf '"%s"\n' $foo
-  # foo was set as one element, so it will be passed as one element, so this is one line
+  # foo was set as one element,
+  # so it will be passed as one element, so this is one line
   "bar baz"
 
 All variables are "arrays" (we use the term "lists"), and expanding a variable expands to all its elements, with each element as its own argument (like bash's ``"${var[@]}"``::
@@ -113,6 +112,10 @@ Globbing doesn't happen on expanded variables, so::
 will not match any files.
 
 There are no options to control globbing so it always behaves like that.
+
+The ``**`` glob will match in subdirectories as well. In other shells this often needs to be turned on with an option, like ``setopt globstar`` in bash.
+
+Unlike bash, fish will also follow symlinks, and will sort the results in a natural sort, with included numbers compared as numbers. That means it will sort e.g. music tracks correctly even if they have numbers like ``1`` instead of ``01``.
 
 See :ref:`Wildcards <expand-wildcard>` for more.
 
@@ -187,7 +190,7 @@ Note that both of these are bashisms, and most things can easily be expressed wi
 
   source (command | psub)
 
-just use::
+Use::
 
   command | source
 
@@ -241,7 +244,7 @@ is mostly the same as
   foo
   EOF
 
-Just like with heredocs, the command has to be prepared to read from stdin. Sometimes this requires special options to be used, often giving a filename of ``-`` turns it on.
+Like with heredocs, the command has to be prepared to read from stdin. Sometimes this requires special options to be used, often giving a filename of ``-`` turns it on.
 
 For example::
 
@@ -261,7 +264,7 @@ and could be written in other shells as
   rxvt-unicode
   EOF
   
-So heredocs really are just minor syntactical sugar that introduces a lot of special rules, which is why fish doesn't have them. Pipes are a core concept, and are simpler and compose nicer.
+So heredocs really are minor syntactical sugar that introduces a lot of special rules, which is why fish doesn't have them. Pipes are a core concept, and are simpler and compose nicer.
 
 .. [#] For example, the "EOF" is just a convention, the terminator can be an arbitrary string, something like "THISISTHEEND" also works. And using ``<<-`` trims leading *tab* characters (but not other whitespace), so you can indent the lines, but only with tabs. Substitutions (variables, commands) are done on the heredoc by default, but not if the terminator is quoted: ``cat << "EOF"``.
 
@@ -298,7 +301,7 @@ Both ``*`` and ``x`` are valid ways to spell multiplication, but ``*`` needs to 
 Prompts
 -------
 
-Fish does not use the ``$PS1``, ``$PS2`` and so on variables. Instead the prompt is the output of the :doc:`fish_prompt <cmds/fish_prompt>` function, plus the :doc:`fish_mode_prompt <cmds/fish_mode_prompt>` function if vi-mode is enabled and the :doc:`fish_right_prompt <cmds/fish_right_prompt>` function for the right prompt.
+Fish does not use the ``$PS1``, ``$PS2`` and so on variables. Instead the prompt is the output of the :doc:`fish_prompt <cmds/fish_prompt>` function, plus the :doc:`fish_mode_prompt <cmds/fish_mode_prompt>` function if :ref:`vi mode <vi-mode>` is enabled. The output of the :doc:`fish_right_prompt <cmds/fish_right_prompt>` function is used for the right-sided prompt.
 
 As an example, here's a relatively simple bash prompt:
 
@@ -321,7 +324,7 @@ and a rough fish equivalent::
 This shows a few differences:
 
 - Fish provides :doc:`set_color <cmds/set_color>` to color text. It can use the 16 named colors and also RGB sequences (so you could also use ``set_color 5555FF``)
-- Instead of introducing specific escapes like ``\h`` for the hostname, the prompt is simply a function. To achieve the effect of ``\h``, fish provides helper functions like :doc:`prompt_hostname <cmds/prompt_hostname>`, which prints a shortened version of the hostname.
+- Instead of introducing specific escapes like ``\h`` for the hostname, the prompt is a function. To achieve the effect of ``\h``, fish provides helper functions like :doc:`prompt_hostname <cmds/prompt_hostname>`, which prints a shortened version of the hostname.
 - Fish offers other helper functions for adding things to the prompt, like :doc:`fish_vcs_prompt <cmds/fish_vcs_prompt>` for adding a display for common version control systems (git, mercurial, svn), and :doc:`prompt_pwd <cmds/prompt_pwd>` for showing a shortened ``$PWD`` (the user's home directory becomes ``~`` and any path component is shortened).
 
 The default prompt is reasonably full-featured and its code can be read via ``type fish_prompt``.
@@ -412,6 +415,8 @@ This includes things like:
         baz &
     done
 
+Fish does not currently have subshells. You will have to find a different solution. The isolation can usually be achieved by scoping variables (with ``set -l``), but if you really do need to run your code in a new shell environment you can use ``fish -c 'your code here'`` to do so explicitly.
+
 ``()`` subshells are often confused with ``{}`` grouping, which does *not* use a subshell. When you just need to group, you can use ``begin; end`` in fish::
 
     (foo; bar) | baz
@@ -420,7 +425,7 @@ This includes things like:
     # becomes
     begin; foo; bar; end | baz
 
-The pipe will simply be run in the same process, so ``while read`` loops can set variables outside::
+The pipe will be run in the same process, so ``while read`` loops can set variables outside::
 
     foo | while read bar
         set -g VAR VAL
@@ -431,8 +436,6 @@ The pipe will simply be run in the same process, so ``while read`` loops can set
     jobs # will show "baz"
 
 Subshells are also frequently confused with :ref:`command substitutions <bash-command-substitutions>`, which bash writes as ```command``` or ``$(command)`` and fish writes as ``$(command)`` or ``(command)``. Bash also *uses* subshells to implement them.
-
-The isolation can usually be achieved by just scoping variables (with ``set -l``), but if you really do need to run your code in a new shell environment you can always use ``fish -c 'your code here'`` to do so explicitly.
 
 Builtins and other commands
 ---------------------------

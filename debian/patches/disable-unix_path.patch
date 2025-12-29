@@ -1,0 +1,15 @@
+Description: Only used for Windows builds
+Forwarded: not-needed
+Last-Update: 2025-11-21
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -65,3 +65,3 @@
+ unicode-width = "0.2.0"
+-unix_path = "1.0.1"
++#unix_path = "1.0.1"
+
+@@ -137,3 +137,3 @@
+ [target.'cfg(windows)'.build-dependencies]
+-unix_path.workspace = true
++#unix_path.workspace = true
+

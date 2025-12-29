@@ -20,7 +20,7 @@ set -l __fish_yadm_subcommands (yadm introspect commands)
 # Borrowed from git completion file
 function __fish_yadm_needs_command
     # Figure out if the current invocation already has a command.
-    set -l cmd (commandline -opc)
+    set -l cmd (commandline -xpc)
     set -e cmd[1]
     argparse -s (__fish_yadm_global_optspecs) -- $cmd 2>/dev/null
     or return 0
@@ -51,7 +51,7 @@ end
 # don't want to inherit all completions from git
 function __fish_complete_yadm_like_git
     # Remove the first word from the commandline because that is "yadm"
-    set -l cmdline (commandline -opc; commandline -ct)[2..-1]
+    set -l cmdline (commandline -xpc | string escape; commandline -ct)[2..-1]
 
     # `yadm gitconfig` is same as `git config`
     if __fish_seen_subcommand_from gitconfig
@@ -61,11 +61,13 @@ function __fish_complete_yadm_like_git
     set -l yadm_work_tree (yadm gitconfig --get core.worktree)
     set -l yadm_repo (yadm introspect repo)
 
-    argparse -i 'R-yadm-repo=' -- $cmdline 2>/dev/null
+    argparse -u 'R-yadm-repo=&' -- $cmdline 2>/dev/null
     if set -q _flag_yadm_repo
         set yadm_repo $_flag_yadm_repo
-        # argparse *always* sets $argv to remaining arguments after consuming specified options
-        set cmdline $argv
+        # argparse -u *always* sets $argv to remaining arguments after consuming all options,
+        # and it *always* sets $argv_opts to any specified non-& options and any unknown options
+        # (the -- is needed in case $argv originally contained a -- followed by arguments starting with a -)
+        set cmdline $argv_opts -- $argv
     end
 
     set -l git_wrapper_cmd "git --work-tree $yadm_work_tree --git-dir $yadm_repo $cmdline"

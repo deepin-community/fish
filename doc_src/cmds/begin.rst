@@ -1,5 +1,3 @@
-.. _cmd-begin:
-
 begin - start a new block of code
 =================================
 
@@ -9,6 +7,7 @@ Synopsis
 .. synopsis::
 
     begin; [COMMANDS ...]; end
+    { [COMMANDS ...] }
 
 Description
 -----------
@@ -20,6 +19,8 @@ A block allows the introduction of a new :ref:`variable scope <variables-scope>`
 The block is unconditionally executed. ``begin; ...; end`` is equivalent to ``if true; ...; end``.
 
 ``begin`` does not change the current exit status itself. After the block has completed, ``$status`` will be set to the status returned by the most recent command.
+
+Some other shells only support the ``{ [COMMANDS ...] ; }`` notation.
 
 The **-h** or **--help** option displays help about using this command.
 

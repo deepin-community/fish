@@ -12,9 +12,10 @@ touch ./b/file.txt
 set dirs ./a ./b
 echo $dirs/*.txt # CHECK: ./b/file.txt
 echo */foo/
-# CHECKERR: checks/wildcard.fish (line {{\d+}}): No matches for wildcard '*/foo/'. See `help wildcards-globbing`.
+# CHECKERR: {{.*}}checks/wildcard.fish (line {{\d+}}): No matches for wildcard '*/foo/'. See `help wildcards-globbing`.
 # CHECKERR: echo */foo/
 # CHECKERR:      ^~~~~^
+
 
 cd $oldpwd
 rm -Rf $dir

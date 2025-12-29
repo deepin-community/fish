@@ -1,5 +1,5 @@
 function __fish_journalctl_fields
-    # This would be nicer to get programatically, but this is how the official
+    # This would be nicer to get programmatically, but this is how the official
     # bash completion does it
     set -l __journal_fields MESSAGE{,_ID} PRIORITY CODE_{FILE,LINE,FUNC} ERRNO SYSLOG_{FACILITY,IDENTIFIER,PID} COREDUMP_EXE _{P,U,G}ID _COMM _EXE _CMDLINE _AUDIT_{SESSION,LOGINUID} _SYSTEMD_{CGROUP,SESSION,UNIT,OWNER_UID} _SELINUX_CONTEXT _SOURCE_REALTIME_TIMESTAMP _{BOOT,MACHINE}_ID _HOSTNAME _TRANSPORT _KERNEL_{DEVICE,SUBSYSTEM} _UDEV_{SYSNAME,DEVNODE,DEVLINK} __CURSOR __{REALTIME,MONOTONIC}_TIMESTAMP
     for f in $__journal_fields
@@ -30,6 +30,7 @@ complete -c journalctl -f -l version -d 'Prints a short version string and exits
 complete -c journalctl -f -l no-pager -d 'Do not pipe output into a pager'
 complete -c journalctl -f -s a -l all -d 'Show all fields in full'
 complete -c journalctl -f -s f -l follow -d 'Show live tail of entries'
+complete -c journalctl -f -s e -l pager-end -d 'Skip to the end of the journal'
 complete -c journalctl -f -s n -l lines -d 'Controls the number of journal lines'
 complete -c journalctl -f -l no-tail -d 'Show all lines, even in follow mode'
 complete -c journalctl -f -s o -l output -d 'Controls the formatting' -xa '(printf %s\t\n (command journalctl --output=help))'
